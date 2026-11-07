@@ -51,7 +51,7 @@ pub(super) fn preview(raw: &str) -> Vec<CapturedItem> {
     };
     let mut items = HashMap::new();
     collect(&json, &mut items, 0);
-    // Atlas CN item IDs. Only show quantities actually present in this snapshot.
+    // Atlas item IDs shared by JP and CN. Only show quantities actually present in this snapshot.
     [
         (1, "QP"),
         (2, "圣晶石"),

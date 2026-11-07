@@ -5,6 +5,7 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import type { CaptureHistoryEntry } from "../../types/packetCapture";
+import { CaptureClientPicker } from "./CaptureClientPicker";
 import { CaptureInventory, CaptureInventorySkeleton } from "./CaptureInventory";
 import { usePacketCapture } from "./usePacketCapture";
 import { openExternalUrl } from "../../tauri";
@@ -58,7 +59,7 @@ export function PacketCapturePage({ onBack, onNavigationLockChange }: { onBack: 
     groups.set(day, [...groups.get(day) ?? [], entry]);
   }
   return <main className="main-content-inner workspace-page packet-capture-page" aria-label="抓包">
-    <PageHeader title="数据抓包" english="PACKET CAPTURE" onBack={onBack} backDisabled={capture.navigationLocked}>{null}</PageHeader>
+    <PageHeader title="数据抓包" english="PACKET CAPTURE" onBack={onBack} backDisabled={capture.navigationLocked}><CaptureClientPicker capture={capture} /></PageHeader>
     <div className="capture-body">
       <aside className="capture-history" aria-label="抓包历史记录">
         <header className="capture-history-header">

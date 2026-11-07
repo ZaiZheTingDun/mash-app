@@ -1,4 +1,5 @@
-use super::{client, find_root, root_shell, shell_quote, AdbCommand};
+use super::{client, find_root, root_shell, shell_quote, target, AdbCommand};
+use crate::Server;
 use base64::{
     engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD},
     Engine,
@@ -85,6 +86,7 @@ impl LoginResponse {
 #[derive(Default)]
 struct Inner {
     generation: u64,
+    server: Server,
     baseline: HashSet<String>,
     state: ResponseState,
     interrupted_stop_target: Option<String>,
@@ -95,6 +97,16 @@ struct Inner {
 pub(crate) struct ResponseStore(Arc<Mutex<Inner>>);
 
 impl ResponseStore {
+    pub(crate) fn ensure_client_selection_allowed(&self) -> Result<(), String> {
+        let inner = self.0.lock().unwrap();
+        if inner.state.phase == ResponsePhase::Waiting
+            || (inner.state.phase == ResponsePhase::Error && inner.state.serial.is_some())
+        {
+            return Err("请先停止抓包，再选择客户端或配置环境".into());
+        }
+        Ok(())
+    }
+
     pub(crate) fn mark_stopped(&self, message: &str) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
@@ -153,17 +165,19 @@ impl ResponseStore {
 
     #[cfg(test)]
     pub(crate) fn begin(&self, serial: String, baseline: HashSet<String>) {
-        self.begin_authenticated(serial, baseline, None);
+        self.begin_authenticated(Server::Cn, serial, baseline, None);
     }
 
     pub(crate) fn begin_authenticated(
         &self,
+        server: Server,
         serial: String,
         baseline: HashSet<String>,
         key: Option<String>,
     ) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
+        inner.server = server;
         inner.baseline = baseline;
         inner.api_key = key;
         inner.interrupted_stop_target = None;
@@ -177,10 +191,10 @@ impl ResponseStore {
 
     pub(crate) fn poll(&self, adb_path: &Path) -> ResponseState {
         self.poll_authenticated_using(
-            |serial, baseline, key| {
+            |server, serial, baseline, key| {
                 let client = client::Client::with_api_key(key)?;
                 client::on_device(adb_path, serial, |port, run| {
-                    scan(&client, port, serial, baseline, run)
+                    scan(server, &client, port, serial, baseline, run)
                 })
             },
             |serial, key| super::stop::stop_capture(adb_path, serial, key),
@@ -194,29 +208,35 @@ impl ResponseStore {
         stop: impl FnOnce(&str) -> Result<(), String>,
     ) -> ResponseState {
         self.poll_authenticated_using(
-            |serial, baseline, _| scan(serial, baseline),
+            |_, serial, baseline, _| scan(serial, baseline),
             |serial, _| stop(serial),
         )
     }
 
     fn poll_authenticated_using(
         &self,
-        scan: impl FnOnce(&str, &HashSet<String>, Option<&str>) -> Result<Option<LoginResponse>, String>,
+        scan: impl FnOnce(
+            Server,
+            &str,
+            &HashSet<String>,
+            Option<&str>,
+        ) -> Result<Option<LoginResponse>, String>,
         stop: impl FnOnce(&str, Option<&str>) -> Result<(), String>,
     ) -> ResponseState {
-        let (generation, serial, baseline, key) = {
+        let (generation, server, serial, baseline, key) = {
             let inner = self.0.lock().unwrap();
             if inner.state.phase != ResponsePhase::Waiting {
                 return inner.state.clone();
             }
             (
                 inner.generation,
+                inner.server,
                 inner.state.serial.clone().unwrap(),
                 inner.baseline.clone(),
                 inner.api_key.clone(),
             )
         };
-        let result = scan(&serial, &baseline, key.as_deref());
+        let result = scan(server, &serial, &baseline, key.as_deref());
         let mut inner = self.0.lock().unwrap();
         // A configuration change or a new start supersedes any in-flight poll.
         if inner.generation == generation && inner.state.phase == ResponsePhase::Waiting {
@@ -229,11 +249,15 @@ impl ResponseStore {
                     match stop(&serial, key.as_deref()) {
                         Ok(()) => {
                             inner.state.phase = ResponsePhase::Found;
-                            inner.state.message = "已获取国服 toplogin 响应，抓包已停止".into();
+                            inner.state.message = format!(
+                                "已获取{} 响应，抓包已停止",
+                                target::response_label(server)
+                            );
                         }
                         Err(error) => {
                             inner.state.phase = ResponsePhase::Error;
-                            inner.state.message = format!("已获取国服 toplogin 响应；{error}");
+                            inner.state.message =
+                                format!("已获取{} 响应；{error}", target::response_label(server));
                         }
                     }
                 }
@@ -266,55 +290,69 @@ struct Body {
     encoding: String,
 }
 
-fn target_url(raw: &str) -> Option<String> {
+fn target_url(server: Server, raw: &str) -> Option<String> {
     let mut url = reqwest::Url::parse(raw).ok()?;
     let host = url.host_str()?;
     if url.scheme() != "https"
         || !url.username().is_empty()
         || url.password().is_some()
-        || !host.ends_with(".bilibiligame.net")
-        || ![
-            "-ios-fate.bilibiligame.net",
-            "-bili-fate.bilibiligame.net",
-            "-uo-fate.bilibiligame.net",
-        ]
-        .iter()
-        .any(|suffix| host.ends_with(suffix))
         || url.port_or_known_default() != Some(443)
     {
         return None;
     }
-    let parts: Vec<_> = url
-        .path()
-        .split('/')
-        .filter(|part| !part.is_empty())
-        .collect();
-    if parts.len() != 4
-        || parts[0] != "rongame_beta"
-        || parts[1] != "rgfate"
-        || parts[3] != "ac.php"
-    {
-        return None;
+    match server {
+        Server::Jp => {
+            if host != "game.fate-go.jp" || url.path() != "/login/top" {
+                return None;
+            }
+            // JP routes by path. Its query may contain private account data.
+            url.set_query(None);
+        }
+        Server::Cn => {
+            if ![
+                "-ios-fate.bilibiligame.net",
+                "-bili-fate.bilibiligame.net",
+                "-uo-fate.bilibiligame.net",
+            ]
+            .iter()
+            .any(|suffix| host.ends_with(suffix))
+            {
+                return None;
+            }
+            let parts: Vec<_> = url
+                .path()
+                .split('/')
+                .filter(|part| !part.is_empty())
+                .collect();
+            if parts.len() != 4
+                || parts[0] != "rongame_beta"
+                || parts[1] != "rgfate"
+                || parts[3] != "ac.php"
+            {
+                return None;
+            }
+            let keys: Vec<_> = url
+                .query_pairs()
+                .filter(|(key, _)| key == "_key")
+                .map(|(_, value)| value.into_owned())
+                .collect();
+            if keys != ["toplogin"] {
+                return None;
+            }
+            url.set_query(Some("_key=toplogin"));
+        }
     }
-    let keys: Vec<_> = url
-        .query_pairs()
-        .filter(|(key, _)| key == "_key")
-        .map(|(_, value)| value.into_owned())
-        .collect();
-    if keys != ["toplogin"] {
-        return None;
-    }
-    // Keep only the routing selector in the displayed URL, never account IDs/tokens.
-    url.set_query(Some("_key=toplogin"));
     url.set_fragment(None);
     Some(url.to_string())
 }
 
-fn ids(client: &client::Client, port: u16) -> Result<Vec<u64>, String> {
+fn ids(server: Server, client: &client::Client, port: u16) -> Result<Vec<u64>, String> {
     let bytes = client.request(
         port,
         "filter",
-        Some(&serde_json::json!({"filters":[{"type":"keyword","pattern":"_key=toplogin"}]})),
+        Some(
+            &serde_json::json!({"filters":[{"type":"keyword","pattern":target::selector(server)}]}),
+        ),
         128 * 1024,
     )?;
     let ids: Vec<u64> = serde_json::from_slice(&bytes).map_err(|_| "Reqable 记录列表无效")?;
@@ -333,11 +371,15 @@ fn record(client: &client::Client, port: u16, id: u64) -> Result<Record, String>
     Ok(record)
 }
 
-pub(super) fn baseline(client: &client::Client, port: u16) -> Result<HashSet<String>, String> {
+pub(super) fn baseline(
+    server: Server,
+    client: &client::Client,
+    port: u16,
+) -> Result<HashSet<String>, String> {
     let mut baseline = HashSet::new();
-    for id in ids(client, port)? {
+    for id in ids(server, client, port)? {
         let record = record(client, port, id)?;
-        if target_url(&record.url).is_some() {
+        if target_url(server, &record.url).is_some() {
             baseline.insert(record.uid);
         }
     }
@@ -345,6 +387,7 @@ pub(super) fn baseline(client: &client::Client, port: u16) -> Result<HashSet<Str
 }
 
 fn scan(
+    server: Server,
     client: &client::Client,
     port: u16,
     serial: &str,
@@ -352,12 +395,12 @@ fn scan(
     run: &mut AdbCommand<'_>,
 ) -> Result<Option<LoginResponse>, String> {
     // Latest completed response wins; pending records are retried on the next poll.
-    for id in ids(client, port)?.into_iter().rev() {
+    for id in ids(server, client, port)?.into_iter().rev() {
         let record = record(client, port, id)?;
         if baseline.contains(&record.uid) {
             continue;
         }
-        let Some(url) = target_url(&record.url) else {
+        let Some(url) = target_url(server, &record.url) else {
             continue;
         };
         let Some(response) = record.response else {
@@ -370,7 +413,10 @@ fn scan(
             continue;
         };
         if !(200..300).contains(&code) {
-            return Err(format!("toplogin 请求失败（HTTP {code}）"));
+            return Err(format!(
+                "{} 请求失败（HTTP {code}）",
+                target::response_label(server)
+            ));
         }
         let bytes = body_bytes(body, &mut |path| read_cache(serial, path, run))?;
         if bytes.is_empty() {

@@ -1,12 +1,13 @@
+use super::target;
 use super::{
     find_root, read_shell_bytes, root_shell, run_adb, select_serial, shell_quote, AdbCommand,
 };
 use crate::device_operation::OperationCancellation;
+use crate::Server;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
-const PACKAGE: &str = "com.bilibili.fatego";
 const MIN_VERSION: [u32; 3] = [3, 3, 5];
 const CONFIG: &str = "/data/user/0/com.reqable.android/files/config/capture_config";
 const MAX_CONFIG_SIZE: usize = 64 * 1024;
@@ -34,6 +35,8 @@ fn reqable_version(info: &[u8]) -> Result<String, String> {
 }
 
 pub(super) fn prepare_capture_configuration(
+    server: Server,
+    package: &str,
     shell: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<String, String> {
     let info = shell("dumpsys package com.reqable.android")?;
@@ -44,10 +47,18 @@ pub(super) fn prepare_capture_configuration(
         &format!("head -c {} {CONFIG}", MAX_CONFIG_SIZE + 1),
         shell,
     )
-    .map_err(|_| "请先点击环境配置，将 Reqable 设置为仅抓国服 FGO")?;
+    .map_err(|_| {
+        format!(
+            "请先点击环境配置，将 Reqable 设置为仅抓所选{} FGO 客户端",
+            target::label(server)
+        )
+    })?;
     let config = parse_config(&bytes)?;
-    if cn_config(config.clone()) != config {
-        return Err("请先点击环境配置，将 Reqable 设置为仅抓国服 FGO".into());
+    if game_config(package, config.clone()) != config {
+        return Err(format!(
+            "请先点击环境配置，将 Reqable 设置为仅抓所选{} FGO 客户端",
+            target::label(server)
+        ));
     }
     super::picture_in_picture::disable(root, shell)?;
     Ok(version)
@@ -63,11 +74,19 @@ pub(crate) struct CaptureConfiguration {
 }
 
 pub(crate) fn configure(
+    server: Server,
+    package: &str,
     adb_path: &Path,
     selected: Option<&str>,
     cancellation: &OperationCancellation,
 ) -> Result<CaptureConfiguration, String> {
-    configure_controlled_using(selected, &mut |args| run_adb(adb_path, args), cancellation)
+    configure_controlled_using(
+        server,
+        package,
+        selected,
+        &mut |args| run_adb(adb_path, args),
+        cancellation,
+    )
 }
 
 fn parse_config(bytes: &[u8]) -> Result<Value, String> {
@@ -91,8 +110,8 @@ fn parse_config(bytes: &[u8]) -> Result<Value, String> {
     Ok(config)
 }
 
-fn cn_config(mut config: Value) -> Value {
-    config["androidApps"] = serde_json::json!([PACKAGE]);
+fn game_config(package: &str, mut config: Value) -> Value {
+    config["androidApps"] = serde_json::json!([package]);
     config["androidAppsBypass"] = false.into();
     config["vpnMode"] = true.into();
     config["hostMode"] = false.into();
@@ -122,10 +141,15 @@ fn opened(output: &[u8]) -> bool {
 }
 
 pub(super) fn configure_controlled_using(
+    server: Server,
+    package: &str,
     selected: Option<&str>,
     run: &mut AdbCommand<'_>,
     cancellation: &OperationCancellation,
 ) -> Result<CaptureConfiguration, String> {
+    if !target::matches_server(server, package) {
+        return Err("客户端包名与服务器不匹配".into());
+    }
     cancellation.check()?;
     let devices = run(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
@@ -149,7 +173,14 @@ pub(super) fn configure_controlled_using(
     };
     for (package, message) in [
         ("com.reqable.android", "请先在设备上安装 Reqable"),
-        (PACKAGE, "请先在设备上安装国服 FGO"),
+        (
+            package,
+            if server == Server::Cn {
+                "请先在设备上安装国服 FGO"
+            } else {
+                "请先在设备上安装日服 FGO"
+            },
+        ),
     ] {
         let output = forward(&format!("pm path {package}"))?;
         if !String::from_utf8_lossy(&output).contains("package:") {
@@ -175,12 +206,15 @@ pub(super) fn configure_controlled_using(
         read_shell_bytes(root, &read, &mut forward)
             .map_err(|_| "无法读取 Reqable 配置，请先完成 Reqable 的首次初始化")?,
     )?;
-    let desired = cn_config(match &original {
-        Some(bytes) => parse_config(bytes)?,
-        // Reqable lazily creates this file after its first settings change.
-        // Omitted fields continue to use Reqable's own defaults.
-        None => serde_json::json!({}),
-    });
+    let desired = game_config(
+        package,
+        match &original {
+            Some(bytes) => parse_config(bytes)?,
+            // Reqable lazily creates this file after its first settings change.
+            // Omitted fields continue to use Reqable's own defaults.
+            None => serde_json::json!({}),
+        },
+    );
     let bytes = serde_json::to_vec(&desired).map_err(|_| "无法生成 Reqable 配置")?;
     if bytes.len() > MAX_CONFIG_SIZE {
         return Err("生成的 Reqable 配置过大，未修改原配置".into());
@@ -288,9 +322,12 @@ echo MASH_CONFIG_RESTORED"#
     let _ = shell(&root_shell(root, &format!("rm -f {backup} {stage}")));
     Ok(CaptureConfiguration {
         serial,
-        package_name: PACKAGE.into(),
+        package_name: package.into(),
         reqable_version,
-        message: "Reqable 已配置为仅抓国服 FGO，抓包未开启".into(),
+        message: format!(
+            "Reqable 已配置为仅抓{} FGO，抓包未开启",
+            target::label(server)
+        ),
     })
 }
 

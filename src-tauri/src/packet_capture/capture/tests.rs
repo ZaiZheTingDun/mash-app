@@ -1,6 +1,71 @@
 use super::super::tests::encoded_shell_output;
 use super::*;
 
+#[test]
+fn channel_capture_uses_the_chosen_package_and_rejects_another_clients_config() {
+    let (result, commands, _) = fake(Scenario {
+        package: Some("com.bilibili.fgo.mi"),
+        ..Default::default()
+    });
+    assert!(result.is_ok());
+    assert!(commands
+        .iter()
+        .any(|c| c == "shell dumpsys package com.bilibili.fgo.mi"));
+    assert!(!commands.iter().any(|c| c.contains("com.bilibili.fatego")));
+    let (result, _, requests) = fake(Scenario {
+        package: Some("com.bilibili.fgo.mi"),
+        configured_package: Some("com.bilibili.fatego"),
+        ..Default::default()
+    });
+    assert!(result.unwrap_err().contains("所选国服 FGO 客户端"));
+    assert!(!requests.contains(&Request::Start));
+}
+
+#[test]
+fn jp_capture_checks_the_selected_package_and_pins_the_response_watch_server() {
+    let (result, commands, _) = fake(Scenario {
+        server: Some(Server::Jp),
+        ..Default::default()
+    });
+    let result = result.unwrap();
+    assert_eq!(result.server, Server::Jp);
+    assert!(result.message.contains("日服"));
+    assert!(commands
+        .iter()
+        .any(|c| c == "shell dumpsys package com.aniplex.fategrandorder"));
+    assert!(!commands.iter().any(|c| c.contains("com.bilibili.fatego")));
+    let store = response::ResponseStore::default();
+    result.begin_response_watch(&store);
+    assert!(!serde_json::to_string(&result).unwrap().contains("server"));
+}
+
+#[test]
+fn changing_servers_requires_matching_configuration_and_vpn_isolation() {
+    for (server, configured_server) in [(Server::Cn, Server::Jp), (Server::Jp, Server::Cn)] {
+        let (result, _, requests) = fake(Scenario {
+            server: Some(server),
+            configured_server: Some(configured_server),
+            ..Default::default()
+        });
+        assert!(result.unwrap_err().contains(target::label(server)));
+        assert!(!requests.contains(&Request::Start));
+    }
+    let (result, _, requests) = fake(Scenario {
+        server: Some(Server::Jp),
+        missing_game: true,
+        ..Default::default()
+    });
+    assert!(result.is_err());
+    assert!(!requests.contains(&Request::Start));
+    let (result, _, requests) = fake(Scenario {
+        server: Some(Server::Jp),
+        wide_vpn: true,
+        ..Default::default()
+    });
+    assert!(result.unwrap_err().contains("无法确认仅抓日服"));
+    assert!(requests.contains(&Request::Stop));
+}
+
 fn vpn(ranges: &str) -> Vec<u8> {
     format!("NetworkAgentInfo{{ ni{{VPN CONNECTED extra: }} nc{{ Uids: <{{{ranges}}}> OwnerUid: 10082 }} }}").into_bytes()
 }
@@ -16,8 +81,8 @@ fn state_and_application_isolation_require_explicit_valid_values() {
     ] {
         assert!(decode_status(invalid).is_err());
     }
-    assert!(vpn_only_cn(&vpn("10081-10081, 20081-20081"), 10081));
-    assert!(vpn_only_cn(&vpn("10081"), 10081));
+    assert!(vpn_only_game(&vpn("10081-10081, 20081-20081"), 10081));
+    assert!(vpn_only_game(&vpn("10081"), 10081));
     for ranges in [
         "0-99999",
         "10081-10082",
@@ -26,15 +91,20 @@ fn state_and_application_isolation_require_explicit_valid_values() {
         "10081, 10082",
         "",
     ] {
-        assert!(!vpn_only_cn(&vpn(ranges), 10081));
+        assert!(!vpn_only_game(&vpn(ranges), 10081));
     }
-    assert!(!vpn_only_cn(b"unknown format", 10081));
+    assert!(!vpn_only_game(b"unknown format", 10081));
     assert_eq!(package_uid(b"    userId=10081\n").unwrap(), 10081);
     assert!(package_uid(b"userId=0").is_err());
 }
 
 #[derive(Default)]
 struct Scenario {
+    package: Option<&'static str>,
+    configured_package: Option<&'static str>,
+    server: Option<Server>,
+    configured_server: Option<Server>,
+    missing_game: bool,
     auth_failure: bool,
     auth_cancel: bool,
     version: Option<&'static str>,
@@ -67,6 +137,8 @@ fn fake_with_cancellation(
     s: Scenario,
     cancellation: &OperationCancellation,
 ) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Request>) {
+    let server = s.server.unwrap_or(Server::Cn);
+    let package = s.package.unwrap_or(target::package(server));
     let mut commands = Vec::new();
     let mut requests = Vec::new();
     let mut started = s.already_active;
@@ -75,6 +147,8 @@ fn fake_with_cancellation(
     let mut pip_disabled = !s.pip_allowed;
     let prepared = std::cell::Cell::new(false);
     let result = start_controlled_using(
+        server,
+        package,
         Some("device"),
         &mut |args| {
             if args == ["devices", "-l"] {
@@ -87,11 +161,15 @@ fn fake_with_cancellation(
                 "shell dumpsys package com.reqable.android" => {
                     Ok(format!("versionName={}\n", s.version.unwrap_or("3.3.5")).into_bytes())
                 }
-                "shell dumpsys package com.bilibili.fatego" => Ok(if s.app_id_field {
-                    b"appId=10081\r\n".to_vec()
-                } else {
-                    b"userId=10081\n".to_vec()
-                }),
+                _ if command == format!("shell dumpsys package {package}") => {
+                    Ok(if s.missing_game {
+                        Vec::new()
+                    } else if s.app_id_field {
+                        b"appId=10081\r\n".to_vec()
+                    } else {
+                        b"userId=10081\n".to_vec()
+                    })
+                }
                 "shell am start -W -n com.reqable.android/.MainActivity" => {
                     Ok(b"Status: ok\n".to_vec())
                 }
@@ -132,7 +210,7 @@ fn fake_with_cancellation(
                 _ if command.contains("id -u") => Ok(b"0\n".to_vec()),
                 _ if command.contains("head -c") => {
                     let mut config = serde_json::json!({
-                    "androidApps": if s.unconfigured { vec!["other.app"] } else { vec!["com.bilibili.fatego"] },
+                    "androidApps": if s.unconfigured { vec!["other.app"] } else { vec![s.configured_package.unwrap_or_else(|| s.configured_server.map(target::package).unwrap_or(package))] },
                     "androidAppsBypass": false, "vpnMode": true, "hostMode": false, "autoCapture": false,
                     });
                     if s.legacy_pip_key {
@@ -461,6 +539,8 @@ fn start_on_authorized_device() {
         .join("resources/adb")
         .join(crate::platform::adb_executable_name());
     let result = start_capture(
+        Server::Cn,
+        target::package(Server::Cn),
         &path,
         Some(&serial),
         &crate::device_operation::OperationCancellation::default(),

@@ -61,3 +61,10 @@ export interface PacketCaptureWorkspace {
   capture: Omit<PacketCaptureResponseState, "response">;
   history: CaptureHistoryState;
 }
+
+export interface CaptureAppList {
+  serial: string;
+  server: "JP" | "CN";
+  apps: { packageName: string; name: string }[];
+  selectedPackage: string | null;
+}

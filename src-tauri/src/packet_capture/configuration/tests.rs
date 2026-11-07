@@ -1,5 +1,75 @@
 use super::super::tests::encoded_shell_output;
 use super::*;
+const PACKAGE: &str = "com.bilibili.fatego";
+
+#[test]
+fn channel_setup_uses_one_chosen_package_for_certificate_and_reqable_configuration() {
+    let (result, commands, _) = fake_with_logs(Scenario {
+        package: Some("com.bilibili.fgo.mi"),
+        setup: true,
+        apex: true,
+        ..Default::default()
+    });
+    assert_eq!(result.unwrap().package_name, "com.bilibili.fgo.mi");
+    assert!(commands.iter().any(|c| c == "pm path com.bilibili.fgo.mi"));
+    assert!(!commands.iter().any(|c| c.contains(PACKAGE)));
+    assert!(commands
+        .iter()
+        .any(|c| c.contains("pidof com.bilibili.fgo.mi")));
+}
+
+#[test]
+fn jp_setup_isolates_the_japanese_app_and_preserves_rollback() {
+    let (result, commands, logs) = fake_with_logs(Scenario {
+        server: Some(Server::Jp),
+        setup: true,
+        apex: true,
+        ..Default::default()
+    });
+    assert_eq!(result.unwrap().package_name, "com.aniplex.fategrandorder");
+    assert!(commands
+        .iter()
+        .any(|c| c == "pm path com.aniplex.fategrandorder"));
+    assert!(!commands.iter().any(|c| c.contains(PACKAGE)));
+    assert!(logs
+        .iter()
+        .any(|(_, message)| message.contains("仅抓日服 FGO")));
+    let install = commands
+        .iter()
+        .find(|c| c.contains("MASH_CA_INSTALLED"))
+        .unwrap();
+    assert!(install.contains("pidof com.aniplex.fategrandorder"));
+    assert!(!install.contains("__GAME_"));
+
+    for scenario in [
+        Scenario {
+            missing_game: true,
+            ..Default::default()
+        },
+        Scenario {
+            write_failure: true,
+            ..Default::default()
+        },
+        Scenario {
+            mismatch: true,
+            ..Default::default()
+        },
+    ] {
+        let write_failure = scenario.write_failure || scenario.mismatch;
+        let (result, commands) = fake(Scenario {
+            server: Some(Server::Jp),
+            ..scenario
+        });
+        let error = result.unwrap_err();
+        if write_failure {
+            assert!(error.contains("已恢复原配置"));
+            assert!(commands.iter().any(|c| c.contains("MASH_CONFIG_RESTORED")));
+        } else {
+            assert!(error.contains("安装日服 FGO"));
+            assert!(!commands.iter().any(|c| c.contains("MASH_CONFIG_WRITTEN")));
+        }
+    }
+}
 use crate::runner::LogLevel;
 
 fn original() -> Value {
@@ -51,7 +121,7 @@ fn newer_versions_can_be_configured_and_report_the_installed_version() {
 #[test]
 fn cn_configuration_preserves_other_settings_and_disables_automatic_capture() {
     let old = original();
-    let new = cn_config(old.clone());
+    let new = game_config(target::package(Server::Cn), old.clone());
     assert_eq!(new["androidApps"], serde_json::json!([PACKAGE]));
     assert_eq!(new["androidAppsBypass"], false);
     assert_eq!(new["vpnMode"], true);
@@ -61,7 +131,7 @@ fn cn_configuration_preserves_other_settings_and_disables_automatic_capture() {
     for field in ["proxyPort", "enhancedMode", "futureSetting"] {
         assert_eq!(new[field], old[field]);
     }
-    assert_eq!(cn_config(new.clone()), new);
+    assert_eq!(game_config(target::package(Server::Cn), new.clone()), new);
 }
 
 #[test]
@@ -93,14 +163,19 @@ fn unverified_legacy_pip_key_is_preserved_without_becoming_a_capture_requirement
         let mut old = original();
         old["pipMode"] = value.clone();
         assert!(parse_config(&serde_json::to_vec(&old).unwrap()).is_ok());
-        let configured = cn_config(old);
+        let configured = game_config(target::package(Server::Cn), old);
         assert_eq!(configured["pipMode"], value);
-        assert_eq!(cn_config(configured.clone()), configured);
+        assert_eq!(
+            game_config(target::package(Server::Cn), configured.clone()),
+            configured
+        );
     }
 }
 
 #[derive(Default)]
 struct Scenario {
+    package: Option<&'static str>,
+    server: Option<Server>,
     setup: bool,
     apex: bool,
     certificate_rollback_failure: bool,
@@ -137,6 +212,8 @@ fn fake_with_logs(
     Vec<String>,
     Vec<(LogLevel, String)>,
 ) {
+    let server = scenario.server.unwrap_or(Server::Cn);
+    let package = scenario.package.unwrap_or(target::package(server));
     let cancellation = OperationCancellation::default();
     let mut logs = Vec::new();
     let mut commands = Vec::new();
@@ -149,13 +226,15 @@ fn fake_with_logs(
     let mut prepare = |selected: Option<&str>, run: &mut AdbCommand<'_>| {
         if scenario.setup {
             super::super::setup_controlled_using(
+                server,
+                package,
                 selected,
                 run,
                 &mut |level, message| logs.push((level, message.into())),
                 &cancellation,
             )
         } else {
-            configure_controlled_using(selected, run, &cancellation)
+            configure_controlled_using(server, package, selected, run, &cancellation)
         }
     };
     let result = prepare(Some("test-device"), &mut |args| {
@@ -212,7 +291,7 @@ fn fake_with_logs(
             return Ok(b"MASH_CA_INSTALLED".to_vec());
         }
         if command.starts_with("pm path") {
-            if command.ends_with(PACKAGE) && scenario.missing_game {
+            if command.ends_with(package) && scenario.missing_game {
                 return Ok(Vec::new());
             }
             return Ok(b"package:/data/app/example/base.apk\n".to_vec());
@@ -239,7 +318,7 @@ fn fake_with_logs(
                     Ok(encoded_shell_output(b"MASH_CONFIG_ABSENT\n"))
                 } else {
                     Ok(encoded_shell_output(
-                        &serde_json::to_vec(&cn_config(serde_json::json!({}))).unwrap(),
+                        &serde_json::to_vec(&game_config(package, serde_json::json!({}))).unwrap(),
                     ))
                 };
             }
@@ -247,7 +326,7 @@ fn fake_with_logs(
                 return Ok(encoded_shell_output(b"{}"));
             }
             let value = if reads > 2 && written && !scenario.mismatch {
-                cn_config(original())
+                game_config(package, original())
             } else {
                 original()
             };
@@ -283,9 +362,9 @@ fn fake_with_logs(
                 assert!(command.contains("chown"));
             } else {
                 assert!(command.contains(&hash(&serde_json::to_vec(&original()).unwrap())));
-                assert!(
-                    command.contains(&hash(&serde_json::to_vec(&cn_config(original())).unwrap()))
-                );
+                assert!(command.contains(&hash(
+                    &serde_json::to_vec(&game_config(package, original())).unwrap()
+                )));
                 assert!(command.contains("cp -p"));
             }
             assert!(command.contains("mv -f"));
@@ -466,6 +545,8 @@ fn configure_on_authorized_device() {
         .join("resources/adb")
         .join(crate::platform::adb_executable_name());
     let result = configure(
+        Server::Cn,
+        target::package(Server::Cn),
         &path,
         Some(&serial),
         &crate::device_operation::OperationCancellation::default(),

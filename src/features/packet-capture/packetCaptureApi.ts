@@ -1,5 +1,5 @@
 import { invoke } from "../../tauri";
-import type { CaptureConfiguration, CaptureStarted, CertificateInstallation, PacketCaptureResponseState, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
+import type { CaptureAppList, CaptureConfiguration, CaptureStarted, CertificateInstallation, PacketCaptureResponseState, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
 
 export function installCaptureCertificate(): Promise<CertificateInstallation> {
   return invoke<CertificateInstallation>("install_capture_certificate");
@@ -43,4 +43,12 @@ export function exportPacketCaptureResponse(recordId: string): Promise<string | 
 
 export function stopPacketCapture(): Promise<void> {
   return invoke<void>("stop_packet_capture");
+}
+
+export function getPacketCaptureApps(): Promise<CaptureAppList> {
+  return invoke<CaptureAppList>("get_packet_capture_apps");
+}
+
+export function selectPacketCaptureApp(list: CaptureAppList, packageName: string): Promise<CaptureAppList> {
+  return invoke<CaptureAppList>("select_packet_capture_app", { serial: list.serial, server: list.server, packageName });
 }
