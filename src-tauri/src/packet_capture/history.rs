@@ -7,7 +7,7 @@ use std::{
     fs,
     io::{self, BufReader},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 mod cache;
@@ -26,6 +26,8 @@ pub(crate) struct CaptureHistoryEntry {
 pub(crate) struct CaptureRecord {
     entry: CaptureHistoryEntry,
     response: LoginResponse,
+    #[serde(skip)]
+    snapshot: OnceLock<Result<Arc<super::preview::Snapshot>, String>>,
 }
 
 impl CaptureRecord {
@@ -43,6 +45,10 @@ impl CaptureRecord {
             + self.entry.id.capacity()
             + self.entry.serial.as_ref().map_or(0, String::capacity)
             + self.response.allocated_bytes()
+            + self.snapshot.get().map_or(0, |result| match result {
+                Ok(snapshot) => 2 * std::mem::size_of::<usize>() + snapshot.allocated_bytes(),
+                Err(error) => error.capacity(),
+            })
     }
 }
 
@@ -194,6 +200,29 @@ impl HistoryStore {
         self.record_using(id, read_record)
     }
 
+    pub(crate) fn preview(
+        &self,
+        id: &str,
+        query: super::PreviewQuery,
+        catalog: &crate::commands::catalog::CaptureCatalog,
+        assets: &Path,
+    ) -> Result<super::CapturePreview, String> {
+        let record = self.record(id)?;
+        let snapshot = record
+            .snapshot
+            .get_or_init(|| super::preview::Snapshot::parse(&record.response.body).map(Arc::new))
+            .clone()?;
+        {
+            let mut inner = self.inner.lock().unwrap();
+            if !inner.index.records.contains(&record.entry) {
+                return Err("抓包记录已删除".into());
+            }
+            // Re-account the newly decoded snapshot within the same bounded cache.
+            inner.cache.insert(record);
+        }
+        Ok(snapshot.view(id, query, catalog, assets))
+    }
+
     fn record_using(
         &self,
         id: &str,
@@ -247,6 +276,7 @@ impl HistoryStore {
                         serial: capture.serial.clone(),
                     },
                     response: response.clone(),
+                    snapshot: OnceLock::new(),
                 });
                 // Payload first, index second: an interrupted save never exposes
                 // an index entry whose complete response has not been persisted.

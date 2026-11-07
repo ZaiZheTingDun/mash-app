@@ -92,6 +92,23 @@ pub(crate) async fn select_packet_capture_record(
 }
 
 #[tauri::command]
+pub(crate) async fn get_packet_capture_preview(
+    record_id: String,
+    query: packet_capture::PreviewQuery,
+    app: tauri::AppHandle,
+    history: tauri::State<'_, Arc<HistoryStore>>,
+) -> Result<packet_capture::CapturePreview, String> {
+    let history = history.inner().clone();
+    let assets = crate::paths::app_assets_dir(&app);
+    tauri::async_runtime::spawn_blocking(move || {
+        let catalog = crate::commands::catalog::capture_catalog()?;
+        history.preview(&record_id, query, &catalog, &assets)
+    })
+    .await
+    .map_err(|error| format!("解析账户数据失败：{error}"))?
+}
+
+#[tauri::command]
 pub(crate) async fn delete_packet_capture_record(
     record_id: Option<String>,
     history: tauri::State<'_, Arc<HistoryStore>>,

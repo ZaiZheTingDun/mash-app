@@ -1,4 +1,5 @@
 import { invoke } from "../../tauri";
+import type { CapturePreview, CapturePreviewQuery } from "../../types/packetCapture";
 import type { CaptureConfiguration, CaptureStarted, CertificateInstallation, PacketCaptureResponseState, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
 
 export function installCaptureCertificate(): Promise<CertificateInstallation> {
@@ -27,6 +28,10 @@ export function getPacketCaptureWorkspace(): Promise<PacketCaptureWorkspace> {
 
 export function selectPacketCaptureRecord(recordId: string): Promise<CaptureRecord> {
   return invoke<CaptureRecord>("select_packet_capture_record", { recordId });
+}
+
+export function getPacketCapturePreview(recordId: string, query: CapturePreviewQuery): Promise<CapturePreview> {
+  return invoke<CapturePreview>("get_packet_capture_preview", { recordId, query });
 }
 
 export function deletePacketCaptureRecord(recordId: string | null): Promise<CaptureHistoryState> {

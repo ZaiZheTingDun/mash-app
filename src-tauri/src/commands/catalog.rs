@@ -41,6 +41,11 @@ pub(crate) use mystic_codes::*;
 mod metadata;
 pub(crate) use metadata::*;
 
+mod capture;
+#[cfg(test)]
+pub(crate) use capture::CaptureIdentity;
+pub(crate) use capture::{capture_catalog, CaptureCatalog};
+
 #[tauri::command]
 pub(crate) fn get_template_asset_path(
     app: tauri::AppHandle,

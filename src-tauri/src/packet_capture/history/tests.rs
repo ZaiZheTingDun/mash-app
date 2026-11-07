@@ -15,6 +15,56 @@ fn capture(id: &str, time: u64, raw: &str) -> ResponseState {
 }
 
 #[test]
+fn projections_are_lazy_reused_and_never_persisted_into_raw_history() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = HistoryStore::new(temp.path().into());
+    let id = uuid::Uuid::new_v4().to_string();
+    let raw = r#"{"cache":{"replaced":{"userGame":[{"userId":"u","qp":"42"}],"userSvt":[],"userSvtStorage":[]}}}"#;
+    store.sync(&capture(&id, 1, raw)).unwrap();
+    let record = store.record(&id).unwrap();
+    assert!(record.snapshot.get().is_none());
+    let bytes_before = record.retained_bytes();
+    let file_before = fs::read(store.path(&id).unwrap()).unwrap();
+    let catalog = crate::commands::catalog::capture_catalog().unwrap();
+    let view = store
+        .preview(
+            &id,
+            super::super::PreviewQuery::default(),
+            &catalog,
+            temp.path(),
+        )
+        .unwrap();
+    assert_eq!(view.currencies[0].quantity, 42);
+    assert!(record.retained_bytes() > bytes_before);
+    assert_eq!(fs::read(store.path(&id).unwrap()).unwrap(), file_before);
+    let snapshot = record.snapshot.get().unwrap().as_ref().unwrap();
+    fs::remove_file(store.path(&id).unwrap()).unwrap();
+    store
+        .preview(
+            &id,
+            super::super::PreviewQuery::default(),
+            &catalog,
+            temp.path(),
+        )
+        .unwrap();
+    let again = store.record(&id).unwrap();
+    assert!(Arc::ptr_eq(
+        snapshot,
+        again.snapshot.get().unwrap().as_ref().unwrap()
+    ));
+    assert_eq!(store.body(&id).unwrap(), raw);
+    store.delete(Some(&id)).unwrap();
+    assert!(store
+        .preview(
+            &id,
+            super::super::PreviewQuery::default(),
+            &catalog,
+            temp.path()
+        )
+        .is_err());
+}
+
+#[test]
 fn persists_raw_responses_orders_selects_and_removes_without_resurrecting_deleted_records() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("history");
@@ -75,6 +125,7 @@ fn migrates_legacy_once_then_returns_index_before_reading_any_payload() {
                 serial: capture.serial,
             },
             response: capture.response.unwrap(),
+            snapshot: OnceLock::new(),
         };
         write_json_atomic(&temp.path().join(format!("{id}.json")), &record, "test").unwrap();
     }

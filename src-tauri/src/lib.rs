@@ -118,6 +118,7 @@ pub fn run() {
             commands::packet_capture::setup_packet_capture,
             commands::packet_capture::get_packet_capture_workspace,
             commands::packet_capture::select_packet_capture_record,
+            commands::packet_capture::get_packet_capture_preview,
             commands::packet_capture::delete_packet_capture_record,
             commands::packet_capture::copy_packet_capture_response,
             commands::packet_capture::export_packet_capture_response,

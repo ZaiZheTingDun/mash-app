@@ -61,3 +61,24 @@ fn allocated_capacity_counts_even_when_string_length_is_small() {
     assert!(cache.records.is_empty());
     assert_eq!(cache.bytes, 0);
 }
+
+#[test]
+fn decoded_snapshots_are_reaccounted_and_evict_an_oversized_record() {
+    let raw = r#"{"cache":{"replaced":{"userItem":[{"itemId":100,"num":5}]}}}"#;
+    let record = record("1", raw);
+    let before = record.retained_bytes();
+    let mut cache = RecordCache::new(3, before);
+    cache.insert(record.clone());
+    assert!(cache.get("1").is_some());
+    record
+        .snapshot
+        .set(Ok(Arc::new(
+            crate::packet_capture::preview::Snapshot::parse(raw).unwrap(),
+        )))
+        .ok()
+        .unwrap();
+    assert!(record.retained_bytes() > before);
+    cache.insert(record);
+    assert!(cache.get("1").is_none());
+    assert_eq!(cache.bytes, 0);
+}
