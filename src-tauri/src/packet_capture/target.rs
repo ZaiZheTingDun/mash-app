@@ -61,32 +61,14 @@ impl CaptureTargetStore {
         server: Server,
         adb_path: &Path,
         selected: Option<&str>,
-    ) -> Result<(String, String), String> {
-        self.resolve_using(server, selected, &mut |args| run_adb(adb_path, args))
-    }
-
-    pub(crate) fn resolve_checked(
-        &self,
-        server: Server,
-        adb_path: &Path,
-        selected: Option<&str>,
         expected: Option<&CaptureClientContext>,
     ) -> Result<(String, String), String> {
-        self.resolve_checked_using(server, selected, expected, &mut |args| {
+        self.resolve_using(server, selected, expected, &mut |args| {
             run_adb(adb_path, args)
         })
     }
 
     fn resolve_using(
-        &self,
-        server: Server,
-        selected: Option<&str>,
-        run: &mut AdbCommand<'_>,
-    ) -> Result<(String, String), String> {
-        self.resolve_checked_using(server, selected, None, run)
-    }
-
-    fn resolve_checked_using(
         &self,
         server: Server,
         selected: Option<&str>,

@@ -13,6 +13,9 @@ use tauri::Emitter;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::DialogExt;
 
+mod operation;
+use operation::CaptureOperation;
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PacketCaptureWorkspace {
@@ -81,40 +84,18 @@ pub(crate) async fn select_packet_capture_app(
 pub(crate) async fn setup_packet_capture(
     app: tauri::AppHandle,
     client_context: Option<CaptureClientContext>,
-    targets: tauri::State<'_, CaptureTargetStore>,
-    server: tauri::State<'_, Mutex<crate::Server>>,
-    settings: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
-    responses: tauri::State<'_, ResponseStore>,
 ) -> Result<CaptureConfiguration, String> {
-    let lease = coordinator.reserve(DeviceOperation::ConfigurePacketCapture)?;
-    let server = *server.lock().unwrap();
-    let targets = targets.inner().clone();
-    let selected = settings.lock().unwrap().selected_adb_serial.clone();
-    let cancellation = lease.cancellation();
-    let responses = responses.inner().clone();
-    let adb_path = crate::adb::resolve_adb_path(&app);
+    let operation = CaptureOperation::reserve(&app, DeviceOperation::ConfigurePacketCapture)?;
     let log_app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let _lease = lease;
-        cancellation.check()?;
-        responses.ensure_client_selection_allowed()?;
-        let (serial, package) = targets.resolve_checked(
-            server,
-            &adb_path,
-            selected.as_deref(),
-            client_context.as_ref(),
-        )?;
-        cancellation.bind_device(&serial)?;
-        cancellation.check()?;
-        responses.reset();
+        let target = operation.prepare(client_context.as_ref())?;
         packet_capture::setup(
-            server,
-            &package,
-            &adb_path,
-            Some(&serial),
+            target.server,
+            &target.package,
+            &operation.adb_path,
+            Some(&target.serial),
             &mut |level, message| {
-                if cancellation.is_cancelled() && level == LogLevel::Info {
+                if operation.cancellation.is_cancelled() && level == LogLevel::Info {
                     return;
                 }
                 operation_log::emit(&log_app, level, message);
@@ -122,7 +103,7 @@ pub(crate) async fn setup_packet_capture(
                     let _ = log_app.emit("packet-capture-setup-progress", message);
                 }
             },
-            &cancellation,
+            &operation.cancellation,
         )
     })
     .await
@@ -253,27 +234,17 @@ pub(crate) async fn stop_packet_capture(
 #[tauri::command]
 pub(crate) async fn install_capture_certificate(
     app: tauri::AppHandle,
-    targets: tauri::State<'_, CaptureTargetStore>,
-    server: tauri::State<'_, Mutex<crate::Server>>,
-    settings: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
-    responses: tauri::State<'_, ResponseStore>,
 ) -> Result<CertificateInstallation, String> {
-    let lease = coordinator.reserve(DeviceOperation::InstallCaptureCertificate)?;
-    let server = *server.lock().unwrap();
-    let targets = targets.inner().clone();
-    let selected = settings.lock().unwrap().selected_adb_serial.clone();
-    let cancellation = lease.cancellation();
-    let responses = responses.inner().clone();
-    let adb_path = crate::adb::resolve_adb_path(&app);
+    let operation = CaptureOperation::reserve(&app, DeviceOperation::InstallCaptureCertificate)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _lease = lease;
-        cancellation.check()?;
-        responses.ensure_client_selection_allowed()?;
-        let (serial, package) = targets.resolve(server, &adb_path, selected.as_deref())?;
-        cancellation.bind_device(&serial)?;
-        responses.reset();
-        packet_capture::install(server, &package, &adb_path, Some(&serial), &cancellation)
+        let target = operation.prepare(None)?;
+        packet_capture::install(
+            target.server,
+            &target.package,
+            &operation.adb_path,
+            Some(&target.serial),
+            &operation.cancellation,
+        )
     })
     .await
     .map_err(|error| format!("证书安装任务失败：{error}"))?
@@ -283,53 +254,32 @@ pub(crate) async fn install_capture_certificate(
 pub(crate) async fn start_packet_capture(
     app: tauri::AppHandle,
     client_context: Option<CaptureClientContext>,
-    targets: tauri::State<'_, CaptureTargetStore>,
-    server: tauri::State<'_, Mutex<crate::Server>>,
-    settings: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
-    responses: tauri::State<'_, ResponseStore>,
 ) -> Result<CaptureStarted, String> {
-    let lease = coordinator.reserve(DeviceOperation::StartPacketCapture)?;
-    let server = *server.lock().unwrap();
-    let targets = targets.inner().clone();
-    let selected = settings.lock().unwrap().selected_adb_serial.clone();
-    let cancellation = lease.cancellation();
-    let responses = responses.inner().clone();
-    let adb_path = crate::adb::resolve_adb_path(&app);
+    let operation = CaptureOperation::reserve(&app, DeviceOperation::StartPacketCapture)?;
     let keys = packet_capture::ApiKeyStore::new(
         crate::paths::app_data_dir(&app).join("packet-capture/api-keys.json"),
     );
     let jar_path = crate::resolve_scrcpy_jar(&app).unwrap_or_default();
     let log_app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let _lease = lease;
-        cancellation.check()?;
-        responses.ensure_client_selection_allowed()?;
-        let (serial, package) = targets.resolve_checked(
-            server,
-            &adb_path,
-            selected.as_deref(),
-            client_context.as_ref(),
-        )?;
-        cancellation.bind_device(&serial)?;
-        responses.reset();
+        let target = operation.prepare(client_context.as_ref())?;
         let result = packet_capture::start_capture(
-            server,
-            &package,
-            &adb_path,
-            Some(&serial),
-            &cancellation,
+            target.server,
+            &target.package,
+            &operation.adb_path,
+            Some(&target.serial),
+            &operation.cancellation,
             &keys,
             &jar_path,
             &mut |message| {
-                if !cancellation.is_cancelled() {
+                if !operation.cancellation.is_cancelled() {
                     operation_log::emit(&log_app, LogLevel::Info, message);
                     let _ = log_app.emit("packet-capture-start-progress", message);
                 }
             },
         )?;
-        cancellation.check()?;
-        result.begin_response_watch(&responses);
+        operation.cancellation.check()?;
+        result.begin_response_watch(&operation.responses);
         Ok(result)
     })
     .await
@@ -339,27 +289,17 @@ pub(crate) async fn start_packet_capture(
 #[tauri::command]
 pub(crate) async fn configure_packet_capture(
     app: tauri::AppHandle,
-    targets: tauri::State<'_, CaptureTargetStore>,
-    server: tauri::State<'_, Mutex<crate::Server>>,
-    settings: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
-    responses: tauri::State<'_, ResponseStore>,
 ) -> Result<CaptureConfiguration, String> {
-    let lease = coordinator.reserve(DeviceOperation::ConfigurePacketCapture)?;
-    let server = *server.lock().unwrap();
-    let targets = targets.inner().clone();
-    let selected = settings.lock().unwrap().selected_adb_serial.clone();
-    let cancellation = lease.cancellation();
-    let responses = responses.inner().clone();
-    let adb_path = crate::adb::resolve_adb_path(&app);
+    let operation = CaptureOperation::reserve(&app, DeviceOperation::ConfigurePacketCapture)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _lease = lease;
-        cancellation.check()?;
-        responses.ensure_client_selection_allowed()?;
-        let (serial, package) = targets.resolve(server, &adb_path, selected.as_deref())?;
-        cancellation.bind_device(&serial)?;
-        responses.reset();
-        packet_capture::configure(server, &package, &adb_path, Some(&serial), &cancellation)
+        let target = operation.prepare(None)?;
+        packet_capture::configure(
+            target.server,
+            &target.package,
+            &operation.adb_path,
+            Some(&target.serial),
+            &operation.cancellation,
+        )
     })
     .await
     .map_err(|error| format!("Reqable 配置任务失败：{error}"))?

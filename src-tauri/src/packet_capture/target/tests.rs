@@ -22,13 +22,13 @@ fn operations_reject_a_stale_displayed_server_device_or_client() {
     }))
     .unwrap();
     assert!(store
-        .resolve_checked_using(Server::Jp, None, Some(&context), &mut |_| panic!(
+        .resolve_using(Server::Jp, None, Some(&context), &mut |_| panic!(
             "must reject before device I/O"
         ))
         .unwrap_err()
         .contains("服务器已切换"));
     assert!(store
-        .resolve_checked_using(
+        .resolve_using(
             Server::Cn,
             None,
             Some(&context),
@@ -38,7 +38,7 @@ fn operations_reject_a_stale_displayed_server_device_or_client() {
         .contains("设备已切换"));
     assert_eq!(
         store
-            .resolve_checked_using(
+            .resolve_using(
                 Server::Cn,
                 None,
                 Some(&context),
@@ -57,7 +57,7 @@ fn operations_reject_a_stale_displayed_server_device_or_client() {
         )
         .unwrap();
     assert!(store
-        .resolve_checked_using(
+        .resolve_using(
             Server::Cn,
             None,
             Some(&context),
@@ -109,7 +109,9 @@ fn a_channel_client_works_without_the_official_app_and_multiple_clients_require_
         assert_eq!(wire["selectedPackage"], channel);
         assert_eq!(wire["apps"][0]["packageName"], channel);
         assert_eq!(
-            store.resolve_using(Server::Cn, None, &mut run).unwrap(),
+            store
+                .resolve_using(Server::Cn, None, None, &mut run)
+                .unwrap(),
             ("device".into(), channel.into())
         );
     }
@@ -121,7 +123,9 @@ fn a_channel_client_works_without_the_official_app_and_multiple_clients_require_
         .selected_package
         .is_none());
     assert_eq!(
-        store.resolve_using(Server::Cn, None, &mut run).unwrap_err(),
+        store
+            .resolve_using(Server::Cn, None, None, &mut run)
+            .unwrap_err(),
         "请在顶部选择需要抓包的客户端，再进行环境配置"
     );
     let chosen = store
@@ -132,7 +136,10 @@ fn a_channel_client_works_without_the_official_app_and_multiple_clients_require_
         Some("com.bilibili.fgo.mi")
     );
     assert_eq!(
-        store.resolve_using(Server::Cn, None, &mut run).unwrap().1,
+        store
+            .resolve_using(Server::Cn, None, None, &mut run)
+            .unwrap()
+            .1,
         "com.bilibili.fgo.mi"
     );
 }
@@ -168,7 +175,9 @@ fn selections_are_isolated_by_device_and_server_and_removed_choices_never_fall_b
         .unwrap()
         .selected_package
         .is_none());
-    assert!(store.resolve_using(Server::Cn, None, &mut removed).is_err());
+    assert!(store
+        .resolve_using(Server::Cn, None, None, &mut removed)
+        .is_err());
     store
         .select_using(
             Server::Cn,
@@ -180,7 +189,7 @@ fn selections_are_isolated_by_device_and_server_and_removed_choices_never_fall_b
         .unwrap();
     assert_eq!(
         store
-            .resolve_using(Server::Cn, None, &mut removed)
+            .resolve_using(Server::Cn, None, None, &mut removed)
             .unwrap()
             .1,
         "com.bilibili.fatego"
@@ -224,7 +233,7 @@ fn stale_devices_servers_missing_apps_and_shell_characters_cannot_be_selected() 
     assert!(empty.apps.is_empty());
     assert!(empty.selected_package.is_none());
     assert!(store
-        .resolve_using(Server::Cn, None, &mut device("current", &[]))
+        .resolve_using(Server::Cn, None, None, &mut device("current", &[]))
         .unwrap_err()
         .contains("请先安装"));
 }
