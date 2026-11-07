@@ -92,6 +92,7 @@ function renderPage(overrides: Partial<ComponentProps<typeof RankUpQuestPage>> =
   };
   renderWithTheme(
     <RankUpQuestPage
+      server="CN"
       projects={[PROJECT]}
       projectCatalog={{ schemaVersion: 1, groups: [], ungroupedProjectIds: [PROJECT.id] }}
       activeProjectId={PROJECT.id}
@@ -226,12 +227,16 @@ describe("RankUpQuestPage", () => {
   });
 
   it("disables the workflow on the Japanese server", async () => {
-    vi.mocked(invoke).mockImplementation(async (command: string) =>
-      command === "get_server" ? "JP" : null,
-    );
-    renderPage();
+    renderPage({ server: "JP" });
 
     expect(await screen.findByRole("alert")).toHaveTextContent("强化任务自动化仅支持国服。");
+    expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
+  });
+
+  it("keeps actions disabled until the backend server is known", () => {
+    renderPage({ server: null });
+    expect(screen.getByRole("status")).toHaveTextContent("正在读取服务器…");
+    expect(screen.getByRole("button", { name: "截取游戏画面" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
   });
 

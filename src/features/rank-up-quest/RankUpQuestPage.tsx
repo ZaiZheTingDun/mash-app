@@ -23,6 +23,7 @@ interface AutomationEvent {
 }
 
 interface RankUpQuestPageProps extends Omit<ComponentProps<typeof ProjectBar>, "disabled" | "headerStyle"> {
+  server: Server | null;
   onBack: () => void;
   onAutomationStart?: () => void;
   onAutomationStartFailed?: () => void;
@@ -39,6 +40,7 @@ function rowStyle(row: RankUpQuestRow) {
 }
 
 export function RankUpQuestPage({
+  server,
   projects,
   activeProjectId,
   onBack,
@@ -48,7 +50,6 @@ export function RankUpQuestPage({
   ...projectBarProps
 }: RankUpQuestPageProps) {
   const [mode, setMode] = useState<RankUpQuestMode>("single");
-  const [server, setServer] = useState<Server | null>(null);
   const [capture, setCapture] = useState<RankUpQuestCaptureResult | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
@@ -60,10 +61,6 @@ export function RankUpQuestPage({
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
   );
-
-  useEffect(() => {
-    invoke<Server>("get_server").then(setServer).catch((value) => setError(String(value)));
-  }, []);
 
   useEffect(() => {
     const unlisten = listen<AutomationEvent>("automation-status", (event) => {
@@ -142,7 +139,8 @@ export function RankUpQuestPage({
 
   const statusError = error || (server === "JP" ? "强化任务自动化仅支持国服。" : null);
   const statusMessage = statusError
-    || (capturing ? "正在截取游戏画面…"
+    || (server == null ? "正在读取服务器…"
+      : capturing ? "正在截取游戏画面…"
       : running ? `当前页面：${currentScreen || "正在启动"}`
       : !selectedProject ? projects.length === 0 ? "请先创建战斗队伍" : "请选择战斗队伍"
       : mode === "all" ? "就绪，将按列表顺序执行"

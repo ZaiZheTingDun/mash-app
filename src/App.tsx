@@ -50,6 +50,7 @@ import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
 import type { SelfCheckStatus } from "./types/selfCheck";
 import type { AppColorTheme, AppTheme, AppThemePreference } from "./types/theme";
+import type { Server } from "./types/server";
 import {
   DEFAULT_BATTLE_START_PANEL,
   normalizeBattleStartPanel,
@@ -152,6 +153,7 @@ function App({
     navigationLocksRef.current.packetCapture || navigationLocksRef.current.resources
   ), []);
   const [view, setView] = useState<View>("team");
+  const [server, setServer] = useState<Server | null>(null);
   const [homeMasterFigureId, setHomeMasterFigureId] = useState(470);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
@@ -1120,6 +1122,7 @@ function App({
             />
           ) : view === "rankUpQuest" && featureToggles.rankUpQuest ? (
             <RankUpQuestPage
+              server={server}
               projects={projects}
               projectCatalog={projectCatalog}
               grandClassDefinitions={grandClassDefinitions}
@@ -1309,6 +1312,7 @@ function App({
         </Box>
       </Flex>
       <StatusBar
+        onServerChange={setServer}
         navigationDisabled={navigationLocked}
         onOpenSettings={handleOpenSettings}
         onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}

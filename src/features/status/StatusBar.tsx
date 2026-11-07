@@ -592,6 +592,7 @@ interface StatusBarProps {
   theme?: AppTheme;
   themePreference?: AppThemePreference;
   onThemeChange?: (theme: AppThemePreference) => void;
+  onServerChange?: (server: Server) => void;
   operationLogs?: OperationLogEntry[];
   servants?: Servant[];
   operationLogOpen?: boolean;
@@ -615,6 +616,7 @@ export function StatusBar({
   theme,
   themePreference,
   onThemeChange,
+  onServerChange,
   operationLogs = [],
   servants = [],
   operationLogOpen = false,
@@ -700,8 +702,11 @@ export function StatusBar({
     [operationLogs, showDebugLogs],
   );
   useEffect(() => {
-    invoke<Server>("get_server").then(setServer).catch(() => {});
-  }, []);
+    invoke<Server>("get_server").then((value) => {
+      setServer(value);
+      onServerChange?.(value);
+    }).catch(() => {});
+  }, [onServerChange]);
 
   const pollAdb = useCallback(() => {
     if (adbPollRef.current) return adbPollRef.current;
@@ -867,11 +872,13 @@ export function StatusBar({
     // Optimistic update; revert + log on backend rejection (e.g. the
     // runner started between this render and the IPC round-trip).
     setServer(next);
-    invoke("set_server", { value: next }).catch((err) => {
+    invoke("set_server", { value: next }).then(() => {
+      onServerChange?.(next);
+    }).catch((err) => {
       console.error("set_server failed", err);
       setServer(previous);
     });
-  }, [server]);
+  }, [onServerChange, server]);
 
   const handleThemeToggle = useCallback(() => {
     if (!theme || !onThemeChange) return;
