@@ -4,12 +4,13 @@ use super::*;
 fn session_key_is_used_for_polling_and_stop_and_is_never_serialized() {
     let store = ResponseStore::default();
     store.begin_authenticated(
+        Server::Cn,
         "device".into(),
         HashSet::new(),
         Some("synthetic-private-key".into()),
     );
     let state = store.poll_authenticated_using(
-        |serial, _, key| {
+        |_, serial, _, key| {
             assert_eq!(serial, "device");
             assert_eq!(key, Some("synthetic-private-key"));
             Ok(Some(complete_response()))
@@ -37,16 +38,28 @@ fn session_key_is_used_for_polling_and_stop_and_is_never_serialized() {
 #[test]
 fn superseded_poll_uses_its_original_key_and_cannot_stop_the_new_session() {
     let store = ResponseStore::default();
-    store.begin_authenticated("old".into(), HashSet::new(), Some("old-private-key".into()));
+    store.begin_authenticated(
+        Server::Cn,
+        "old".into(),
+        HashSet::new(),
+        Some("old-private-key".into()),
+    );
     let state = store.poll_authenticated_using(
-        |serial, _, key| {
-            store.begin_authenticated("new".into(), HashSet::new(), Some("new-private-key".into()));
+        |server, serial, _, key| {
+            assert_eq!(server, Server::Cn);
+            store.begin_authenticated(
+                Server::Jp,
+                "new".into(),
+                HashSet::new(),
+                Some("new-private-key".into()),
+            );
             assert_eq!(serial, "old");
             assert_eq!(key, Some("old-private-key"));
             Ok(Some(complete_response()))
         },
         |_, _| panic!("old poll must not stop a new capture"),
     );
+    assert_eq!(store.0.lock().unwrap().server, Server::Jp);
     assert_eq!(state.serial.as_deref(), Some("new"));
     assert_eq!(state.phase, ResponsePhase::Waiting);
     assert_eq!(
@@ -61,10 +74,82 @@ use std::{
 };
 
 const URL: &str = "https://le1-ios-fate.bilibiligame.net/rongame_beta//rgfate/60_1001/ac.php?_userId=private&_key=toplogin&token=secret";
+const JP_URL: &str = "https://game.fate-go.jp/login/top?userId=private&authKey=secret#fragment";
+
+#[test]
+fn changing_clients_is_blocked_until_capture_or_failed_stop_is_resolved() {
+    let store = ResponseStore::default();
+    assert!(store.ensure_client_selection_allowed().is_ok());
+    store.begin("device".into(), HashSet::new());
+    assert!(store.ensure_client_selection_allowed().is_err());
+    store.mark_stop_failed("device", "停止失败");
+    assert!(store.ensure_client_selection_allowed().is_err());
+    store.mark_stopped("抓包已停止");
+    assert!(store.ensure_client_selection_allowed().is_ok());
+}
+
+#[test]
+fn jp_matching_requires_the_exact_host_and_login_path_and_removes_private_queries() {
+    assert_eq!(
+        target_url(Server::Jp, JP_URL).unwrap(),
+        "https://game.fate-go.jp/login/top"
+    );
+    assert!(target_url(Server::Jp, "https://game.fate-go.jp/login/top").is_some());
+    for wrong in [
+        JP_URL.replace("https:", "http:"),
+        JP_URL.replace("game.fate-go.jp", "game.fate-go.jp.evil.test"),
+        JP_URL.replace("game.fate-go.jp", "evilgame.fate-go.jp"),
+        JP_URL.replace("game.fate-go.jp", "game.fate-go.us"),
+        JP_URL.replace("game.fate-go.jp", "game.fate-go.jp:444"),
+        JP_URL.replace("game.fate-go.jp", "user:secret@game.fate-go.jp"),
+        JP_URL.replace("/login/top", "/login/topExtra"),
+        JP_URL.replace("/login/top", "/login/top/"),
+        JP_URL.replace("/login/top", "/other?_key=toplogin"),
+        URL.into(),
+    ] {
+        assert!(target_url(Server::Jp, &wrong).is_none(), "{wrong}");
+    }
+    assert!(target_url(Server::Cn, JP_URL).is_none());
+}
+
+#[test]
+fn jp_response_session_keeps_its_server_through_polling_and_automatic_stop() {
+    for stop_fails in [false, true] {
+        let store = ResponseStore::default();
+        store.begin_authenticated(Server::Jp, "device".into(), HashSet::new(), None);
+        let state = store.poll_authenticated_using(
+            |server, _, _, _| {
+                assert_eq!(server, Server::Jp);
+                let mut response = complete_response();
+                response.url = target_url(server, JP_URL).unwrap();
+                Ok(Some(response))
+            },
+            |serial, _| {
+                assert_eq!(serial, "device");
+                if stop_fails {
+                    Err("请在设备上手动关闭抓包".into())
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert!(state.message.contains("日服 login/top"));
+        assert!(!state.message.contains("国服"));
+        assert!(state.response.is_some());
+        assert_eq!(
+            state.phase,
+            if stop_fails {
+                ResponsePhase::Error
+            } else {
+                ResponsePhase::Found
+            }
+        );
+    }
+}
 
 #[test]
 fn matching_requires_cn_ac_php_and_exact_query_selector_without_disclosing_other_parameters() {
-    let matched = target_url(URL).unwrap();
+    let matched = target_url(Server::Cn, URL).unwrap();
     assert!(matched.ends_with("ac.php?_key=toplogin"));
     assert!(!matched.contains("private"));
     assert!(!matched.contains("secret"));
@@ -77,10 +162,14 @@ fn matching_requires_cn_ac_php_and_exact_query_selector_without_disclosing_other
         format!("{URL}&_key=another"),
         "https://game.fate-go.jp/login/top?_key=toplogin".into(),
     ] {
-        assert!(target_url(&wrong).is_none());
+        assert!(target_url(Server::Cn, &wrong).is_none());
     }
-    assert!(target_url(&URL.replace("le1-ios-fate", "line3-s2-bili-fate")).is_some());
-    assert!(target_url(&URL.replace("_key=toplogin", "_key=%74oplogin")).is_some());
+    assert!(target_url(
+        Server::Cn,
+        &URL.replace("le1-ios-fate", "line3-s2-bili-fate")
+    )
+    .is_some());
+    assert!(target_url(Server::Cn, &URL.replace("_key=toplogin", "_key=%74oplogin")).is_some());
 }
 
 #[test]
@@ -277,7 +366,7 @@ fn complete_response() -> LoginResponse {
         captured_at: 1,
         items: vec![],
         record_id: 42,
-        url: target_url(URL).unwrap(),
+        url: target_url(Server::Cn, URL).unwrap(),
         status_code: 200,
         byte_length: 12,
         format: "JSON".into(),
@@ -407,11 +496,69 @@ fn captured(id: u64, uid: &str, body: Option<serde_json::Value>) -> serde_json::
     serde_json::json!({"id":id,"uid":uid,"url":URL,"response":{"code":200,"body":body}})
 }
 
+fn jp_captured(id: u64, uid: &str, body: Option<serde_json::Value>) -> serde_json::Value {
+    let mut record = captured(id, uid, body);
+    record["url"] = JP_URL.into();
+    record
+}
+
+#[test]
+fn jp_polling_excludes_old_and_cn_responses_and_preserves_raw_json_and_preview() {
+    let api = client::Client::new().unwrap();
+    let (port, worker) = server(vec![
+        serde_json::json!([1, 2]),
+        jp_captured(1, "old-jp", None),
+        captured(2, "old-cn", None),
+    ]);
+    let old = baseline(Server::Jp, &api, port).unwrap();
+    assert_eq!(old, HashSet::from(["old-jp".into()]));
+    assert_eq!(
+        worker.join().unwrap()[0].1["filters"][0]["pattern"],
+        "/login/top"
+    );
+
+    let (port, worker) = server(vec![
+        serde_json::json!([1, 2, 3]),
+        captured(
+            3,
+            "new-cn",
+            Some(serde_json::json!({"text":"wrong-server","encoding":"utf8"})),
+        ),
+        jp_captured(2, "old-jp", None),
+        jp_captured(1, "pending-jp", None),
+        serde_json::json!({"status":"active"}),
+    ]);
+    assert!(
+        scan(Server::Jp, &api, port, "device", &old, &mut |_| panic!())
+            .unwrap()
+            .is_none()
+    );
+    worker.join().unwrap();
+
+    let raw = "{\n  \"response\": [{\"success\": {\"cache\": {\"replaced\": {\"userItem\": [{\"itemId\":1,\"num\":1234}]}}}}]\n}";
+    let (port, worker) = server(vec![
+        serde_json::json!([1]),
+        jp_captured(
+            1,
+            "fresh-jp",
+            Some(serde_json::json!({"text":raw,"encoding":"utf8"})),
+        ),
+    ]);
+    let response = scan(Server::Jp, &api, port, "device", &old, &mut |_| panic!())
+        .unwrap()
+        .unwrap();
+    worker.join().unwrap();
+    assert_eq!(response.url, "https://game.fate-go.jp/login/top");
+    assert_eq!(response.body, raw);
+    assert_eq!(response.items[0].quantity, 1234);
+    assert_eq!(response.items[0].name, "QP");
+}
+
 #[test]
 fn polling_ignores_baseline_uids_but_accepts_reused_numeric_ids_and_pending_responses() {
     let api = client::Client::new().unwrap();
     let (port, worker) = server(vec![serde_json::json!([1]), captured(1, "old", None)]);
-    let old = baseline(&api, port).unwrap();
+    let old = baseline(Server::Cn, &api, port).unwrap();
     let requests = worker.join().unwrap();
     assert_eq!(requests[0].1["filters"][0]["pattern"], "_key=toplogin");
     let (port, worker) = server(vec![
@@ -419,18 +566,22 @@ fn polling_ignores_baseline_uids_but_accepts_reused_numeric_ids_and_pending_resp
         captured(1, "old", None),
         serde_json::json!({"status":"active"}),
     ]);
-    assert!(scan(&api, port, "device", &old, &mut |_| panic!())
-        .unwrap()
-        .is_none());
+    assert!(
+        scan(Server::Cn, &api, port, "device", &old, &mut |_| panic!())
+            .unwrap()
+            .is_none()
+    );
     worker.join().unwrap();
     let (port, worker) = server(vec![
         serde_json::json!([1]),
         captured(1, "new", None),
         serde_json::json!({"status":"active"}),
     ]);
-    assert!(scan(&api, port, "device", &old, &mut |_| panic!())
-        .unwrap()
-        .is_none());
+    assert!(
+        scan(Server::Cn, &api, port, "device", &old, &mut |_| panic!())
+            .unwrap()
+            .is_none()
+    );
     worker.join().unwrap();
     let (port, worker) = server(vec![
         serde_json::json!([1]),
@@ -440,7 +591,7 @@ fn polling_ignores_baseline_uids_but_accepts_reused_numeric_ids_and_pending_resp
             Some(serde_json::json!({"text":"{\"cache\":{}}","encoding":"utf8"})),
         ),
     ]);
-    let response = scan(&api, port, "device", &old, &mut |_| panic!())
+    let response = scan(Server::Cn, &api, port, "device", &old, &mut |_| panic!())
         .unwrap()
         .unwrap();
     worker.join().unwrap();
@@ -458,6 +609,8 @@ fn display_toplogin_on_authorized_device() {
         .join("resources/adb")
         .join(crate::platform::adb_executable_name());
     let started = super::super::start_capture(
+        Server::Cn,
+        target::package(Server::Cn),
         &adb,
         Some(&serial),
         &crate::device_operation::OperationCancellation::default(),

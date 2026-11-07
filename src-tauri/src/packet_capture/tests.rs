@@ -208,6 +208,8 @@ fn install_certificate_on_authorized_device() {
         .join("resources/adb")
         .join(crate::platform::adb_executable_name());
     let result = install(
+        Server::Cn,
+        target::package(Server::Cn),
         &path,
         Some(&serial),
         &crate::device_operation::OperationCancellation::default(),

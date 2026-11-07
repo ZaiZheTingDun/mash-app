@@ -1,13 +1,17 @@
+use super::target;
 use super::{
     client, configuration, credentials, response, run_adb, select_serial, AdbCommand, ApiKeyStore,
 };
 use crate::device_operation::OperationCancellation;
+use crate::Server;
 use std::{collections::HashSet, path::Path, time::Duration};
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CaptureStarted {
     pub(super) serial: String,
+    #[serde(skip)]
+    server: Server,
     already_active: bool,
     message: String,
     #[serde(skip)]
@@ -19,6 +23,7 @@ pub(crate) struct CaptureStarted {
 impl CaptureStarted {
     pub(crate) fn begin_response_watch(&self, store: &response::ResponseStore) {
         store.begin_authenticated(
+            self.server,
             self.serial.clone(),
             self.baseline.clone(),
             self.api_key.clone(),
@@ -49,6 +54,8 @@ pub(super) fn decode_status(bytes: &[u8]) -> Result<bool, String> {
 }
 
 pub(crate) fn start_capture(
+    server: Server,
+    package: &str,
     adb_path: &Path,
     selected: Option<&str>,
     cancellation: &OperationCancellation,
@@ -59,6 +66,8 @@ pub(crate) fn start_capture(
     let client = std::cell::RefCell::new(client::Client::new()?);
     let api_key = std::cell::RefCell::new(None);
     let mut started = start_controlled_using(
+        server,
+        package,
         selected,
         &mut |args| run_adb(adb_path, args),
         &mut |serial, port, version| {
@@ -90,7 +99,7 @@ pub(crate) fn start_capture(
                 Ok(None)
             }
         },
-        &mut |port| response::baseline(&client.borrow(), port),
+        &mut |port| response::baseline(server, &client.borrow(), port),
         &mut || cancellation.wait(Duration::from_millis(250)),
         cancellation,
     )?;
@@ -112,12 +121,12 @@ fn package_uid(info: &[u8]) -> Result<u32, String> {
                 .ok()
         })
         .filter(|uid| (10000..20000).contains(uid))
-        .ok_or_else(|| "未找到国服 FGO，请先安装国服游戏".into())
+        .ok_or_else(|| "未找到所选服务器的 FGO，请先安装游戏".into())
 }
 
 // Android 13 also assigns the application's SDK sandbox UID (app UID + 10000).
 // Reject broad ranges or unknown dump formats rather than claiming app isolation.
-fn vpn_only_cn(output: &[u8], uid: u32) -> bool {
+fn vpn_only_game(output: &[u8], uid: u32) -> bool {
     let text = String::from_utf8_lossy(output);
     let mut vpns = text
         .lines()
@@ -150,6 +159,8 @@ fn vpn_only_cn(output: &[u8], uid: u32) -> bool {
 }
 
 fn start_controlled_using(
+    server: Server,
+    package: &str,
     selected: Option<&str>,
     run: &mut AdbCommand<'_>,
     authorize: &mut dyn FnMut(&str, u16, &str) -> Result<(), String>,
@@ -158,6 +169,9 @@ fn start_controlled_using(
     pause: &mut dyn FnMut(),
     cancellation: &OperationCancellation,
 ) -> Result<CaptureStarted, String> {
+    if !target::matches_server(server, package) {
+        return Err("客户端包名与服务器不匹配".into());
+    }
     cancellation.check()?;
     let mut forward = |args: &[&str]| {
         cancellation.check()?;
@@ -166,14 +180,14 @@ fn start_controlled_using(
     let devices = forward(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
     cancellation.bind_device(&serial)?;
-    let version = configuration::prepare_capture_configuration(&mut |command| {
+    let version = configuration::prepare_capture_configuration(server, package, &mut |command| {
         forward(&["-s", &serial, "shell", command])
     })?;
     let uid = package_uid(&forward(&[
         "-s",
         &serial,
         "shell",
-        "dumpsys package com.bilibili.fatego",
+        &format!("dumpsys package {package}"),
     ])?)?;
     let launch = forward(&[
         "-s",
@@ -235,20 +249,23 @@ fn start_controlled_using(
                     let _ = forward(&["-s", &serial, "wait-for-device"]);
                     let vpn = forward(&["-s", &serial, "shell", "dumpsys connectivity"])?;
                     cancellation.check()?;
-                    if !vpn_only_cn(&vpn, uid) {
-                        return Err("无法确认仅抓国服，请重新进行环境配置后重试".into());
+                    if !vpn_only_game(&vpn, uid) {
+                        return Err(format!(
+                            "无法确认仅抓{}，请重新进行环境配置后重试",
+                            target::label(server)
+                        ));
                     }
                     return Ok(CaptureStarted {
                         serial: serial.clone(),
+                        server,
                         already_active,
                         baseline,
                         api_key: None,
                         message: if already_active {
-                            "国服抓包已在运行"
+                            format!("{}抓包已在运行", target::label(server))
                         } else {
-                            "已开始抓取国服 FGO 流量"
-                        }
-                        .into(),
+                            format!("已开始抓取{} FGO 流量", target::label(server))
+                        },
                     });
                 }
                 Err(_) => {

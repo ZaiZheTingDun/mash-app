@@ -1,5 +1,6 @@
 //! Run the real installer with isolated fake namespaces, never with ADB/root.
-use super::APEX_INSTALL_SCRIPT;
+use super::{target, APEX_INSTALL_SCRIPT};
+use crate::Server;
 use sha2::{Digest, Sha256};
 use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Output};
 
@@ -97,8 +98,18 @@ esac
     }
 
     fn run(&self, env: &[(&str, &str)]) -> Output {
+        self.run_for(Server::Cn, env)
+    }
+
+    fn run_for(&self, server: Server, env: &[(&str, &str)]) -> Output {
+        self.run_for_package(server, target::package(server), env)
+    }
+
+    fn run_for_package(&self, server: Server, package: &str, env: &[(&str, &str)]) -> Output {
         let hash = format!("{:x}", Sha256::digest(b"reqable certificate"));
         let script = APEX_INSTALL_SCRIPT
+            .replace("__GAME_PACKAGE__", package)
+            .replace("__GAME_LABEL__", target::label(server))
             .replace("__CERT_PATH__", self.path("source.crt").to_str().unwrap())
             .replace(
                 "/data/local/tmp/mash-capture-ca-__SESSION_ID__",
@@ -137,6 +148,36 @@ fn assert_success(output: &Output, marker: &str) {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), marker);
+}
+
+#[test]
+fn jp_installer_updates_the_running_japanese_game_namespace() {
+    let device = Device::new();
+    fs::rename(
+        device.path("packages/com.bilibili.fatego"),
+        device.path("packages/com.aniplex.fategrandorder"),
+    )
+    .unwrap();
+    assert_success(&device.run_for(Server::Jp, &[]), "MASH_CA_INSTALLED");
+    assert!(device.operations().contains("mount 400\n"));
+    assert!(device.store(400).join("cafebabe.0").exists());
+    assert!(device.store(400).join("original-400.0").exists());
+}
+
+#[test]
+fn channel_installer_updates_the_selected_game_without_the_official_app() {
+    let device = Device::new();
+    fs::rename(
+        device.path("packages/com.bilibili.fatego"),
+        device.path("packages/com.bilibili.fgo.mi"),
+    )
+    .unwrap();
+    assert_success(
+        &device.run_for_package(Server::Cn, "com.bilibili.fgo.mi", &[]),
+        "MASH_CA_INSTALLED",
+    );
+    assert!(device.operations().contains("mount 400\n"));
+    assert!(device.store(400).join("cafebabe.0").exists());
 }
 
 #[test]

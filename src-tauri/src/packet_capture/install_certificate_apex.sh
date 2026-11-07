@@ -31,7 +31,7 @@ verify_source
 zygotes="$(pidof zygote 2>/dev/null || true) $(pidof zygote64 2>/dev/null || true)"
 test -n "$(echo "$zygotes" | tr -d ' ')" || fail '未找到 Zygote，无法配置 Android 14+ 系统证书'
 reqable=$(pidof com.reqable.android) || fail 'Reqable 未运行，请重新打开后重试'
-game=$(pidof com.bilibili.fatego 2>/dev/null || true)
+game=$(pidof __GAME_PACKAGE__ 2>/dev/null || true)
 
 # Preflight all namespaces before creating any mounts. Multiple processes can
 # share one namespace; mounting it twice would make rollback remove the wrong layer.
@@ -118,8 +118,8 @@ for pid in $zygotes; do
   has_certificate "/proc/$pid/root$trust_dir" || fail 'Zygote 证书校验失败，正在撤销本次安装'
 done
 verify_package com.reqable.android || fail '证书未对 Reqable 生效，请重试环境配置'
-if pidof com.bilibili.fatego >/dev/null; then
-  verify_package com.bilibili.fatego || fail '证书未对国服 FGO 生效，请重新进入游戏后重试环境配置'
+if pidof __GAME_PACKAGE__ >/dev/null; then
+  verify_package __GAME_PACKAGE__ || fail '证书未对__GAME_LABEL__ FGO 生效，请重新进入游戏后重试环境配置'
 fi
 verify_source
 complete=1

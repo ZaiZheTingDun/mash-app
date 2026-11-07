@@ -5,7 +5,7 @@
 | 系统版本 | 证书安装方式 |
 | --- | --- |
 | Android 5–13（API 21–33） | 保留原有 `/system/etc/security/cacerts` 内容，加入 Reqable CA 后 bind mount，并检查 Reqable 进程可见的文件。 |
-| Android 14+（API 34+） | 使用 `/apex/com.android.conscrypt/cacerts`；通过 `nsenter` 分别进入 Zygote、Zygote64 以及当前 Reqable、国服 FGO 主进程的挂载命名空间进行安装。 |
+| Android 14+（API 34+） | 使用 `/apex/com.android.conscrypt/cacerts`；通过 `nsenter` 分别进入 Zygote、Zygote64 以及当前 Reqable、所选客户端（国服官服、渠道服或日服）的 FGO 主进程的挂载命名空间进行安装。 |
 
 Android 14+ 的 `/apex` 挂载不会自动在不同命名空间间传播，所以仅从 ADB shell 挂载不足以生效。更新 Zygote 供后续启动的应用继承，已经运行的目标应用则单独处理。相同命名空间只挂载一次；每个命名空间保留各自原有的根证书，不用旧系统目录覆盖 APEX 根证书。
 

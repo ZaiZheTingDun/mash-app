@@ -568,6 +568,8 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return { importedProjects: [] } as T;
     case "check_adb":
       return { connected: selectedAdbSerial != null, deviceName: selectedAdbSerial } as T;
+    case "get_packet_capture_apps":
+    case "select_packet_capture_app":
     case "install_capture_certificate":
     case "configure_packet_capture":
     case "setup_packet_capture":

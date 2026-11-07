@@ -1,7 +1,7 @@
 //! Device-only preparation for the independent packet capture tool.
 use crate::device_operation::OperationCancellation;
 use crate::runner::LogLevel;
-use crate::{adb::Adb, platform};
+use crate::{adb::Adb, platform, Server};
 use std::path::Path;
 use std::time::Duration;
 
@@ -18,12 +18,14 @@ mod onboarding;
 mod picture_in_picture;
 mod response;
 mod stop;
+mod target;
 pub(crate) use capture::{start_capture, CaptureStarted};
 pub(crate) use configuration::{configure, CaptureConfiguration};
 pub(crate) use credentials::ApiKeyStore;
 pub(crate) use history::{CaptureHistoryState, CaptureRecord, HistoryStore};
 pub(crate) use lifecycle::stop_task;
 pub(crate) use response::{ResponseState, ResponseStatus, ResponseStore};
+pub(crate) use target::{CaptureAppList, CaptureClientContext, CaptureTargetStore};
 #[cfg(test)]
 mod root_tests;
 #[cfg(test)]
@@ -47,11 +49,15 @@ pub(crate) struct CertificateInstallation {
 }
 
 pub(crate) fn install(
+    server: Server,
+    package: &str,
     adb_path: &Path,
     selected: Option<&str>,
     cancellation: &OperationCancellation,
 ) -> Result<CertificateInstallation, String> {
     install_with_log_using(
+        server,
+        package,
         selected,
         &mut |args| run_adb(adb_path, args),
         &mut |_, _| {},
@@ -61,12 +67,16 @@ pub(crate) fn install(
 
 /// Keep the same device selected across both preparation steps.
 pub(crate) fn setup(
+    server: Server,
+    package: &str,
     adb_path: &Path,
     selected: Option<&str>,
     log: &mut dyn FnMut(LogLevel, &str),
     cancellation: &OperationCancellation,
 ) -> Result<CaptureConfiguration, String> {
     setup_controlled_using(
+        server,
+        package,
         selected,
         &mut |args| run_adb(adb_path, args),
         log,
@@ -75,6 +85,8 @@ pub(crate) fn setup(
 }
 
 fn setup_controlled_using(
+    server: Server,
+    package: &str,
     selected: Option<&str>,
     run: &mut AdbCommand<'_>,
     log: &mut dyn FnMut(LogLevel, &str),
@@ -83,16 +95,24 @@ fn setup_controlled_using(
     cancellation.check()?;
     log(LogLevel::Info, "开始抓包环境配置");
     let result: Result<CaptureConfiguration, String> = (|| {
-        let installed = install_with_log_using(selected, run, log, cancellation)?;
+        let installed = install_with_log_using(server, package, selected, run, log, cancellation)?;
         cancellation.check()?;
         log(
             LogLevel::Info,
             &format!("设备 {}：{}", installed.serial, installed.message),
         );
-        log(LogLevel::Info, "正在配置 Reqable，仅抓国服 FGO…");
-        let mut configured =
-            configuration::configure_controlled_using(Some(&installed.serial), run, cancellation)
-                .map_err(|error| format!("证书已安装，环境配置未完成：{error}"))?;
+        log(
+            LogLevel::Info,
+            &format!("正在配置 Reqable，仅抓{} FGO…", target::label(server)),
+        );
+        let mut configured = configuration::configure_controlled_using(
+            server,
+            package,
+            Some(&installed.serial),
+            run,
+            cancellation,
+        )
+        .map_err(|error| format!("证书已安装，环境配置未完成：{error}"))?;
         log(LogLevel::Info, "已关闭并验证 Reqable 的系统画中画权限");
         configured.message = "环境配置完成，请点击开始按钮（设备重启后可能需要重新配置）".into();
         Ok(configured)
@@ -248,6 +268,8 @@ fn install_using(
     run: &mut AdbCommand<'_>,
 ) -> Result<CertificateInstallation, String> {
     install_with_log_using(
+        Server::Cn,
+        target::package(Server::Cn),
         selected,
         run,
         &mut |_, _| {},
@@ -256,11 +278,16 @@ fn install_using(
 }
 
 fn install_with_log_using(
+    server: Server,
+    package: &str,
     selected: Option<&str>,
     run: &mut AdbCommand<'_>,
     log: &mut dyn FnMut(LogLevel, &str),
     cancellation: &OperationCancellation,
 ) -> Result<CertificateInstallation, String> {
+    if !target::matches_server(server, package) {
+        return Err("客户端包名与服务器不匹配".into());
+    }
     cancellation.check()?;
     let devices = run(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
@@ -300,6 +327,8 @@ fn install_with_log_using(
         INSTALL_SCRIPT
     }
     .replace("\r\n", "\n")
+    .replace("__GAME_PACKAGE__", package)
+    .replace("__GAME_LABEL__", target::label(server))
     .replace("__CERT_PATH__", source_path)
     .replace("__SOURCE_SHA256__", &cert.source_sha256)
     .replace("__SUBJECT_HASH__", &cert.subject_hash)
