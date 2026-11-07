@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ComponentProps } from "react";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
@@ -70,9 +71,20 @@ function mockCommands() {
   });
 }
 
-function renderPage() {
+function renderPage(overrides: Partial<ComponentProps<typeof RankUpQuestPage>> = {}) {
   const callbacks = {
     onProjectSelect: vi.fn(),
+    onCreateProject: vi.fn(),
+    onRenameProject: vi.fn(),
+    onDuplicateProject: vi.fn(),
+    onDeleteProject: vi.fn(),
+    onCreateProjectGroup: vi.fn(async () => {}),
+    onRenameProjectGroup: vi.fn(async () => {}),
+    onDeleteProjectGroup: vi.fn(async () => {}),
+    onMoveProjectToGroup: vi.fn(async () => {}),
+    onReorderProjectGroups: vi.fn(async () => {}),
+    onReorderProjectsInGroup: vi.fn(async () => {}),
+    onOpenProjectSettings: vi.fn(),
     onBack: vi.fn(),
     onAutomationStart: vi.fn(),
     onAutomationStartFailed: vi.fn(),
@@ -81,8 +93,10 @@ function renderPage() {
   renderWithTheme(
     <RankUpQuestPage
       projects={[PROJECT]}
+      projectCatalog={{ schemaVersion: 1, groups: [], ungroupedProjectIds: [PROJECT.id] }}
       activeProjectId={PROJECT.id}
       {...callbacks}
+      {...overrides}
     />,
   );
   return callbacks;
@@ -95,10 +109,51 @@ describe("RankUpQuestPage", () => {
     const callbacks = renderPage();
 
     expect(screen.getByRole("heading", { name: "强化任务", level: 1 })).toBeInTheDocument();
-    expect(within(screen.getByRole("banner")).getByRole("combobox", { name: "战斗队伍" })).toHaveTextContent(PROJECT.name);
+    expect(within(screen.getByRole("banner")).getByRole("button", { name: PROJECT.name })).toBeInTheDocument();
+    expect(within(screen.getByRole("banner")).getByRole("button", { name: "队伍操作" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("请截图并选择强化任务");
     await user.click(screen.getByRole("button", { name: "返回" }));
     expect(callbacks.onBack).toHaveBeenCalledOnce();
+  });
+
+  it("uses the formation selector's grouped search and selection callbacks", async () => {
+    mockCommands();
+    const user = userEvent.setup();
+    const secondProject = { ...PROJECT, id: "team-2", name: "第二强化队伍" };
+    const callbacks = renderPage({
+      projects: [PROJECT, secondProject],
+      projectCatalog: {
+        schemaVersion: 1,
+        groups: [{ id: "group-1", name: "强化分组", projectIds: [secondProject.id] }],
+        ungroupedProjectIds: [PROJECT.id],
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: PROJECT.name }));
+    expect(screen.getByRole("button", { name: /强化分组/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "管理所有队伍…" })).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "搜索队伍" }), "第二");
+    await user.click(screen.getByRole("button", { name: /第二强化队伍/ }));
+    expect(callbacks.onProjectSelect).toHaveBeenCalledWith(secondProject.id);
+  });
+
+  it("opens the shared party operations menu", async () => {
+    mockCommands();
+    const user = userEvent.setup();
+    const callbacks = renderPage();
+    await user.click(screen.getByRole("button", { name: "队伍操作" }));
+    await user.click(screen.getByRole("menuitem", { name: "队伍设置" }));
+    expect(callbacks.onOpenProjectSettings).toHaveBeenCalledOnce();
+  });
+
+  it.each([null, "missing-team"])("does not run an unselected fallback party for %s", async (activeProjectId) => {
+    mockCommands();
+    const user = userEvent.setup();
+    renderPage({ activeProjectId });
+    expect(screen.getByRole("button", { name: "选择队伍" })).toBeEnabled();
+    await user.click(screen.getByRole("radio", { name: "按顺序完成所有强化任务" }));
+    expect(screen.getByRole("status")).toHaveTextContent("请选择战斗队伍");
+    expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
   });
 
   it("refreshes the screenshot and only allows selecting an actionable row", async () => {
@@ -209,7 +264,8 @@ describe("RankUpQuestPage", () => {
     await user.click(await screen.findByText("按顺序完成所有强化任务"));
     await user.click(screen.getByRole("button", { name: "开始强化任务" }));
     expect(screen.getByRole("status")).toHaveTextContent("当前页面：正在启动");
-    expect(screen.getByRole("combobox", { name: "战斗队伍" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: PROJECT.name })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "队伍操作" })).toBeDisabled();
 
     act(() => eventHandler?.({
       event: "automation-status", id: 1,
@@ -224,6 +280,7 @@ describe("RankUpQuestPage", () => {
     }));
     expect(screen.getByRole("button", { name: "开始强化任务" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "返回" })).toBeEnabled();
-    expect(screen.getByRole("combobox", { name: "战斗队伍" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: PROJECT.name })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "队伍操作" })).toBeEnabled();
   });
 });

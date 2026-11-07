@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Box, Button, Flex, Select, Text } from "@radix-ui/themes";
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import { ImageIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import { convertFileSrc, invoke, listen } from "../../tauri";
-import type { Project } from "../../types/project";
+import { ProjectBar } from "../projects/ProjectBar";
 import type { Server } from "../../types/server";
 import type {
   RankUpQuestCaptureResult,
@@ -22,10 +22,7 @@ interface AutomationEvent {
   message: string;
 }
 
-interface RankUpQuestPageProps {
-  projects: Project[];
-  activeProjectId: string | null;
-  onProjectSelect: (id: string) => void;
+interface RankUpQuestPageProps extends Omit<ComponentProps<typeof ProjectBar>, "disabled" | "headerStyle"> {
   onBack: () => void;
   onAutomationStart?: () => void;
   onAutomationStartFailed?: () => void;
@@ -44,11 +41,11 @@ function rowStyle(row: RankUpQuestRow) {
 export function RankUpQuestPage({
   projects,
   activeProjectId,
-  onProjectSelect,
   onBack,
   onAutomationStart,
   onAutomationStartFailed,
   onLogEntry,
+  ...projectBarProps
 }: RankUpQuestPageProps) {
   const [mode, setMode] = useState<RankUpQuestMode>("single");
   const [server, setServer] = useState<Server | null>(null);
@@ -60,7 +57,7 @@ export function RankUpQuestPage({
   const [currentScreen, setCurrentScreen] = useState("");
 
   const selectedProject = useMemo(
-    () => projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null,
+    () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
   );
 
@@ -147,7 +144,7 @@ export function RankUpQuestPage({
   const statusMessage = statusError
     || (capturing ? "正在截取游戏画面…"
       : running ? `当前页面：${currentScreen || "正在启动"}`
-      : !selectedProject ? "请先创建战斗队伍"
+      : !selectedProject ? projects.length === 0 ? "请先创建战斗队伍" : "请选择战斗队伍"
       : mode === "all" ? "就绪，将按列表顺序执行"
       : selectedCandidateId ? "已选择强化任务，可以开始"
       : "请截图并选择强化任务");
@@ -155,21 +152,7 @@ export function RankUpQuestPage({
   return (
     <main className="main-content-inner workspace-page battle-page rank-up-quest-page" aria-label="强化任务">
       <PageHeader title="强化任务" english="RANK UP QUEST" onBack={onBack} backDisabled={running}>
-        <div className="rank-up-quest-team">
-          <span className="project-context-label">PARTY</span>
-          <Select.Root
-            value={selectedProject?.id ?? ""}
-            onValueChange={onProjectSelect}
-            disabled={running || projects.length === 0}
-          >
-            <Select.Trigger aria-label="战斗队伍" placeholder="选择队伍" className="rank-up-quest-team-select" />
-            <Select.Content>
-              {projects.map((project) => (
-                <Select.Item key={project.id} value={project.id}>{project.name}</Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
-        </div>
+        <ProjectBar {...projectBarProps} projects={projects} activeProjectId={activeProjectId} headerStyle disabled={running} />
       </PageHeader>
 
       <Flex direction="column" className="battle-body battle-body-scroll">

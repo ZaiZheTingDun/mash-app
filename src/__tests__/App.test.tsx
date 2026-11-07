@@ -733,6 +733,26 @@ describe("App active project restore", () => {
     expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeInTheDocument();
   });
 
+  it("shares formation party selection and settings on the rank-up quest page", async () => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+    await user.click(screen.getByRole("button", { name: "主页" }));
+    await user.click(screen.getByRole("button", { name: "战斗" }));
+    await user.click(screen.getByRole("button", { name: "强化任务" }));
+    await user.click(screen.getByRole("button", { name: "第一套" }));
+    await user.type(screen.getByRole("textbox", { name: "搜索队伍" }), "第二");
+    await user.click(screen.getByRole("button", { name: /第二套/ }));
+    expect(invoke).toHaveBeenCalledWith("set_active_project_id", { activeProjectId: "project-2" });
+    expect(screen.getByRole("button", { name: "第二套" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "队伍操作" }));
+    await user.click(screen.getByRole("menuitem", { name: "队伍设置" }));
+    expect(screen.getByRole("dialog", { name: "队伍设置" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "关闭队伍设置" }));
+    expect(screen.getByRole("heading", { name: "强化任务" })).toBeInTheDocument();
+  });
+
   it("keeps the team page as the startup view and routes through the home battle menu", async () => {
     installAppMock("project-1");
     const user = userEvent.setup();

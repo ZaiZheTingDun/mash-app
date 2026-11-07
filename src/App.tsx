@@ -1121,8 +1121,23 @@ function App({
           ) : view === "rankUpQuest" && featureToggles.rankUpQuest ? (
             <RankUpQuestPage
               projects={projects}
+              projectCatalog={projectCatalog}
+              grandClassDefinitions={grandClassDefinitions}
               activeProjectId={activeProjectId}
               onProjectSelect={handleProjectSelect}
+              onCreateProject={handleCreateProject}
+              onRenameProject={handleRenameProject}
+              onDuplicateProject={handleDuplicateProject}
+              onDeleteProject={handleDeleteProject}
+              onCreateProjectGroup={handleCreateProjectGroup}
+              onRenameProjectGroup={handleRenameProjectGroup}
+              onDeleteProjectGroup={handleDeleteProjectGroup}
+              onMoveProjectToGroup={handleMoveProjectToGroup}
+              onReorderProjectGroups={handleReorderProjectGroups}
+              onReorderProjectsInGroup={handleReorderProjectsInGroup}
+              onOpenProjectSettings={handleOpenProjectSettings}
+              beforeShare={beforeFormationShare}
+              onFormationImported={handleFormationImported}
               onBack={handleOpenHome}
               onAutomationStart={() => handleBattleAutomationStart(null)}
               onAutomationStartFailed={handleBattleAutomationStartFailed}
