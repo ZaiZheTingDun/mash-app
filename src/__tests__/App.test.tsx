@@ -638,7 +638,7 @@ describe("App active project restore", () => {
     await user.click(screen.getByRole("button", { name: "主页" }));
     await user.click(screen.getByRole("button", { name: "强化" }));
     await user.click(
-      screen.getByRole("button", { name: "制作丸子（节省 QP 策略）" })
+      screen.getByRole("button", { name: "开始制作丸子" })
     );
 
     expect(
