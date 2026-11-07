@@ -5538,6 +5538,32 @@ def _support_crop(img: np.ndarray, region: dict) -> np.ndarray:
     return img[ry : ry + rh, rx : rx + rw]
 
 
+def _support_read_np_level_template(img: np.ndarray, np_region: dict) -> Optional[int]:
+    """Use server-specific label templates only after OCR has failed."""
+    if _current_server != "JP" or not np_region:
+        return None
+    y = float(np_region.get("y", 0.0))
+    height = float(np_region.get("h", 0.0))
+    if height <= 0 or y < 0 or y + height > 1:
+        return None
+    refs = []
+    for level in range(1, 6):
+        key = f"screen_support/np_level_jp_{level}"
+        # Older installed template packs may not contain this optional probe.
+        if key not in templates and not _template_path_for_key(key):
+            return None
+        refs.append((level, _get_template(key)))
+    from mash_cv.support_np_level import match_np_level
+
+    region = {
+        "x": SUPPORT_ROW_NP_REGION_X,
+        "y": max(0.0, y - 0.008),
+        "w": SUPPORT_ROW_NP_REGION_W,
+        "h": min(height + 0.016, 1.0 - max(0.0, y - 0.008)),
+    }
+    return match_np_level(_support_crop(img, region), refs, img.shape[1])
+
+
 def _support_find_score_anchors(img: np.ndarray) -> list[dict]:
     """Locate every "分值 +N" badge inside ``SUPPORT_SCORE_STRIP_REGION``.
 
@@ -6372,6 +6398,8 @@ def _support_add_details(img: np.ndarray, rows: list[dict], fragments: list[dict
         row["npLevel"] = _support_extract_np_level(
             fragments, row_region, str(row.get("npText", ""))
         )
+        if row["npLevel"] is None:
+            row["npLevel"] = _support_read_np_level_template(img, row.get("npRegion") or {})
         row["servantLevel"] = _support_extract_servant_level(img, row_region)
         panel, skill_levels, append_levels, skill_diagnostics = (
             _support_extract_skill_details_with_diagnostics(img, row_region)
