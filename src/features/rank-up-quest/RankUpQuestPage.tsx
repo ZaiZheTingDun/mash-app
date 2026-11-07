@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, Button, Flex, Select, Text } from "@radix-ui/themes";
-import { ChevronLeftIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { ImageIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
+import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
+import { TaskActionButton } from "../../components/common/TaskActionButton";
 import { convertFileSrc, invoke, listen } from "../../tauri";
 import type { Project } from "../../types/project";
 import type { Server } from "../../types/server";
@@ -141,26 +143,41 @@ export function RankUpQuestPage({
     selectedProject != null &&
     (mode === "all" || (capture != null && selectedCandidateId != null));
 
+  const statusError = error || (server === "JP" ? "强化任务自动化仅支持国服。" : null);
+  const statusMessage = statusError
+    || (capturing ? "正在截取游戏画面…"
+      : running ? `当前页面：${currentScreen || "正在启动"}`
+      : !selectedProject ? "请先创建战斗队伍"
+      : mode === "all" ? "就绪，将按列表顺序执行"
+      : selectedCandidateId ? "已选择强化任务，可以开始"
+      : "请截图并选择强化任务");
+
   return (
-    <Flex direction="column" className="battle-page rank-up-quest-page">
-      <Flex align="center" gap="3" className="battle-header">
-        <Button variant="soft" color="gray" onClick={onBack} disabled={running}>
-          <ChevronLeftIcon width={16} height={16} />
-          <Text size="2">返回</Text>
-        </Button>
-        <Text size="4" weight="bold">强化任务</Text>
-      </Flex>
+    <main className="main-content-inner workspace-page battle-page rank-up-quest-page" aria-label="强化任务">
+      <PageHeader title="强化任务" english="RANK UP QUEST" onBack={onBack} backDisabled={running}>
+        <div className="rank-up-quest-team">
+          <span className="project-context-label">PARTY</span>
+          <Select.Root
+            value={selectedProject?.id ?? ""}
+            onValueChange={onProjectSelect}
+            disabled={running || projects.length === 0}
+          >
+            <Select.Trigger aria-label="战斗队伍" placeholder="选择队伍" className="rank-up-quest-team-select" />
+            <Select.Content>
+              {projects.map((project) => (
+                <Select.Item key={project.id} value={project.id}>{project.name}</Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+        </div>
+      </PageHeader>
 
-      <Flex direction="column" gap="4" className="battle-body battle-body-scroll">
-        {server === "JP" && (
-          <Box className="rank-up-quest-notice">
-            <Text size="2" color="red">强化任务自动化首版仅支持国服。</Text>
-          </Box>
-        )}
-
+      <Flex direction="column" className="battle-body battle-body-scroll">
         <Box className="battle-panel">
-          <SectionHeading>完成方式</SectionHeading>
+          <SectionHeading rail stacked english="MODE">完成方式</SectionHeading>
           <OptionCardRadioGroup
+            indicator="diamond"
+            className="battle-repeat-cards rank-up-quest-modes"
             value={mode}
             disabled={running}
             onValueChange={(value) => setMode(value as RankUpQuestMode)}
@@ -177,34 +194,19 @@ export function RankUpQuestPage({
               },
             ]}
           />
-        </Box>
-
-        <Box className="battle-panel">
-          <SectionHeading>战斗队伍</SectionHeading>
-          <Select.Root
-            value={selectedProject?.id ?? ""}
-            onValueChange={onProjectSelect}
-            disabled={running || projects.length === 0}
-          >
-            <Select.Trigger placeholder="选择队伍" className="rank-up-quest-team-select" />
-            <Select.Content>
-              {projects.map((project) => (
-                <Select.Item key={project.id} value={project.id}>{project.name}</Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
           <Text size="1" color="gray" className="rank-up-quest-help">
-            沿用该队伍的助战条件、战斗指令和行动力恢复设置；忽略普通重复次数。
+            沿用所选队伍的助战条件、战斗指令和行动力恢复设置；忽略普通重复次数。
           </Text>
         </Box>
 
         {mode === "single" && (
           <Box className="battle-panel">
-            <Flex align="center" justify="between" gap="3">
-              <SectionHeading>选择强化任务</SectionHeading>
+            <Flex align="center" justify="between" gap="3" className="rank-up-quest-capture-header">
+              <SectionHeading rail stacked english="QUEST">选择强化任务</SectionHeading>
               <Button
-                variant="soft"
+                variant="ghost"
                 color="gray"
+                className="rank-up-quest-capture-button"
                 onClick={capturePage}
                 disabled={running || capturing || server !== "CN"}
               >
@@ -225,6 +227,7 @@ export function RankUpQuestPage({
                       className={`rank-up-quest-row${row.actionable ? " is-actionable" : " is-disabled"}${selected ? " is-selected" : ""}`}
                       disabled={!row.actionable || running}
                       aria-label={row.actionable ? "选择可强化任务" : "不可点击的强化任务"}
+                      aria-pressed={selected}
                       onClick={() => setSelectedCandidateId(row.candidateId)}
                     >
                       <span>{row.actionable ? (selected ? "已选择" : "可强化") : "不可点击"}</span>
@@ -233,24 +236,23 @@ export function RankUpQuestPage({
                 })}
               </Box>
             ) : (
-              <Text size="2" color="gray">请先在游戏中打开强化任务页面，再截取画面。</Text>
+              <div className="rank-up-quest-empty">
+                <ImageIcon width={28} height={28} aria-hidden="true" />
+                <Text size="2" color="gray">请先在游戏中打开强化任务页面，再截取画面。</Text>
+              </div>
             )}
           </Box>
         )}
-
-        {error && <Text size="2" color="red">{error}</Text>}
-        {running && (
-          <Text size="2" color="gray">当前页面：{currentScreen || "正在启动"}</Text>
-        )}
       </Flex>
 
-      <Flex justify="end" align="center" className="page-footer" gap="3">
-        {running ? (
-          <Button color="red" variant="soft" onClick={() => void invoke("stop_automation")}>停止</Button>
-        ) : (
-          <Button disabled={!canStart} onClick={handleStart}>开始强化任务</Button>
-        )}
+      <Flex justify="between" className="page-footer rank-up-quest-footer" gap="4">
+        <div className="task-status" role={statusError ? "alert" : "status"} data-error={!!statusError}>
+          <i aria-hidden="true" />
+          <span>{statusMessage}</span>
+        </div>
+        <TaskActionButton label={running ? "停止" : "开始强化任务"} running={running} disabled={!running && !canStart}
+          onClick={running ? () => void invoke("stop_automation") : handleStart} />
       </Flex>
-    </Flex>
+    </main>
   );
 }
