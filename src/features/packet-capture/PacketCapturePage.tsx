@@ -119,7 +119,7 @@ export function PacketCapturePage({ onBack, onNavigationLockChange }: { onBack: 
       <Callout.Text>{capture.workspace.capture.warnings.map(warning => <span key={warning} style={{ display: "block" }}>{warning}</span>)}</Callout.Text>
     </Callout.Root>}
     <Flex className="page-footer capture-footer" gap="5">
-      <div className="capture-status" role={capture.error ? "alert" : "status"} data-error={!!capture.error}>
+      <div className="task-status capture-status" role={capture.error ? "alert" : "status"} data-error={!!capture.error}>
         {(capture.error || capture.message) && <><i className="capture-diamond" aria-hidden="true" /><span><CaptureStatusMessage message={capture.error || capture.message} manualEntry={authorization && <Link asChild>
           <button type="button" onClick={() => setAuthorizationDialogId(authorization.requestId)}>手动输入</button>
         </Link>} /></span></>}

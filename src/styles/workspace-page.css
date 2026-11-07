@@ -25,6 +25,36 @@
   align-items: flex-end;
 }
 
+.task-status {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 10px;
+  min-width: 0;
+  margin-right: auto;
+  color: var(--mash-color-text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.task-status > i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  color: var(--mash-color-accent-default);
+}
+
+.task-status[data-error="true"],
+.task-status[data-error="true"] > i {
+  color: var(--mash-color-status-danger);
+}
+
+.task-status span { overflow-wrap: anywhere; }
+.task-status a { color: var(--mash-color-accent-default); text-underline-offset: 2px; }
+
 .workspace-page .mystic-code-trigger.is-expanded.rt-Button {
   box-sizing: border-box;
   grid-template-columns: 30px minmax(0, 1fr) 12px;

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Button, Flex, Text } from "@radix-ui/themes";
-import { ChevronLeftIcon } from "@radix-ui/react-icons";
+import { Box, Flex, Text } from "@radix-ui/themes";
+import { PageHeader } from "../../components/common/PageHeader";
+import { SectionHeading } from "../../components/common/SectionHeading";
+import { TaskActionButton } from "../../components/common/TaskActionButton";
 import { invoke, listen } from "../../tauri";
 import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
 
@@ -18,6 +20,13 @@ interface FriendPointSummonPageProps {
   onAutomationStart?: () => void;
   onLogEntry?: (message: string) => void;
 }
+
+const SCREEN_LABELS: Record<string, string> = {
+  FriendPointSummonMain: "友情点召唤主页",
+  FriendPointSummonConfirmation: "召唤确认",
+  FriendPointSummonAnimation: "召唤动画",
+  FriendPointSummonResult: "召唤结果",
+};
 
 export function FriendPointSummonPage({
   onBack,
@@ -65,39 +74,49 @@ export function FriendPointSummonPage({
   }, []);
 
   return (
-    <Flex direction="column" className="battle-page">
-      <Flex align="center" gap="3" className="battle-header">
-        <Button variant="soft" color="gray" onClick={onBack}>
-          <ChevronLeftIcon width={16} height={16} />
-          <Text size="2">返回</Text>
-        </Button>
-        <Text size="4" weight="bold">
-          友情点抽取
-        </Text>
-      </Flex>
+    <main className="main-content-inner workspace-page battle-page friend-point-summon-page" aria-label="友情点召唤">
+      <PageHeader title="友情点召唤" english="FRIEND POINT SUMMON" onBack={onBack} backDisabled={running}>
+        {null}
+      </PageHeader>
 
-      <Flex direction="column" gap="4" className="battle-body">
-        <Box className="enhancement-summary">
-          <Text size="2" color="gray">
-            当前页面：{currentScreen || "等待启动"}
-          </Text>
-          <Text size="2" color="gray" style={{ display: "block", marginTop: 4 }}>
-            已完成 {completedBatches} 批，共 {summonedCount} 次召唤
-          </Text>
-          <Text size="1" color="gray" style={{ display: "block", marginTop: 4 }}>
-            仅支持国服。启动前请停留在友情点抽取主页；程序只执行“100次召唤”流程，并在无法继续时停止。
-          </Text>
+      <Flex direction="column" className="battle-body battle-body-scroll">
+        <Box asChild className="battle-panel">
+          <section aria-label="召唤方式">
+            <SectionHeading rail stacked english="SUMMON">召唤方式</SectionHeading>
+            <Flex align="baseline" gap="3" className="friend-point-summon-mode">
+              <Text size="4" weight="bold">100 次召唤</Text>
+              <Text size="2" color="gray">仅支持国服</Text>
+            </Flex>
+            <Text as="p" size="2" color="gray" className="friend-point-summon-note">
+              启动前请停留在友情点召唤主页，无法继续召唤时自动停止。
+            </Text>
+          </section>
         </Box>
 
-        <Flex gap="3" wrap="wrap" className="battle-controls">
-          <Button disabled={running} onClick={handleStart}>
-            开始友情点抽取
-          </Button>
-          <Button color="red" variant="soft" disabled={!running} onClick={handleStop}>
-            停止
-          </Button>
-        </Flex>
+        <Box asChild className="battle-panel">
+          <section aria-label="召唤进度">
+            <SectionHeading rail stacked english="PROGRESS">召唤进度</SectionHeading>
+            <dl className="friend-point-summon-progress" aria-live="polite" aria-atomic="true">
+              <div>
+                <dt>已完成批次</dt>
+                <dd>{completedBatches}<span>批</span></dd>
+              </div>
+              <div>
+                <dt>累计召唤</dt>
+                <dd>{summonedCount}<span>次</span></dd>
+              </div>
+            </dl>
+          </section>
+        </Box>
       </Flex>
-    </Flex>
+
+      <Flex justify="between" gap="4" className="page-footer friend-point-summon-footer">
+        <div className="task-status" role="status">
+          <i aria-hidden="true" />
+          <span>当前页面：{currentScreen ? SCREEN_LABELS[currentScreen] ?? currentScreen : running ? "正在识别…" : "等待启动"}</span>
+        </div>
+        <TaskActionButton label={running ? "停止" : "开始"} running={running} onClick={running ? handleStop : handleStart} />
+      </Flex>
+    </main>
   );
 }

@@ -569,11 +569,11 @@ describe("App active project restore", () => {
     await screen.findByText("第一套");
     await user.click(screen.getByRole("button", { name: "主页" }));
     await user.click(screen.getByRole("button", { name: "召唤" }));
-    await user.click(screen.getByRole("button", { name: "开始友情点抽取" }));
+    await user.click(screen.getByRole("button", { name: "开始" }));
     await user.click(screen.getByRole("button", { name: "设置" }));
     await screen.findByRole("main", { name: "设置" });
     await user.click(screen.getByRole("button", { name: "关闭设置" }));
-    expect(screen.getByRole("button", { name: "开始友情点抽取" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "开始" })).not.toBeInTheDocument();
     const stop = screen.getByRole("button", { name: "停止" });
     expect(stop).toBeEnabled();
     await user.click(stop);
@@ -724,10 +724,10 @@ describe("App active project restore", () => {
     await user.click(screen.getByRole("button", { name: "召唤" }));
 
     expect(
-      screen.getByRole("button", { name: "开始友情点抽取" })
+      screen.getByRole("button", { name: "开始" })
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/程序只执行“100次召唤”流程，并在无法继续时停止。/)
+      screen.getByText("100 次召唤")
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "返回" }));
     expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeInTheDocument();
