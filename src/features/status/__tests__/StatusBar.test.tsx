@@ -252,8 +252,7 @@ describe("StatusBar", () => {
   });
 
   it("dispatches set_server with the chosen value and reverts on backend rejection", async () => {
-    // First two `set_server` calls succeed; third one rejects to prove
-    // the optimistic update is rolled back on failure.
+    // The first switch succeeds; the second rejection must not notify pages.
     let setServerCallCount = 0;
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";
@@ -275,8 +274,10 @@ describe("StatusBar", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const user = userEvent.setup();
-    renderWithTheme(<StatusBar />);
+    const onServerChange = vi.fn();
+    renderWithTheme(<StatusBar onServerChange={onServerChange} />);
     const serverButton = await screen.findByRole("button", { name: "日服" });
+    await waitFor(() => expect(onServerChange).toHaveBeenCalledWith("JP"));
     await user.click(serverButton);
 
     await waitFor(() => {
@@ -285,6 +286,7 @@ describe("StatusBar", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "国服" })).toBeInTheDocument();
     });
+    expect(onServerChange.mock.calls).toEqual([["JP"], ["CN"]]);
 
     // The second toggle is rejected by the backend — UI must revert.
     await user.click(screen.getByRole("button", { name: "国服" }));
@@ -298,6 +300,7 @@ describe("StatusBar", () => {
       expect(screen.getByRole("button", { name: "国服" })).toBeInTheDocument();
     });
     expect(errSpy).toHaveBeenCalled();
+    expect(onServerChange.mock.calls).toEqual([["JP"], ["CN"]]);
     errSpy.mockRestore();
   });
 

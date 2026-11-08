@@ -52,3 +52,38 @@
   height: 20px;
   color: var(--blue-11);
 }
+
+:is(.task-status, .footer-note) {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 10px;
+  min-width: 0;
+  margin-right: auto;
+  color: var(--mash-color-text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+:is(.task-status, .footer-note) > i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  color: var(--mash-color-accent-default);
+}
+
+.footer-note > i {
+  /* Keep the rotated diamond inside the scroll container's clipping edge. */
+  margin-inline-start: 2px;
+}
+
+:is(.task-status, .footer-note)[data-error="true"],
+:is(.task-status, .footer-note)[data-error="true"] > i {
+  color: var(--mash-color-status-danger);
+}
+
+:is(.task-status, .footer-note) span { overflow-wrap: anywhere; }
+:is(.task-status, .footer-note) a { color: var(--mash-color-accent-default); text-underline-offset: 2px; }

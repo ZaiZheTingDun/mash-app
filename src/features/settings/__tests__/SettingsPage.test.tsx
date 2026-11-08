@@ -307,7 +307,7 @@ describe("SettingsPage", () => {
     const user = userEvent.setup();
     renderWithTheme(<SettingsPage open section="basic" onOpenChange={onOpenChange} onSectionChange={vi.fn()} />);
     expect(screen.getByRole("button", { name: "关闭设置" })).toHaveFocus();
-    await user.click(await screen.findByRole("combobox", { name: "御主礼装显示性别" }));
+    await user.click(await screen.findByRole("combobox", { name: "御主性别" }));
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
@@ -438,6 +438,37 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("button", { name: "导出队伍" })).toBeInTheDocument();
   });
 
+  it("groups basic settings and opens advanced settings in the requested order", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    const appearance = screen.getByRole("region", { name: "外观" });
+    expect(within(appearance).getAllByRole("combobox").map((control) => control.getAttribute("aria-label")))
+      .toEqual(["主题", "技能设置", "御主性别"]);
+    const runtime = screen.getByRole("region", { name: "运行" });
+    expect(within(runtime).getByRole("combobox", { name: "触控方式" })).toBeInTheDocument();
+    expect(within(runtime).getByRole("combobox", { name: "自动展开" })).toBeInTheDocument();
+    expect(within(runtime).getByRole("switch", { name: "额外职阶筛选" })).toBeInTheDocument();
+    expect(within(runtime).getByText("此为国服特有功能").tagName).toBe("STRONG");
+    const bond = screen.getByRole("region", { name: "牵绊" });
+    expect(within(bond).getAllByRole("switch").map((control) => control.getAttribute("aria-label")))
+      .toEqual(["自动截图", "升级自动停止", "满级自动停止"]);
+    expect(screen.queryByRole("combobox", { name: "宝具识别" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton", { name: "回复道具等待时长" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "高级设置" }));
+    const advanced = screen.getByRole("region", { name: "高级设置内容" });
+    expect(within(advanced).getAllByRole("spinbutton").map((control) => control.getAttribute("aria-label")))
+      .toEqual(["回复道具等待时长", "识别超时次数"]);
+    expect(within(advanced).getByRole("combobox", { name: "宝具识别" })).toBeInTheDocument();
+    expect(within(advanced).getAllByRole("switch").map((control) => control.getAttribute("aria-label")))
+      .toEqual(["画面识别超时", "技能使用确认", "使用全列表 OCR"]);
+    expect(screen.queryByRole("region", { name: "外观" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "基础设置" }));
+    expect(screen.getByRole("region", { name: "外观" })).toBeInTheDocument();
+  });
+
   it("hides debug settings outside local development", async () => {
     vi.stubEnv("DEV", false);
     vi.resetModules();
@@ -456,7 +487,7 @@ describe("SettingsPage", () => {
     expect(screen.queryByText("点击攻击前自动截图")).not.toBeInTheDocument();
     expect(screen.queryByText("自动截图战利品页面")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "基础设置" })).toBeInTheDocument();
-    expect(await screen.findByText("宝具识别方式")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "外观" })).toBeInTheDocument();
   });
 
   it("loads and saves debug settings from the debug page", async () => {
@@ -545,10 +576,12 @@ describe("SettingsPage", () => {
       name: "助战礼装匹配阈值数值",
     });
     expect(input).toHaveValue(0.7);
+    expect(screen.getAllByRole("spinbutton")).toHaveLength(4);
+    expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
 
     await user.clear(input);
     await user.type(input, "0.65");
-    await user.click(screen.getAllByRole("button", { name: "保存" })[0]);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_support_ce_threshold", {
@@ -560,11 +593,11 @@ describe("SettingsPage", () => {
 
   it("keeps NP-card detection as the default and can opt into gauge detection", async () => {
     const user = userEvent.setup();
-    renderWithTheme(<SettingsHarness initialSection="basic" />);
+    renderWithTheme(<SettingsHarness initialSection="advanced" />);
 
-    const modeSelect = await screen.findByRole("combobox", { name: "宝具识别方式" });
+    const modeSelect = await screen.findByRole("combobox", { name: "宝具识别" });
     expect(modeSelect).toHaveTextContent("指令卡识别");
-    expect(screen.getByText("出现宝具识别问题可尝试切换，仍在实验中可能导致选卡速度变慢"))
+    expect(screen.getByText("控制 Mash 使用的宝具状态识别方式"))
       .toBeInTheDocument();
 
     await user.click(modeSelect);
@@ -586,9 +619,9 @@ describe("SettingsPage", () => {
 
   it("offers gauge detection before attack with a dialogue warning", async () => {
     const user = userEvent.setup();
-    renderWithTheme(<SettingsHarness initialSection="basic" />);
+    renderWithTheme(<SettingsHarness initialSection="advanced" />);
 
-    const modeSelect = await screen.findByRole("combobox", { name: "宝具识别方式" });
+    const modeSelect = await screen.findByRole("combobox", { name: "宝具识别" });
     await user.click(modeSelect);
     await user.click(await screen.findByText("宝具条识别（选卡前）"));
 
@@ -597,7 +630,7 @@ describe("SettingsPage", () => {
         value: "gaugeBeforeAttack",
       });
     });
-    expect(await screen.findByText("攻击前识别可能被从者台词遮挡，请关闭台词")).toBeInTheDocument();
+    expect(await screen.findByText("当前模式宝具条可能被从者台词遮挡，请在设置中关闭台词")).toBeInTheDocument();
     expect(
       await screen.findByRole("img", { name: "关闭战斗中宝具语音字幕的设置示例" })
     ).toBeInTheDocument();
@@ -606,22 +639,22 @@ describe("SettingsPage", () => {
   it("loads bond auto-stop switches disabled by default", async () => {
     renderWithTheme(<SettingsHarness initialSection="basic" />);
 
-    expect(await screen.findByRole("switch", { name: "牵绊升级自动停止" })).not.toBeChecked();
-    expect(screen.getByRole("switch", { name: "牵绊满级自动停止" })).not.toBeChecked();
-    expect(screen.getByRole("switch", { name: "牵绊升级时自动截图" })).not.toBeChecked();
+    expect(await screen.findByRole("switch", { name: "升级自动停止" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "满级自动停止" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "自动截图" })).not.toBeChecked();
   });
 
   it("saves automatic bond level-up screenshots", async () => {
     const user = userEvent.setup();
     renderWithTheme(<SettingsHarness initialSection="basic" />);
 
-    const captureSwitch = await screen.findByRole("switch", { name: "牵绊升级时自动截图" });
+    const captureSwitch = await screen.findByRole("switch", { name: "自动截图" });
     await user.click(captureSwitch);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_auto_capture_bond_level_up", { value: true });
     });
-    expect(screen.getByRole("switch", { name: "牵绊升级时自动截图" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "自动截图" })).toBeChecked();
   });
 
   it("opens the bond level-up screenshot folder", async () => {
@@ -640,8 +673,8 @@ describe("SettingsPage", () => {
     const user = userEvent.setup();
     renderWithTheme(<SettingsHarness initialSection="basic" />);
 
-    await screen.findByRole("switch", { name: "牵绊升级自动停止" });
-    const maxSwitch = screen.getByRole("switch", { name: "牵绊满级自动停止" });
+    await screen.findByRole("switch", { name: "升级自动停止" });
+    const maxSwitch = screen.getByRole("switch", { name: "满级自动停止" });
 
     await user.click(maxSwitch);
 
@@ -650,10 +683,10 @@ describe("SettingsPage", () => {
         value: true,
       });
     });
-    const levelUpSwitch = screen.getByRole("switch", { name: "牵绊升级自动停止" });
+    const levelUpSwitch = screen.getByRole("switch", { name: "升级自动停止" });
     expect(levelUpSwitch).not.toBeChecked();
     expect(levelUpSwitch).toBeDisabled();
-    expect(screen.getByRole("switch", { name: "牵绊满级自动停止" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "满级自动停止" })).toBeChecked();
 
     await user.hover(levelUpSwitch.parentElement ?? levelUpSwitch);
 
@@ -666,8 +699,8 @@ describe("SettingsPage", () => {
     const user = userEvent.setup();
     renderWithTheme(<SettingsHarness initialSection="basic" />);
 
-    const levelUpSwitch = await screen.findByRole("switch", { name: "牵绊升级自动停止" });
-    const maxSwitch = screen.getByRole("switch", { name: "牵绊满级自动停止" });
+    const levelUpSwitch = await screen.findByRole("switch", { name: "升级自动停止" });
+    const maxSwitch = screen.getByRole("switch", { name: "满级自动停止" });
     expect(levelUpSwitch).not.toBeChecked();
     expect(maxSwitch).not.toBeChecked();
 
@@ -678,8 +711,8 @@ describe("SettingsPage", () => {
         value: true,
       });
     });
-    expect(screen.getByRole("switch", { name: "牵绊升级自动停止" })).toBeChecked();
-    expect(screen.getByRole("switch", { name: "牵绊满级自动停止" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "升级自动停止" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "满级自动停止" })).not.toBeChecked();
   });
 
   it("saves support CE icon recognition thresholds", async () => {
@@ -691,7 +724,6 @@ describe("SettingsPage", () => {
     });
     await user.clear(mlbInput);
     await user.type(mlbInput, "0.76");
-    await user.click(screen.getAllByRole("button", { name: "保存" })[2]);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_support_mlb_icon_threshold", {
@@ -704,7 +736,6 @@ describe("SettingsPage", () => {
     });
     await user.clear(bondInput);
     await user.type(bondInput, "0.78");
-    await user.click(screen.getAllByRole("button", { name: "保存" })[3]);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_support_bond_icon_threshold", {
@@ -724,7 +755,6 @@ describe("SettingsPage", () => {
 
     await user.clear(input);
     await user.type(input, "0.55");
-    await user.click(screen.getAllByRole("button", { name: "保存" })[1]);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_support_ce_full_gate_threshold", {
@@ -735,7 +765,7 @@ describe("SettingsPage", () => {
 
   it("saves the global skill activation verification toggle", async () => {
     const user = userEvent.setup();
-    renderWithTheme(<SettingsHarness initialSection="basic" />);
+    renderWithTheme(<SettingsHarness initialSection="advanced" />);
 
     const toggle = await screen.findByRole("switch", { name: "技能使用确认" });
     expect(toggle).not.toBeChecked();
@@ -755,7 +785,7 @@ describe("SettingsPage", () => {
     renderWithTheme(<SettingsHarness initialSection="basic" />);
 
     const toggle = await screen.findByRole("switch", {
-      name: "全局 Extra 职阶筛选",
+      name: "额外职阶筛选",
     });
     expect(toggle).toBeChecked();
 
@@ -767,13 +797,13 @@ describe("SettingsPage", () => {
       });
     });
     expect(
-      screen.getByRole("switch", { name: "全局 Extra 职阶筛选" })
+      screen.getByRole("switch", { name: "额外职阶筛选" })
     ).not.toBeChecked();
   });
 
   it("auto-saves the shared timeout count and disables the limit with a toggle", async () => {
     const user = userEvent.setup();
-    renderWithTheme(<SettingsHarness initialSection="basic" />);
+    renderWithTheme(<SettingsHarness initialSection="advanced" />);
 
     const timeoutInput = await screen.findByRole("spinbutton", {
       name: "识别超时次数",
@@ -795,7 +825,7 @@ describe("SettingsPage", () => {
     });
 
     const timeoutLimit = screen.getByRole("switch", {
-      name: "识别超时限制",
+      name: "画面识别超时",
     });
     expect(timeoutLimit).toBeChecked();
 
@@ -856,6 +886,39 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("button", { name: "导出" })).toBeDisabled();
   });
 
+  it.each(["cancelled", "failed"] as const)("shows %s import feedback below the management actions", async (outcome) => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "pick_config_import_file") {
+        if (outcome === "failed") throw new Error("文件读取失败");
+        return null;
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="dataManagement" />);
+    await user.click(screen.getByRole("button", { name: "导入队伍" }));
+    const feedback = await screen.findByRole(outcome === "failed" ? "alert" : "status");
+    expect(feedback).toHaveTextContent(outcome === "failed" ? "导入失败：Error: 文件读取失败" : "已取消导入");
+    const lastAction = screen.getByRole("button", { name: "导出队伍" });
+    expect(lastAction.compareDocumentPosition(feedback) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it.each([null, { exportedCount: 1, filePath: "/tmp/config.mashconfig.json" }])("shows export results in the footer", async (result) => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "list_exportable_configs") return [{ id: "project-1", name: "第一套", advancedMode: false, battleSceneCount: 1, advancedBattleSceneCount: 0 }];
+      if (cmd === "export_configs") return result;
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="dataManagement" />);
+    await user.click(screen.getByRole("button", { name: "导出队伍" }));
+    await user.click(await screen.findByRole("button", { name: "导出" }));
+    const feedback = await screen.findByRole("status");
+    expect(feedback).toHaveTextContent(result ? "已导出 1 个配置：/tmp/config.mashconfig.json" : "已取消导出");
+    expect(screen.getByRole("button", { name: "导出队伍" }).compareDocumentPosition(feedback) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("previews import results and imports only selected configs", async () => {
     const user = userEvent.setup();
     const onProjectsImported = vi.fn();
@@ -912,6 +975,7 @@ describe("SettingsPage", () => {
       expect(onProjectsImported).toHaveBeenCalledWith([importedProject]);
     });
     expect(screen.queryByRole("button", { name: "导入" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("已导入 1 个配置");
     expect(invoke).toHaveBeenCalledWith("import_configurations", {
       filePath: "/tmp/config.mashconfig.json",
       importKeys: ["0"],

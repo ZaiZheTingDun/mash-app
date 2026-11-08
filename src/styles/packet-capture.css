@@ -63,11 +63,6 @@
 .capture-history .capture-empty-diamonds { width: 30px; height: 30px; }
 .capture-history .capture-empty-diamonds i + i { display: none; }
 .capture-empty.is-loading .capture-empty-diamonds { color: var(--mash-color-accent-default); animation: capture-pulse 1.6s ease-in-out infinite alternate; }
-.capture-status { display: flex; align-items: center; align-self: center; gap: 10px; min-width: 0; margin-right: auto; color: var(--mash-color-text-muted); font-size: 11px; line-height: 1.6; }
-.capture-status > i { color: var(--mash-color-accent-default); }
-.capture-status[data-error="true"], .capture-status[data-error="true"] > i { color: var(--mash-color-status-danger); }
-.capture-status span { overflow-wrap: anywhere; }
-.capture-status a { color: var(--mash-color-accent-default); text-underline-offset: 2px; }
 .capture-setup.rt-Button { box-sizing: border-box; flex-shrink: 0; align-self: flex-end; justify-content: flex-start; height: 66px; width: 180px; margin: 0; padding: 7.5px 0 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; color: var(--mash-color-text-muted); }
 .capture-setup > span { align-self: flex-start; display: flex; flex-direction: column; align-items: flex-start; gap: 7.5px; }
 .capture-setup small { font-size: 8.25px; letter-spacing: 1.8px; line-height: 12px; }

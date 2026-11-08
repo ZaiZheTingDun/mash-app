@@ -1,15 +1,22 @@
 import { useState } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { createInitialProjectSlots } from "../../team/projectSlots";
 import { ProjectSettingsDialog } from "../ProjectSettingsDialog";
+import type { ThresholdKey } from "../../settings/recognitionSettingsModel";
+import { DEFAULT_RECOGNITION_SETTINGS } from "../../settings/recognitionSettingsModel";
 import type { Project } from "../../../types/project";
 
+const storedProjects = new Map<string, Project>();
+const saveThreshold = vi.fn(async (projectId: string, key: ThresholdKey, value: number | null) => {
+  await invoke("set_project_recognition_threshold", { projectId, key, value });
+});
+
 function makeProject(overrides?: Partial<Project>): Project {
-  return {
+  const project: Project = {
     id: "project-1",
     name: "项目甲",
     advancedMode: false,
@@ -18,22 +25,40 @@ function makeProject(overrides?: Partial<Project>): Project {
     repeatMission: false,
     ...overrides,
   };
+  storedProjects.set(project.id, project);
+  return project;
 }
 
 function StatefulSettings({ initialProject, onSave }: {
   initialProject: Project;
-  onSave: (project: Project) => void;
+  onSave: (project: Project) => void | Promise<void>;
 }) {
   const [project, setProject] = useState(initialProject);
-  return <ProjectSettingsDialog
+  return <ProjectSettingsDialog onSaveThreshold={saveThreshold}
     open project={project} onOpenChange={vi.fn()}
-    onUpdateProject={async (next) => { onSave(next); setProject(next); }}
+    onUpdateProject={async (next) => { await onSave(next); setProject(next); }}
   />;
 }
 
 describe("ProjectSettingsDialog", () => {
   beforeEach(() => {
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    storedProjects.clear();
+    vi.mocked(invoke).mockImplementation(async (cmd: string, invokeArgs) => {
+      const args = invokeArgs as Record<string, unknown> | undefined;
+      if (cmd === "set_project_recognition_threshold") {
+        const project = storedProjects.get(String(args?.projectId))!;
+        const settings = { ...project.recognitionSettings };
+        const key = args?.key as ThresholdKey;
+        if (args?.value == null) delete settings[key];
+        else settings[key] = Number(args.value);
+        const saved = { ...project, recognitionSettings: Object.keys(settings).length ? settings : null };
+        storedProjects.set(project.id, saved);
+        return saved;
+      }
+      if (cmd === "get_project_recognition_settings") {
+        return { ...DEFAULT_RECOGNITION_SETTINGS, supportCeThreshold: 0.71, supportMlbIconThreshold: 0.72,
+          ...storedProjects.get(String(args?.projectId))?.recognitionSettings };
+      }
       if (cmd === "get_recognition_settings") {
         return {
           noblePhantasmDetectionMode: "card",
@@ -52,7 +77,7 @@ describe("ProjectSettingsDialog", () => {
 
   it("loads global thresholds when the project has no override", async () => {
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={makeProject()}
         onOpenChange={vi.fn()}
@@ -63,6 +88,7 @@ describe("ProjectSettingsDialog", () => {
     expect(await screen.findByText("游戏")).toBeInTheDocument();
     expect(await screen.findByText("项目甲")).toBeInTheDocument();
     await userEvent.setup().click(await screen.findByRole("button", { name: "阈值设置" }));
+    expect(screen.queryByRole("slider")).not.toBeInTheDocument();
     expect(screen.queryByText("当前队伍：项目甲")).not.toBeInTheDocument();
     expect(screen.getByText("低数值更容易命中，高数值更不容易误选；默认 0.71")).toBeInTheDocument();
     expect(
@@ -70,12 +96,12 @@ describe("ProjectSettingsDialog", () => {
     ).toHaveValue(0.71);
   });
 
-  it("saves a project recognition threshold through update_project state", async () => {
+  it("saves only the selected project threshold through the backend", async () => {
     const user = userEvent.setup();
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -89,17 +115,40 @@ describe("ProjectSettingsDialog", () => {
     });
     await user.clear(input);
     await user.type(input, "0.66");
-    await user.click(screen.getAllByRole("button", { name: "保存" })[0]);
 
     await waitFor(() => {
-      expect(onUpdateProject).toHaveBeenCalledWith({
-        ...project,
-        recognitionSettings: {
-          supportCeThreshold: 0.66,
-        },
-      });
+      expect(saveThreshold).toHaveBeenCalledWith(project.id, "supportCeThreshold", 0.66);
+      expect(onUpdateProject).not.toHaveBeenCalled();
     });
     expect(await screen.findByText("已保存")).toBeInTheDocument();
+  });
+
+  it("keeps pending and queued edits bound to A after closing settings and selecting B", async () => {
+    const a = makeProject();
+    const b = makeProject({ id: "project-2", name: "项目乙" });
+    let finish!: () => void;
+    const save = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }))
+      .mockImplementation(saveThreshold);
+    const { rerender } = renderWithTheme(<ProjectSettingsDialog open project={a} onOpenChange={vi.fn()}
+      onUpdateProject={vi.fn()} onSaveThreshold={save} />);
+    fireEvent.click(screen.getByRole("button", { name: "阈值设置" }));
+    const input = await screen.findByRole("spinbutton", { name: "助战礼装匹配阈值数值" });
+    await waitFor(() => expect(input).not.toBeDisabled());
+    fireEvent.change(input, { target: { value: "0.66" } });
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: "0.67" } });
+    rerender(<ProjectSettingsDialog open={false} project={a} onOpenChange={vi.fn()}
+      onUpdateProject={vi.fn()} onSaveThreshold={save} />);
+    rerender(<ProjectSettingsDialog open project={b} onOpenChange={vi.fn()}
+      onUpdateProject={vi.fn()} onSaveThreshold={save} />);
+    const bInput = await screen.findByRole("spinbutton", { name: "助战礼装匹配阈值数值" });
+    await waitFor(() => expect(bInput).not.toBeDisabled());
+    await act(async () => finish());
+    await waitFor(() => expect(save).toHaveBeenCalledWith(a.id, "supportCeThreshold", 0.67));
+    fireEvent.change(bInput, { target: { value: "0.78" } });
+    await waitFor(() => expect(save).toHaveBeenLastCalledWith(b.id, "supportCeThreshold", 0.78));
+    expect(storedProjects.get(a.id)?.recognitionSettings?.supportCeThreshold).toBe(0.67);
+    expect(storedProjects.get(b.id)?.recognitionSettings?.supportCeThreshold).toBe(0.78);
   });
 
   it("restores a project threshold by deleting its override", async () => {
@@ -112,7 +161,7 @@ describe("ProjectSettingsDialog", () => {
       },
     });
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -128,12 +177,8 @@ describe("ProjectSettingsDialog", () => {
     await user.click(screen.getAllByRole("button", { name: "恢复默认" })[0]);
 
     await waitFor(() => {
-      expect(onUpdateProject).toHaveBeenCalledWith({
-        ...project,
-        recognitionSettings: {
-          supportMlbIconThreshold: 0.76,
-        },
-      });
+      expect(saveThreshold).toHaveBeenCalledWith(project.id, "supportCeThreshold", null);
+      expect(storedProjects.get(project.id)?.recognitionSettings).toEqual({ supportMlbIconThreshold: 0.76 });
     });
     expect(screen.getByRole("spinbutton", { name: "助战礼装匹配阈值数值" })).toHaveValue(0.71);
   });
@@ -143,7 +188,7 @@ describe("ProjectSettingsDialog", () => {
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -151,7 +196,7 @@ describe("ProjectSettingsDialog", () => {
       />
     );
 
-    await user.click(await screen.findByRole("button", { name: "基础设置" }));
+    await user.click(await screen.findByRole("button", { name: "高级设置" }));
 
     const trigger = await screen.findByRole("combobox", {
       name: "队伍技能使用确认",
@@ -176,13 +221,15 @@ describe("ProjectSettingsDialog", () => {
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
         onUpdateProject={onUpdateProject}
       />
     );
+
+    await user.click(screen.getByRole("button", { name: "高级设置" }));
 
     const trigger = await screen.findByRole("combobox", {
       name: "关闭自动技能目标识别",
@@ -205,7 +252,7 @@ describe("ProjectSettingsDialog", () => {
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -233,7 +280,7 @@ describe("ProjectSettingsDialog", () => {
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -242,7 +289,7 @@ describe("ProjectSettingsDialog", () => {
     );
 
     const extraFilter = await screen.findByRole("switch", {
-      name: "Extra 职阶筛选",
+      name: "额外职阶筛选",
     });
     expect(extraFilter).toBeChecked();
 
@@ -278,7 +325,7 @@ describe("ProjectSettingsDialog", () => {
     });
 
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={makeProject()}
         onOpenChange={vi.fn()}
@@ -287,21 +334,31 @@ describe("ProjectSettingsDialog", () => {
     );
 
     expect(
-      await screen.findByRole("switch", { name: "Extra 职阶筛选" })
+      await screen.findByRole("switch", { name: "额外职阶筛选" })
     ).not.toBeChecked();
     expect(screen.getAllByText("全局当前：关闭")).not.toHaveLength(0);
   });
-  it("places run settings between basic and threshold settings with legacy defaults", async () => {
+  it("groups run options under basic settings and moves skill options to advanced settings", async () => {
     const user = userEvent.setup();
     renderWithTheme(<StatefulSettings initialProject={makeProject()} onSave={vi.fn()} />);
     const navigation = screen.getByRole("navigation", { name: "队伍设置导航" });
     expect(within(navigation).getAllByRole("button").map((button) => button.textContent)).toEqual([
-      "基础设置", "运行设置", "阈值设置",
+      "基础设置", "高级设置", "阈值设置",
     ]);
-    await user.click(within(navigation).getByRole("button", { name: "运行设置" }));
+    expect(within(navigation).queryByRole("button", { name: "运行设置" })).not.toBeInTheDocument();
+    const runtime = screen.getByRole("region", { name: "运行" });
+    expect(within(runtime).getByRole("switch", { name: "额外职阶筛选" })).toBeInTheDocument();
+    expect(within(runtime).getByRole("switch", { name: "优先选择暴击率更高的指令卡" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "队伍技能使用确认" })).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "助战筛选设置" })).toHaveTextContent("只筛选对应职阶");
     expect(screen.getByRole("switch", { name: "五星礼装掉落自动停止" })).not.toBeChecked();
     expect(screen.queryByRole("spinbutton", { name: "五星礼装掉落个数" })).not.toBeInTheDocument();
+    await user.click(within(navigation).getByRole("button", { name: "高级设置" }));
+    expect(screen.getByRole("combobox", { name: "队伍技能使用确认" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "关闭自动技能目标识别" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "运行" })).not.toBeInTheDocument();
+    await user.click(within(navigation).getByRole("button", { name: "基础设置" }));
+    expect(screen.getByRole("combobox", { name: "助战筛选设置" })).toHaveTextContent("只筛选对应职阶");
   });
 
   it.each([
@@ -316,7 +373,6 @@ describe("ProjectSettingsDialog", () => {
       stopOnFiveStarCeDrop: true, fiveStarCeDropTargetCount: 3,
     } });
     renderWithTheme(<StatefulSettings initialProject={project} onSave={onSave} />);
-    await user.click(screen.getByRole("button", { name: "运行设置" }));
     // Begin from a different option so every case exercises a mutation.
     await user.click(screen.getByRole("combobox", { name: "助战筛选设置" }));
     await user.click(await screen.findByRole("option", { name: mode === "both" ? "只筛选全职阶" : label }));
@@ -328,6 +384,9 @@ describe("ProjectSettingsDialog", () => {
       ...project, recognitionSettings: { ...project.recognitionSettings, supportClassFilterMode: mode },
     }));
     expect(screen.getByRole("combobox", { name: "助战筛选设置" })).toHaveTextContent(label);
+    await user.click(screen.getByRole("button", { name: "高级设置" }));
+    await user.click(screen.getByRole("button", { name: "基础设置" }));
+    expect(screen.getByRole("combobox", { name: "助战筛选设置" })).toHaveTextContent(label);
     expect(screen.getByRole("spinbutton", { name: "五星礼装掉落个数" })).toHaveValue(3);
   });
 
@@ -338,7 +397,6 @@ describe("ProjectSettingsDialog", () => {
       stopOnFiveStarCeDrop: true, fiveStarCeDropTargetCount: 3, supportCeThreshold: 0.8,
     } });
     renderWithTheme(<StatefulSettings initialProject={project} onSave={onSave} />);
-    await user.click(screen.getByRole("button", { name: "运行设置" }));
     expect(screen.getByRole("spinbutton", { name: "五星礼装掉落个数" })).toHaveValue(3);
     await user.click(screen.getByRole("button", { name: "增加五星礼装掉落个数" }));
     expect(screen.getByRole("spinbutton", { name: "五星礼装掉落个数" })).toHaveValue(4);
@@ -353,7 +411,6 @@ describe("ProjectSettingsDialog", () => {
   it("enables drop stop with a default target of one", async () => {
     const user = userEvent.setup();
     renderWithTheme(<StatefulSettings initialProject={makeProject()} onSave={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: "运行设置" }));
     await user.click(screen.getByRole("switch", { name: "五星礼装掉落自动停止" }));
     expect(screen.getByRole("spinbutton", { name: "五星礼装掉落个数" })).toHaveValue(1);
     expect(screen.getByRole("button", { name: "减少五星礼装掉落个数" })).toBeDisabled();
@@ -361,9 +418,8 @@ describe("ProjectSettingsDialog", () => {
 
   it("keeps the saved mode and shows an error when saving fails", async () => {
     const user = userEvent.setup();
-    renderWithTheme(<ProjectSettingsDialog open project={makeProject()} onOpenChange={vi.fn()}
+    renderWithTheme(<ProjectSettingsDialog onSaveThreshold={saveThreshold} open project={makeProject()} onOpenChange={vi.fn()}
       onUpdateProject={vi.fn().mockRejectedValue(new Error("保存失败"))} />);
-    await user.click(screen.getByRole("button", { name: "运行设置" }));
     await user.click(screen.getByRole("combobox", { name: "助战筛选设置" }));
     await user.click(await screen.findByRole("option", { name: "同时筛选" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("保存失败");

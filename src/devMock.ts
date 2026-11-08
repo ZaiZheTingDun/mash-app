@@ -1,3 +1,4 @@
+import type { ThresholdKey } from "./features/settings/recognitionSettingsModel";
 import { commandEditorDevBridge } from "./commandEditorDevMock";
 import { createInitialProjectSlots } from "./features/team/projectSlots";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
@@ -510,6 +511,21 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "update_project": {
       const project = args.project as Project;
       projects = projects.map((item) => (item.id === project.id ? clone(project) : item));
+      return clone(project) as T;
+    }
+    case "get_project_recognition_settings": {
+      const project = projects.find((item) => item.id === args.projectId);
+      if (!project) throw new Error(`project not found: ${args.projectId}`);
+      return { ...recognitionSettings(), ...project.recognitionSettings } as T;
+    }
+    case "set_project_recognition_threshold": {
+      const project = projects.find((item) => item.id === args.projectId);
+      if (!project) throw new Error(`project not found: ${args.projectId}`);
+      const key = args.key as ThresholdKey;
+      const settings = { ...project.recognitionSettings };
+      if (args.value == null) delete settings[key];
+      else settings[key] = Number(args.value);
+      project.recognitionSettings = Object.keys(settings).length ? settings : null;
       return clone(project) as T;
     }
     case "delete_project":

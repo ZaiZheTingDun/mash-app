@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Button, Text } from "@radix-ui/themes";
 import { PageHeader } from "../../components/common/PageHeader";
-import { SectionHeading } from "../../components/common/SectionHeading";
 import { invoke } from "../../tauri";
 import { featureToggles } from "../../featureToggles";
 import type { BattleStartPanel, MysticCodeGender, SkillEditorLayout } from "../../types/appUiSettings";
@@ -9,6 +8,7 @@ import type { Project } from "../../types/project";
 import type { AppColorTheme } from "../../types/theme";
 import { SettingsDataManagementPage } from "./SettingsDataManagementPage";
 import { SettingsBasicPage } from "./SettingsBasicPage";
+import { SettingsAdvancedPage } from "./SettingsAdvancedPage";
 import { SettingsRecognitionPage } from "./SettingsRecognitionPage";
 import { SettingsResourcesPage } from "./SettingsResourcesPage";
 import { SettingsSelfCheckPage } from "./SettingsSelfCheckPage";
@@ -16,6 +16,7 @@ import { SettingsDebugPage } from "./SettingsDebugPage";
 
 export type SettingsSection =
   | "basic"
+  | "advanced"
   | "selfCheck"
   | "resources"
   | "dataManagement"
@@ -69,6 +70,12 @@ const navItems: Array<{
         onMysticCodeGenderChange={props.onMysticCodeGenderChange}
       />
     ),
+  },
+  {
+    group: "game",
+    section: "advanced",
+    label: "高级设置",
+    render: (active) => <SettingsAdvancedPage active={active} />,
   },
   {
     group: "game",
@@ -202,9 +209,6 @@ export function SettingsPage({
         <div className="settings-page-scroll" key={activeSection} tabIndex={0}
           role="region" aria-label={`${activeItem.label}内容`}>
           <Box className="settings-page-body">
-            <SectionHeading className="settings-page-section-title" english={
-              { basic: "GENERAL", recognition: "RECOGNITION", dataManagement: "PARTY", debug: "DEBUG", resources: "RESOURCES", selfCheck: "SELF CHECK" }[activeSection]
-            } stacked rail>{activeItem.label}</SectionHeading>
             {activeItem.render(open, {
               onProjectsImported, onBattleStartPanelChange, onSkillEditorLayoutChange, mysticCodeGender,
               colorTheme, onColorThemeChange,

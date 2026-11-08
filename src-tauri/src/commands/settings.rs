@@ -217,6 +217,31 @@ fn normalize_support_ce_full_gate_threshold(value: f64) -> Result<f64, String> {
     )
 }
 
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ThresholdKey {
+    SupportCeThreshold,
+    SupportCeFullGateThreshold,
+    SupportMlbIconThreshold,
+    SupportBondIconThreshold,
+}
+
+pub(crate) fn normalize_recognition_threshold(
+    key: ThresholdKey,
+    value: f64,
+) -> Result<f64, String> {
+    match key {
+        ThresholdKey::SupportCeThreshold => normalize_support_ce_threshold(value),
+        ThresholdKey::SupportCeFullGateThreshold => normalize_support_ce_full_gate_threshold(value),
+        ThresholdKey::SupportMlbIconThreshold => {
+            normalize_support_icon_threshold(value, "满破图标阈值")
+        }
+        ThresholdKey::SupportBondIconThreshold => {
+            normalize_support_icon_threshold(value, "牵绊图标阈值")
+        }
+    }
+}
+
 fn apply_stop_on_bond_level_up(settings: &mut RecognitionSettings, value: bool) {
     settings.stop_on_bond_level_up = value;
 }

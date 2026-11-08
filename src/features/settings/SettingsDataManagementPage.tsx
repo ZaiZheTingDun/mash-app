@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { Box, Button, Checkbox, Dialog, Flex, Spinner, Text } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
+import { DownloadIcon, UploadIcon } from "@radix-ui/react-icons";
+import { SettingsRow } from "./SettingsRow";
+import { FooterNote } from "../../components/common/FooterNote";
 import type {
   ConfigImportPreview,
   ConfigImportResult,
@@ -162,54 +165,28 @@ export function SettingsDataManagementPage({
   }, [importFilePath, importPreview, onProjectsImported, selectedImportKeys]);
 
   return (
-    <Flex direction="column" gap="4">
-      <Box className="settings-data-panel">
-        <Flex align="start" justify="between" gap="4">
-          <Box>
-            <Text size="3" weight="bold">
-              导入队伍
-            </Text>
-            <Text size="2" color="gray" className="settings-data-description">
-              选择要导入的队伍打包文件
-            </Text>
-          </Box>
-          <Button type="button" variant="soft" color="gray" onClick={handlePickImportFile} disabled={importLoading}>
-            {importLoading && !importDialogOpen ? <Spinner size="1" /> : null}
-            <Text size="2">导入队伍</Text>
+    <Flex direction="column" className="settings-section-panel settings-basic settings-with-footer">
+      <Flex direction="column" className="recognition-setting-block">
+        <SettingsRow label="导入队伍" description="选择要导入的队伍打包文件">
+          <Button type="button" size="1" variant="ghost" className="settings-data-action"
+            onClick={handlePickImportFile} disabled={importLoading}>
+            {importLoading && !importDialogOpen ? <Spinner size="1" /> : <UploadIcon />}
+            导入队伍
           </Button>
-        </Flex>
-        {importError && (
-          <Text size="2" color="red" className="settings-data-status">
-            导入失败：{importError}
-          </Text>
-        )}
-        {importMessage && !importDialogOpen && (
-          <Text size="2" color="gray" className="settings-data-status">
-            {importMessage}
-          </Text>
-        )}
-      </Box>
+        </SettingsRow>
+        <SettingsRow label="导出队伍" description="将选择的队伍导出到目标文件夹">
+          <Button type="button" size="1" variant="ghost" className="settings-data-action" onClick={openExportDialog}>
+            <DownloadIcon />导出队伍
+          </Button>
+        </SettingsRow>
+      </Flex>
 
-      <Box className="settings-data-panel">
-        <Flex align="start" justify="between" gap="4">
-          <Box>
-            <Text size="3" weight="bold">
-              导出队伍
-            </Text>
-            <Text size="2" color="gray" className="settings-data-description">
-              将选择的队伍导出到目标文件夹
-            </Text>
-          </Box>
-          <Button type="button" variant="soft" color="gray" onClick={openExportDialog}>
-            <Text size="2">导出队伍</Text>
-          </Button>
-        </Flex>
-        {exportMessage && !exportDialogOpen && (
-          <Text size="2" color="gray" className="settings-data-status">
-            {exportMessage}
-          </Text>
-        )}
-      </Box>
+      <Flex direction="column" gap="2" className="settings-footer-note">
+        {importError && !importDialogOpen && <FooterNote role="alert">导入失败：{importError}</FooterNote>}
+        {importMessage && !importDialogOpen && <FooterNote role="status">{importMessage}</FooterNote>}
+        {exportError && !exportDialogOpen && <FooterNote role="alert">导出失败：{exportError}</FooterNote>}
+        {exportMessage && !exportDialogOpen && <FooterNote role="status">{exportMessage}</FooterNote>}
+      </Flex>
 
       <Dialog.Root open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <Dialog.Content maxWidth="520px">

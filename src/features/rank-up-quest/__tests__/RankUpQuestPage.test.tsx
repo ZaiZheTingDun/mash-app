@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import type { ComponentProps } from "react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type Event } from "@tauri-apps/api/event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import type { Project } from "../../../types/project";
 import { RankUpQuestPage } from "../RankUpQuestPage";
@@ -69,9 +71,20 @@ function mockCommands() {
   });
 }
 
-function renderPage() {
+function renderPage(overrides: Partial<ComponentProps<typeof RankUpQuestPage>> = {}) {
   const callbacks = {
     onProjectSelect: vi.fn(),
+    onCreateProject: vi.fn(),
+    onRenameProject: vi.fn(),
+    onDuplicateProject: vi.fn(),
+    onDeleteProject: vi.fn(),
+    onCreateProjectGroup: vi.fn(async () => {}),
+    onRenameProjectGroup: vi.fn(async () => {}),
+    onDeleteProjectGroup: vi.fn(async () => {}),
+    onMoveProjectToGroup: vi.fn(async () => {}),
+    onReorderProjectGroups: vi.fn(async () => {}),
+    onReorderProjectsInGroup: vi.fn(async () => {}),
+    onOpenProjectSettings: vi.fn(),
     onBack: vi.fn(),
     onAutomationStart: vi.fn(),
     onAutomationStartFailed: vi.fn(),
@@ -79,15 +92,71 @@ function renderPage() {
   };
   renderWithTheme(
     <RankUpQuestPage
+      server="CN"
       projects={[PROJECT]}
+      projectCatalog={{ schemaVersion: 1, groups: [], ungroupedProjectIds: [PROJECT.id] }}
       activeProjectId={PROJECT.id}
       {...callbacks}
+      {...overrides}
     />,
   );
   return callbacks;
 }
 
 describe("RankUpQuestPage", () => {
+  it("shows the shared header with team selection and a footer status", async () => {
+    mockCommands();
+    const user = userEvent.setup();
+    const callbacks = renderPage();
+
+    expect(screen.getByRole("heading", { name: "强化任务", level: 1 })).toBeInTheDocument();
+    expect(within(screen.getByRole("banner")).getByRole("button", { name: PROJECT.name })).toBeInTheDocument();
+    expect(within(screen.getByRole("banner")).getByRole("button", { name: "队伍操作" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("请截图并选择强化任务");
+    await user.click(screen.getByRole("button", { name: "返回" }));
+    expect(callbacks.onBack).toHaveBeenCalledOnce();
+  });
+
+  it("uses the formation selector's grouped search and selection callbacks", async () => {
+    mockCommands();
+    const user = userEvent.setup();
+    const secondProject = { ...PROJECT, id: "team-2", name: "第二强化队伍" };
+    const callbacks = renderPage({
+      projects: [PROJECT, secondProject],
+      projectCatalog: {
+        schemaVersion: 1,
+        groups: [{ id: "group-1", name: "强化分组", projectIds: [secondProject.id] }],
+        ungroupedProjectIds: [PROJECT.id],
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: PROJECT.name }));
+    expect(screen.getByRole("button", { name: /强化分组/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "管理所有队伍…" })).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "搜索队伍" }), "第二");
+    await user.click(screen.getByRole("button", { name: /第二强化队伍/ }));
+    expect(callbacks.onProjectSelect).toHaveBeenCalledWith(secondProject.id);
+  });
+
+  it("opens the shared party operations menu", async () => {
+    mockCommands();
+    const user = userEvent.setup();
+    const callbacks = renderPage();
+    await user.click(screen.getByRole("button", { name: "队伍操作" }));
+    await user.click(screen.getByRole("menuitem", { name: "队伍设置" }));
+    expect(callbacks.onOpenProjectSettings).toHaveBeenCalledOnce();
+  });
+
+  it.each([null, "missing-team"])("does not run an unselected fallback party for %s", async (activeProjectId) => {
+    mockCommands();
+    const user = userEvent.setup();
+    renderPage({ activeProjectId });
+    expect(screen.getByRole("button", { name: "选择队伍" })).toBeEnabled();
+    await user.click(screen.getByRole("radio", { name: "按顺序完成所有强化任务" }));
+    expect(screen.getByRole("status")).toHaveTextContent("请选择战斗队伍");
+    expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
+  });
+
   it("refreshes the screenshot and only allows selecting an actionable row", async () => {
     mockCommands();
     const user = userEvent.setup();
@@ -100,7 +169,9 @@ describe("RankUpQuestPage", () => {
     expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "选择可强化任务" }));
+    expect(screen.getByRole("button", { name: "选择可强化任务", pressed: true })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始强化任务" })).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent("已选择强化任务，可以开始");
   });
 
   it("starts single mode with candidate identity only and ignores project repeat count", async () => {
@@ -143,6 +214,8 @@ describe("RankUpQuestPage", () => {
     renderPage();
 
     await user.click(await screen.findByText("按顺序完成所有强化任务"));
+    expect(screen.getByRole("status")).toHaveTextContent("就绪，将按列表顺序执行");
+    expect(screen.queryByRole("button", { name: "截取游戏画面" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "开始强化任务" }));
 
     expect(invoke).toHaveBeenCalledWith(
@@ -154,12 +227,65 @@ describe("RankUpQuestPage", () => {
   });
 
   it("disables the workflow on the Japanese server", async () => {
-    vi.mocked(invoke).mockImplementation(async (command: string) =>
-      command === "get_server" ? "JP" : null,
-    );
+    renderPage({ server: "JP" });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("强化任务自动化仅支持国服。");
+    expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
+  });
+
+  it("keeps actions disabled until the backend server is known", () => {
+    renderPage({ server: null });
+    expect(screen.getByRole("status")).toHaveTextContent("正在读取服务器…");
+    expect(screen.getByRole("button", { name: "截取游戏画面" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
+  });
+
+  it("shows capture errors in the footer and allows retrying", async () => {
+    vi.mocked(invoke).mockImplementation(async (command: string) => {
+      if (command === "get_server") return "CN";
+      if (command === "capture_rank_up_quest_page") throw new Error("设备未连接");
+      return null;
+    });
+    const user = userEvent.setup();
     renderPage();
 
-    expect(await screen.findByText("强化任务自动化首版仅支持国服。")).toBeVisible();
+    await user.click(await screen.findByRole("button", { name: "截取游戏画面" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("设备未连接");
+    expect(screen.getByRole("button", { name: "截取游戏画面" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
+  });
+
+  it("shows running status and restores controls after stopping", async () => {
+    mockCommands();
+    type Payload = { status: "running" | "idle"; currentScreen: string; message: string };
+    let eventHandler: ((event: Event<Payload>) => void) | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "automation-status") eventHandler = handler as typeof eventHandler;
+      return () => {};
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByText("按顺序完成所有强化任务"));
+    await user.click(screen.getByRole("button", { name: "开始强化任务" }));
+    expect(screen.getByRole("status")).toHaveTextContent("当前页面：正在启动");
+    expect(screen.getByRole("button", { name: PROJECT.name })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "队伍操作" })).toBeDisabled();
+
+    act(() => eventHandler?.({
+      event: "automation-status", id: 1,
+      payload: { status: "running", currentScreen: "RankUpQuest", message: "执行强化任务" },
+    }));
+    expect(screen.getByRole("status")).toHaveTextContent("当前页面：RankUpQuest");
+    await user.click(screen.getByRole("button", { name: "停止" }));
+    expect(invoke).toHaveBeenCalledWith("stop_automation");
+    act(() => eventHandler?.({
+      event: "automation-status", id: 2,
+      payload: { status: "idle", currentScreen: "RankUpQuest", message: "已停止" },
+    }));
+    expect(screen.getByRole("button", { name: "开始强化任务" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "返回" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: PROJECT.name })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "队伍操作" })).toBeEnabled();
   });
 });

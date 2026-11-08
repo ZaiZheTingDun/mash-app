@@ -1,0 +1,53 @@
+.craft-essence-enhancement-page .craft-essence-enhancement-modes.battle-repeat-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.craft-essence-enhancement-page .battle-body > .battle-panel {
+  min-height: 0;
+  gap: 16px;
+}
+
+.craft-essence-enhancement-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 27px;
+  margin: 0 0 0 21px;
+}
+
+.craft-essence-enhancement-rules > div {
+  min-width: 0;
+  padding: 4px 0 16px;
+  border-bottom: 1px solid var(--mash-color-border-default);
+}
+
+.craft-essence-enhancement-rules dt {
+  color: var(--mash-color-text-muted);
+  font-size: 12px;
+}
+
+.craft-essence-enhancement-rules dd {
+  margin: 10px 0 0;
+  color: var(--mash-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+@media (max-width: 720px) {
+  .craft-essence-enhancement-page .craft-essence-enhancement-modes .option-card-radio-content > .rt-Text {
+    white-space: normal;
+  }
+
+  .craft-essence-enhancement-page .craft-essence-enhancement-modes .option-card-radio-item {
+    height: auto;
+    min-height: 63px;
+  }
+}
+
+@media (max-width: 600px) {
+  .craft-essence-enhancement-page .craft-essence-enhancement-modes.battle-repeat-cards { grid-template-columns: 1fr; }
+  .craft-essence-enhancement-rules { grid-template-columns: 1fr; gap: 16px; }
+  .craft-essence-enhancement-footer { flex-wrap: wrap; }
+  .craft-essence-enhancement-footer .task-status { flex-basis: 100%; }
+  .craft-essence-enhancement-footer .task-action-button { margin-left: auto; }
+  .workspace-page > .craft-essence-enhancement-footer { flex-basis: auto; }
+}
