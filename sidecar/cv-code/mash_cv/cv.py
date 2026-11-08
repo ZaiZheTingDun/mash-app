@@ -2653,29 +2653,41 @@ def _bond_level_digit_candidates(img: np.ndarray, region: dict) -> tuple[list[di
 
     candidates: list[dict] = []
     for digit, tmpl in refs:
-        match = _match_template_region_multiscale(
-            img,
-            tmpl,
-            region,
-            0.0,
-            scales=BOND_LEVEL_TEMPLATE_SCALES,
-        )
-        if match["score"] < BOND_LEVEL_DIGIT_THRESHOLD:
-            continue
-        if not match.get("region") or float(match["region"]["h"]) < BOND_LEVEL_DIGIT_MIN_HEIGHT:
-            continue
-        candidates.append(
-            {
-                "digit": digit,
-                "score": float(match["score"]),
-                "x": float(match["region"]["x"]),
-                "y": float(match["region"]["y"]),
-                "w": float(match["region"]["w"]),
-                "h": float(match["region"]["h"]),
-                "region": match["region"],
-                "scale": float(match.get("scale", 1.0)),
-            }
-        )
+        pending_regions = [region]
+        while pending_regions:
+            search_region = pending_regions.pop()
+            match = _match_template_region_multiscale(
+                img,
+                tmpl,
+                search_region,
+                BOND_LEVEL_DIGIT_THRESHOLD,
+                scales=BOND_LEVEL_TEMPLATE_SCALES,
+            )
+            if not match["found"]:
+                continue
+            matched_region = match["region"]
+            if float(matched_region["h"]) < BOND_LEVEL_DIGIT_MIN_HEIGHT:
+                continue
+            candidates.append(
+                {
+                    "digit": digit,
+                    "score": float(match["score"]),
+                    "x": float(matched_region["x"]),
+                    "y": float(matched_region["y"]),
+                    "w": float(matched_region["w"]),
+                    "h": float(matched_region["h"]),
+                    "region": matched_region,
+                    "scale": float(match.get("scale", 1.0)),
+                }
+            )
+            # Exclude this glyph and search both sides for repeated digits such as 11.
+            left_width = float(matched_region["x"]) - float(search_region["x"])
+            if left_width > 0:
+                pending_regions.append({**search_region, "w": left_width})
+            right_x = float(matched_region["x"]) + float(matched_region["w"])
+            right_width = float(search_region["x"]) + float(search_region["w"]) - right_x
+            if right_width > 0:
+                pending_regions.append({**search_region, "x": right_x, "w": right_width})
     return candidates, []
 
 

@@ -901,6 +901,59 @@ class TestDetectScreen:
         assert expected_keyword in read["servantCoinKeywords"]
         assert read["servantNameField"] == expected_name_field
 
+    @pytest.mark.parametrize("expected_level", [1, 10, 11])
+    @pytest.mark.parametrize("width", [1920, 2560])
+    def test_bond_level_reader_distinguishes_repeated_digits_in_real_captures(
+        self, monkeypatch, expected_level, width
+    ):
+        resources = Path(__file__).resolve().parents[3] / "src-tauri/resources/servers/cn"
+        mash_cv._load_templates(str(resources / "templates"))
+        mash_cv._load_config(str(resources / "cv.json"))
+        screenshot = Path(__file__).with_name("test_data") / "screenshots" / (
+            f"battle_result_bond_level_up_cn_level_{expected_level}.jpg"
+        )
+        image = cv2.imread(str(screenshot))
+        assert image is not None
+        if image.shape[1] != width:
+            image = cv2.resize(image, (width, width * 9 // 16), interpolation=cv2.INTER_CUBIC)
+        monkeypatch.setattr(
+            mash_cv.cv, "_ocr_region", lambda _img, _region: {"fragments": [], "fullText": ""}
+        )
+
+        detected = mash_cv._detect_screen(
+            image, ["Battle", "BattleResultBond", "BattleResultBondLevelUp"]
+        )
+        result = mash_cv._read_bond_level_up(image, debug=True)
+
+        assert detected["screen"] == "BattleResultBondLevelUp"
+        assert result["ok"] is True, result.get("diagnostics")
+        assert result["bondLevelAfter"] == expected_level, result.get("diagnostics")
+        assert result["confidence"]["bondLevelAfter"] >= 0.85
+
+    @pytest.mark.parametrize("server", ["cn", "jp"])
+    @pytest.mark.parametrize("level", [1, 9, 10, 11, 12, 13, 14, 15])
+    @pytest.mark.parametrize("width", [1920, 2560])
+    def test_bond_level_digits_preserve_one_and_two_digit_levels(self, server, level, width):
+        resources = Path(__file__).resolve().parents[3] / "src-tauri/resources/servers" / server
+        mash_cv._load_templates(str(resources / "templates"))
+        image = _make_bgr_image(1920, 1080)
+        region = {"x": 0.84, "y": 0.40, "w": 0.073, "h": 0.13}
+        x = round(region["x"] * 1920) + 5
+        y = round(region["y"] * 1080) + 10
+        for digit in str(level):
+            template = mash_cv._get_template(f"digit/digit_{digit}")
+            glyph = cv2.resize(template, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+            h, w = glyph.shape[:2]
+            image[y:y + h, x:x + w] = cv2.cvtColor(glyph, cv2.COLOR_GRAY2BGR)
+            x += w + 8
+        if width != 1920:
+            image = cv2.resize(image, (width, width * 9 // 16), interpolation=cv2.INTER_CUBIC)
+
+        result = mash_cv.cv._read_bond_level_after(image, region, debug=True)
+
+        assert result["found"] is True, result.get("diagnostics")
+        assert result["value"] == level, result.get("diagnostics")
+
     @pytest.mark.parametrize(
         ("server", "screenshot_rel", "expected_level", "expected_name"),
         [
