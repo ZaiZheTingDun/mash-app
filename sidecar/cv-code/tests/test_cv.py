@@ -3575,6 +3575,62 @@ def test_support_np_level_parser_handles_observed_jp_ocr_errors(text, expected):
     assert _support_parse_np_level_text(text) == expected
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "絶技・八岐怒濤 5", "秘剣・比翼閃耀５", "絶技・八岐怒濤 3",
+        "宝具名 1Ａ", "宝具名 4 ▲", "5", "宝具名 10", "宝具名 15",
+        "宝具名 120", "宝具名 0", "宝具名 6", "第1の宝具", "宝具名 5式", "宝具名",
+    ],
+)
+def test_support_np_level_requires_prefix_even_in_dedicated_strip(text):
+    from mash_cv.cv import _support_extract_np_level
+
+    row_region = {"x": 0.177, "y": 0.32, "w": 0.466, "h": 0.12}
+    assert _support_extract_np_level([], row_region, text) is None
+    fragment = {"text": text, "region": {"y": 0.39, "h": 0.04}}
+    assert _support_extract_np_level([fragment], row_region) is None
+
+
+@pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080)])
+@pytest.mark.parametrize(
+    ("filename", "expected", "expected_1080p"),
+    [
+        ("support_score_grand_jp_31_16_0_16.png", [3, 5], [None, 5]),
+        ("support_score_grand_jp_14_16_62_16.png", [1, 5], [1, 5]),
+        ("support_score_grand_jp_9_15_5_8.png", [3, 2], [3, 2]),
+    ],
+)
+def test_support_np_levels_fall_back_to_templates_when_ocr_has_no_prefix(size, filename, expected, expected_1080p):
+    import mash_cv.cv as cv
+
+    cv._load_templates(
+        os.path.join(_REPO_ROOT, "src-tauri/resources/servers/shared/templates"),
+        key_prefix="shared",
+    )
+    cv._load_templates(_PROD_TEMPLATES_DIR, append=True)
+    img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, filename))
+    assert img is not None
+    img = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
+    anchors = cv._support_find_confirm_button_anchors(img)[:2]
+    assert len(anchors) == 2
+    # An unprefixed OCR digit must not bypass the template backup. The
+    # pixels contain different levels, so treating every trailing 5 as a
+    # level would fail this regression.
+    rows = [
+        {
+            "rowRegion": {"y": a["y"] + cv.SUPPORT_ROW_NAME_REGION_DY, "h": 0.11},
+            "npText": "宝具名 5",
+            "npRegion": {"y": a["y"] + cv.SUPPORT_ROW_NP_REGION_DY, "h": cv.SUPPORT_ROW_NP_REGION_H},
+        }
+        for a in anchors
+    ]
+    cv._support_add_details(img, rows, [])
+    # In the first fixture's downscale, 3 and 5 score within the required
+    # margin. Keep that level unknown rather than trusting the bare OCR 5.
+    assert [row["npLevel"] for row in rows] == (expected_1080p if size == (1920, 1080) else expected)
+
+
 @pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080)])
 def test_support_np_levels_from_jp_screenshot_with_misread_lv(size):
     import mash_cv.cv as cv
