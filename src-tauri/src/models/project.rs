@@ -291,7 +291,7 @@ pub enum SupportClassFilterMode {
     Both,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRecognitionSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]

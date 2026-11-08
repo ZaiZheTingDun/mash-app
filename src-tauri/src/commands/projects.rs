@@ -323,6 +323,9 @@ pub(crate) use catalog::*;
 mod normalization;
 pub(crate) use normalization::*;
 
+mod recognition;
+pub(crate) use recognition::*;
+
 mod member_references;
 
 mod command_editor;

@@ -6,10 +6,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { createInitialProjectSlots } from "../../team/projectSlots";
 import { ProjectSettingsDialog } from "../ProjectSettingsDialog";
+import type { ThresholdKey } from "../../settings/recognitionSettingsModel";
+import { DEFAULT_RECOGNITION_SETTINGS } from "../../settings/recognitionSettingsModel";
 import type { Project } from "../../../types/project";
 
+const storedProjects = new Map<string, Project>();
+const saveThreshold = vi.fn(async (projectId: string, key: ThresholdKey, value: number | null) => {
+  await invoke("set_project_recognition_threshold", { projectId, key, value });
+});
+
 function makeProject(overrides?: Partial<Project>): Project {
-  return {
+  const project: Project = {
     id: "project-1",
     name: "项目甲",
     advancedMode: false,
@@ -18,6 +25,8 @@ function makeProject(overrides?: Partial<Project>): Project {
     repeatMission: false,
     ...overrides,
   };
+  storedProjects.set(project.id, project);
+  return project;
 }
 
 function StatefulSettings({ initialProject, onSave }: {
@@ -25,7 +34,7 @@ function StatefulSettings({ initialProject, onSave }: {
   onSave: (project: Project) => void | Promise<void>;
 }) {
   const [project, setProject] = useState(initialProject);
-  return <ProjectSettingsDialog
+  return <ProjectSettingsDialog onSaveThreshold={saveThreshold}
     open project={project} onOpenChange={vi.fn()}
     onUpdateProject={async (next) => { await onSave(next); setProject(next); }}
   />;
@@ -33,7 +42,23 @@ function StatefulSettings({ initialProject, onSave }: {
 
 describe("ProjectSettingsDialog", () => {
   beforeEach(() => {
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    storedProjects.clear();
+    vi.mocked(invoke).mockImplementation(async (cmd: string, invokeArgs) => {
+      const args = invokeArgs as Record<string, unknown> | undefined;
+      if (cmd === "set_project_recognition_threshold") {
+        const project = storedProjects.get(String(args?.projectId))!;
+        const settings = { ...project.recognitionSettings };
+        const key = args?.key as ThresholdKey;
+        if (args?.value == null) delete settings[key];
+        else settings[key] = Number(args.value);
+        const saved = { ...project, recognitionSettings: Object.keys(settings).length ? settings : null };
+        storedProjects.set(project.id, saved);
+        return saved;
+      }
+      if (cmd === "get_project_recognition_settings") {
+        return { ...DEFAULT_RECOGNITION_SETTINGS, supportCeThreshold: 0.71, supportMlbIconThreshold: 0.72,
+          ...storedProjects.get(String(args?.projectId))?.recognitionSettings };
+      }
       if (cmd === "get_recognition_settings") {
         return {
           noblePhantasmDetectionMode: "card",
@@ -52,7 +77,7 @@ describe("ProjectSettingsDialog", () => {
 
   it("loads global thresholds when the project has no override", async () => {
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={makeProject()}
         onOpenChange={vi.fn()}
@@ -71,12 +96,12 @@ describe("ProjectSettingsDialog", () => {
     ).toHaveValue(0.71);
   });
 
-  it("saves a project recognition threshold through update_project state", async () => {
+  it("saves only the selected project threshold through the backend", async () => {
     const user = userEvent.setup();
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -92,41 +117,38 @@ describe("ProjectSettingsDialog", () => {
     await user.type(input, "0.66");
 
     await waitFor(() => {
-      expect(onUpdateProject).toHaveBeenCalledWith({
-        ...project,
-        recognitionSettings: {
-          supportCeThreshold: 0.66,
-        },
-      });
+      expect(saveThreshold).toHaveBeenCalledWith(project.id, "supportCeThreshold", 0.66);
+      expect(onUpdateProject).not.toHaveBeenCalled();
     });
     expect(await screen.findByText("已保存")).toBeInTheDocument();
   });
 
-  it("preserves queued threshold edits and other team settings during automatic saves", async () => {
+  it("keeps pending and queued edits bound to A after closing settings and selecting B", async () => {
+    const a = makeProject();
+    const b = makeProject({ id: "project-2", name: "项目乙" });
     let finish!: () => void;
-    const onSave = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }))
-      .mockResolvedValue(undefined);
-    const project = makeProject({ recognitionSettings: { stopOnFiveStarCeDrop: true, fiveStarCeDropTargetCount: 3 } });
-    renderWithTheme(<StatefulSettings initialProject={project} onSave={onSave} />);
+    const save = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }))
+      .mockImplementation(saveThreshold);
+    const { rerender } = renderWithTheme(<ProjectSettingsDialog open project={a} onOpenChange={vi.fn()}
+      onUpdateProject={vi.fn()} onSaveThreshold={save} />);
     fireEvent.click(screen.getByRole("button", { name: "阈值设置" }));
-    const ce = await screen.findByRole("spinbutton", { name: "助战礼装匹配阈值数值" });
-    await waitFor(() => expect(ce).not.toBeDisabled());
-    const mlb = screen.getByRole("spinbutton", { name: "满破图标匹配阈值数值" });
-    fireEvent.change(ce, { target: { value: "0.66" } });
-    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
-    fireEvent.change(ce, { target: { value: "0.67" } });
-    fireEvent.change(mlb, { target: { value: "0.77" } });
+    const input = await screen.findByRole("spinbutton", { name: "助战礼装匹配阈值数值" });
+    await waitFor(() => expect(input).not.toBeDisabled());
+    fireEvent.change(input, { target: { value: "0.66" } });
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: "0.67" } });
+    rerender(<ProjectSettingsDialog open={false} project={a} onOpenChange={vi.fn()}
+      onUpdateProject={vi.fn()} onSaveThreshold={save} />);
+    rerender(<ProjectSettingsDialog open project={b} onOpenChange={vi.fn()}
+      onUpdateProject={vi.fn()} onSaveThreshold={save} />);
+    const bInput = await screen.findByRole("spinbutton", { name: "助战礼装匹配阈值数值" });
+    await waitFor(() => expect(bInput).not.toBeDisabled());
     await act(async () => finish());
-    await waitFor(() => expect(onSave).toHaveBeenLastCalledWith({
-      ...project,
-      recognitionSettings: { ...project.recognitionSettings, supportCeThreshold: 0.67, supportMlbIconThreshold: 0.77 },
-    }));
-    expect(ce).toHaveValue(0.67);
-    expect(mlb).toHaveValue(0.77);
-    fireEvent.click(screen.getByRole("button", { name: "基础设置" }));
-    fireEvent.click(screen.getByRole("button", { name: "阈值设置" }));
-    await waitFor(() => expect(screen.getByRole("spinbutton", { name: "助战礼装匹配阈值数值" })).toHaveValue(0.67));
-    expect(screen.getByRole("spinbutton", { name: "满破图标匹配阈值数值" })).toHaveValue(0.77);
+    await waitFor(() => expect(save).toHaveBeenCalledWith(a.id, "supportCeThreshold", 0.67));
+    fireEvent.change(bInput, { target: { value: "0.78" } });
+    await waitFor(() => expect(save).toHaveBeenLastCalledWith(b.id, "supportCeThreshold", 0.78));
+    expect(storedProjects.get(a.id)?.recognitionSettings?.supportCeThreshold).toBe(0.67);
+    expect(storedProjects.get(b.id)?.recognitionSettings?.supportCeThreshold).toBe(0.78);
   });
 
   it("restores a project threshold by deleting its override", async () => {
@@ -139,7 +161,7 @@ describe("ProjectSettingsDialog", () => {
       },
     });
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -155,12 +177,8 @@ describe("ProjectSettingsDialog", () => {
     await user.click(screen.getAllByRole("button", { name: "恢复默认" })[0]);
 
     await waitFor(() => {
-      expect(onUpdateProject).toHaveBeenCalledWith({
-        ...project,
-        recognitionSettings: {
-          supportMlbIconThreshold: 0.76,
-        },
-      });
+      expect(saveThreshold).toHaveBeenCalledWith(project.id, "supportCeThreshold", null);
+      expect(storedProjects.get(project.id)?.recognitionSettings).toEqual({ supportMlbIconThreshold: 0.76 });
     });
     expect(screen.getByRole("spinbutton", { name: "助战礼装匹配阈值数值" })).toHaveValue(0.71);
   });
@@ -170,7 +188,7 @@ describe("ProjectSettingsDialog", () => {
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -203,7 +221,7 @@ describe("ProjectSettingsDialog", () => {
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -234,7 +252,7 @@ describe("ProjectSettingsDialog", () => {
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -262,7 +280,7 @@ describe("ProjectSettingsDialog", () => {
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);
     const project = makeProject();
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={project}
         onOpenChange={vi.fn()}
@@ -307,7 +325,7 @@ describe("ProjectSettingsDialog", () => {
     });
 
     renderWithTheme(
-      <ProjectSettingsDialog
+      <ProjectSettingsDialog onSaveThreshold={saveThreshold}
         open
         project={makeProject()}
         onOpenChange={vi.fn()}
@@ -400,7 +418,7 @@ describe("ProjectSettingsDialog", () => {
 
   it("keeps the saved mode and shows an error when saving fails", async () => {
     const user = userEvent.setup();
-    renderWithTheme(<ProjectSettingsDialog open project={makeProject()} onOpenChange={vi.fn()}
+    renderWithTheme(<ProjectSettingsDialog onSaveThreshold={saveThreshold} open project={makeProject()} onOpenChange={vi.fn()}
       onUpdateProject={vi.fn().mockRejectedValue(new Error("保存失败"))} />);
     await user.click(screen.getByRole("combobox", { name: "助战筛选设置" }));
     await user.click(await screen.findByRole("option", { name: "同时筛选" }));

@@ -203,6 +203,8 @@ pub fn run() {
             commands::projects::create_project,
             commands::projects::duplicate_project,
             commands::projects::update_project,
+            commands::projects::get_project_recognition_settings,
+            commands::projects::set_project_recognition_threshold,
             commands::projects::delete_project,
             commands::projects::delete_slot_servant,
             commands::adb::check_adb,

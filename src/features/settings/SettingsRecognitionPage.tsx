@@ -5,6 +5,7 @@ import { ResetIcon } from "@radix-ui/react-icons";
 import { FooterNote } from "../../components/common/FooterNote";
 import type { RecognitionSettings } from "../../types/recognition";
 import { SettingsRow } from "./SettingsRow";
+import { queueThresholdOperation } from "./recognitionThresholdQueue";
 import {
   clampThreshold,
   DEFAULT_RECOGNITION_SETTINGS,
@@ -18,6 +19,7 @@ import {
 } from "./recognitionSettingsModel";
 
 interface RecognitionThresholdSettingsProps {
+  scope: string;
   active: boolean;
   helpText?: string;
   loadSettings: () => Promise<RecognitionSettings>;
@@ -30,6 +32,7 @@ interface RecognitionThresholdSettingsProps {
 }
 
 export function RecognitionThresholdSettings({
+  scope,
   active,
   helpText,
   loadSettings,
@@ -45,7 +48,7 @@ export function RecognitionThresholdSettings({
   const [saveStatus, setSaveStatus] = useState<Partial<Record<ThresholdKey, "saving" | "saved">>>({});
   const [errors, setErrors] = useState<Partial<Record<ThresholdKey, string>>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
-  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const session = useRef({ cancelled: false });
   const editSequences = useRef<Partial<Record<ThresholdKey, number>>>({});
   const callbacks = useRef({ loadSettings, loadDefaultSettings, saveThreshold });
 
@@ -53,57 +56,63 @@ export function RecognitionThresholdSettings({
     callbacks.current = { loadSettings, loadDefaultSettings, saveThreshold };
   }, [loadSettings, loadDefaultSettings, saveThreshold]);
 
-  const loadCurrentSettings = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    setSaveStatus({});
-    setErrors({});
-    try {
-      const [settings, defaultSettings] = await Promise.all([
-        callbacks.current.loadSettings(),
-        callbacks.current.loadDefaultSettings?.() ?? Promise.resolve(DEFAULT_RECOGNITION_SETTINGS),
-      ]);
+  useEffect(() => {
+    if (!active) return;
+    const currentSession = { cancelled: false };
+    session.current = currentSession;
+    void Promise.resolve().then(() => {
+      if (currentSession.cancelled) return;
+      setLoading(true);
+      setLoadError(null);
+      setSaveStatus({});
+      setErrors({});
+    });
+    const { loadSettings, loadDefaultSettings } = callbacks.current;
+    // Read after earlier writes, including writes queued by a closed page.
+    void queueThresholdOperation(scope, () => Promise.all([
+      loadSettings(),
+      loadDefaultSettings?.() ?? Promise.resolve(DEFAULT_RECOGNITION_SETTINGS),
+    ])).then(([settings, defaultSettings]) => {
+      if (currentSession.cancelled) return;
       setDefaults(normalizeRecognitionSettings(defaultSettings));
       const normalizedSettings = normalizeRecognitionSettings(settings);
       setSaved(normalizedSettings);
       setDraft(settingsToDraft(normalizedSettings));
-    } catch (err) {
-      setLoadError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (active) {
-      void loadCurrentSettings();
-    }
-  }, [active, loadCurrentSettings]);
+    }).catch((err: unknown) => {
+      if (!currentSession.cancelled) setLoadError(String(err));
+    }).finally(() => {
+      if (!currentSession.cancelled) setLoading(false);
+    });
+    return () => {
+      currentSession.cancelled = true;
+    };
+  }, [active, scope]);
 
   const saveCurrentThreshold = useCallback(
     (config: ThresholdConfig, value: number, sequence: number, options?: { restoreDefault?: boolean }) => {
       setSaveStatus((current) => ({ ...current, [config.key]: "saving" }));
       setErrors((current) => ({ ...current, [config.key]: undefined }));
-      // Preserve write order across fields without blocking further edits.
-      saveQueue.current = saveQueue.current.then(async () => {
-        try {
-          const settings = normalizeRecognitionSettings(
-            await callbacks.current.saveThreshold(config, clampThreshold(value, config), options)
-          );
+      const currentSession = session.current;
+      // Capture the callback now: a queued edit must retain its original team.
+      const save = callbacks.current.saveThreshold;
+      void queueThresholdOperation(scope, () => save(config, clampThreshold(value, config), options))
+        .then((result) => {
+          if (currentSession.cancelled) return;
+          const settings = normalizeRecognitionSettings(result);
           setSaved((current) => ({ ...current, [config.key]: settings[config.key] }));
           if (editSequences.current[config.key] !== sequence) return;
           if (options?.restoreDefault) {
             setDraft((current) => ({ ...current, [config.key]: formatThreshold(settings[config.key], config) }));
           }
           setSaveStatus((current) => ({ ...current, [config.key]: "saved" }));
-        } catch (err) {
+        }).catch((err: unknown) => {
+          if (currentSession.cancelled) return;
           if (editSequences.current[config.key] !== sequence) return;
           setSaveStatus((current) => ({ ...current, [config.key]: undefined }));
           setErrors((current) => ({ ...current, [config.key]: String(err) }));
-        }
-      });
+        });
     },
-    []
+    [scope]
   );
 
   const updateDraft = (config: ThresholdConfig, value: string) => {
@@ -190,6 +199,7 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
 
   return (
     <RecognitionThresholdSettings
+      scope="global"
       active={active}
       helpText="此处为全局设置；若只想针对某个队伍进行设置，请前往队伍设置页面。"
       loadSettings={loadSettings}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Box, Button, Dialog, Flex, Heading, IconButton, Select, Text } from "@radix-ui/themes";
 import { Cross1Icon } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
@@ -7,6 +7,7 @@ import {
   normalizeRecognitionSettings,
   type ThresholdKey,
 } from "../settings/recognitionSettingsModel";
+import { projectThresholdScope } from "../settings/recognitionThresholdQueue";
 import { RecognitionThresholdSettings } from "../settings/SettingsRecognitionPage";
 import { ProjectRunSettings } from "./ProjectRunSettings";
 import { DiamondSwitch } from "../../components/common/DiamondSwitch";
@@ -21,18 +22,7 @@ interface ProjectSettingsDialogProps {
   project: Project | null;
   onOpenChange: (open: boolean) => void;
   onUpdateProject: (project: Project) => Promise<void>;
-}
-
-function projectRecognitionSettings(
-  project: Project | null,
-  globalSettings: RecognitionSettings
-): RecognitionSettings {
-  return normalizeRecognitionSettings(
-    {
-      ...(globalSettings ?? DEFAULT_RECOGNITION_SETTINGS),
-      ...(project?.recognitionSettings ?? {}),
-    }
-  );
+  onSaveThreshold: (projectId: string, key: ThresholdKey, value: number | null) => Promise<void>;
 }
 
 function hasRecognitionOverrides(settings: ProjectRecognitionSettings) {
@@ -44,17 +34,15 @@ export function ProjectSettingsDialog({
   project,
   onOpenChange,
   onUpdateProject,
+  onSaveThreshold,
 }: ProjectSettingsDialogProps) {
   const [section, setSection] = useState<ProjectSettingsSection>("basic");
-  const thresholdWriteProject = useRef(project);
-  useEffect(() => { thresholdWriteProject.current = project; }, [project]);
   const [globalSettings, setGlobalSettings] = useState<RecognitionSettings>(
     DEFAULT_RECOGNITION_SETTINGS
   );
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const loadSettings = useCallback(async () => {
-    const globalSettings = await invoke<RecognitionSettings>("get_recognition_settings");
-    return projectRecognitionSettings(project, globalSettings);
+    return invoke<RecognitionSettings>("get_project_recognition_settings", { projectId: project?.id });
   }, [project]);
   const loadDefaultSettings = useCallback(
     () => invoke<RecognitionSettings>("get_recognition_settings"),
@@ -67,28 +55,11 @@ export function ProjectSettingsDialog({
       value: number,
       options?: { restoreDefault?: boolean }
     ) => {
-      const currentProject = thresholdWriteProject.current;
-      if (!currentProject) return DEFAULT_RECOGNITION_SETTINGS;
-      const globalSettings = await invoke<RecognitionSettings>("get_recognition_settings");
-      const currentOverrides = currentProject.recognitionSettings ?? {};
-      const recognitionSettings = { ...currentOverrides };
-      if (options?.restoreDefault) {
-        delete recognitionSettings[key];
-      } else {
-        recognitionSettings[key] = value;
-      }
-      const nextRecognitionSettings = hasRecognitionOverrides(recognitionSettings)
-        ? recognitionSettings
-        : null;
-      const nextProject = { ...currentProject, recognitionSettings: nextRecognitionSettings };
-      await onUpdateProject(nextProject);
-      thresholdWriteProject.current = nextProject;
-      return projectRecognitionSettings(
-        { ...currentProject, recognitionSettings: nextRecognitionSettings },
-        globalSettings
-      );
+      if (!project) return DEFAULT_RECOGNITION_SETTINGS;
+      await onSaveThreshold(project.id, key, options?.restoreDefault ? null : value);
+      return invoke<RecognitionSettings>("get_project_recognition_settings", { projectId: project.id });
     },
-    [onUpdateProject]
+    [onSaveThreshold, project]
   );
 
   useEffect(() => {
@@ -314,6 +285,7 @@ export function ProjectSettingsDialog({
                 ) : (
                   <RecognitionThresholdSettings
                     key={project?.id}
+                    scope={projectThresholdScope(project?.id ?? "")}
                     active={open && project != null}
                     helpText="此处只影响当前队伍；未保存队伍阈值时会继承全局设置。"
                     loadSettings={loadSettings}

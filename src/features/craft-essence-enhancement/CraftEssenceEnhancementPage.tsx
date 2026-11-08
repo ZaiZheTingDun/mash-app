@@ -3,6 +3,7 @@ import { Box, Flex } from "@radix-ui/themes";
 import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
+import { FooterNote } from "../../components/common/FooterNote";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import { invoke, listen } from "../../tauri";
 import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
@@ -127,10 +128,9 @@ export function CraftEssenceEnhancementPage({
       </Flex>
 
       <Flex justify="between" gap="4" className="page-footer craft-essence-enhancement-footer">
-        <div className="task-status" role={error ? "alert" : "status"} data-error={!!error}>
-          <i aria-hidden="true" />
-          <span>{error || `当前页面：${currentScreen ? SCREEN_LABELS[currentScreen] ?? currentScreen : running ? "正在识别…" : "等待启动"}`}</span>
-        </div>
+        <FooterNote className="task-status" role={error ? "alert" : "status"}>
+          {error || `当前页面：${currentScreen ? SCREEN_LABELS[currentScreen] ?? currentScreen : running ? "正在识别…" : "等待启动"}`}
+        </FooterNote>
         <TaskActionButton label={running ? "停止" : "开始制作丸子"} running={running} onClick={running ? handleStop : handleStart} />
       </Flex>
     </main>

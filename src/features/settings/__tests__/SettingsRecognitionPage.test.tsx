@@ -16,7 +16,7 @@ async function findInput() {
 describe("RecognitionThresholdSettings automatic saving", () => {
   it("places the scope explanation after all threshold controls as a footer note", async () => {
     const helpText = "此处为全局设置；若只想针对某个队伍进行设置，请前往队伍设置页面。";
-    renderWithTheme(<RecognitionThresholdSettings active helpText={helpText}
+    renderWithTheme(<RecognitionThresholdSettings scope="test" active helpText={helpText}
       loadSettings={loadSettings} saveThreshold={vi.fn()} />);
     await findInput();
     const note = screen.getByRole("note");
@@ -28,7 +28,7 @@ describe("RecognitionThresholdSettings automatic saving", () => {
 
   it("saves valid edits without a save button and restores defaults from the button before the input", async () => {
     const save = vi.fn(async ({ key }: { key: ThresholdKey }, value: number) => ({ ...DEFAULT_RECOGNITION_SETTINGS, [key]: value }));
-    renderWithTheme(<RecognitionThresholdSettings active loadSettings={loadSettings} saveThreshold={save} />);
+    renderWithTheme(<RecognitionThresholdSettings scope="test" active loadSettings={loadSettings} saveThreshold={save} />);
     const input = await findInput();
     expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
     const reset = screen.getAllByRole("button", { name: "恢复默认" })[0];
@@ -48,7 +48,7 @@ describe("RecognitionThresholdSettings automatic saving", () => {
     const save = vi.fn(({ key }: { key: ThresholdKey }, value: number) => new Promise<RecognitionSettings>((resolve) => {
       pending.push({ key, value, resolve });
     }));
-    renderWithTheme(<RecognitionThresholdSettings active loadSettings={loadSettings} saveThreshold={save} />);
+    renderWithTheme(<RecognitionThresholdSettings scope="test" active loadSettings={loadSettings} saveThreshold={save} />);
     const input = await findInput();
     const second = screen.getByRole("spinbutton", { name: "满破图标匹配阈值数值" });
     fireEvent.change(input, { target: { value: "0.65" } });
@@ -72,7 +72,7 @@ describe("RecognitionThresholdSettings automatic saving", () => {
   it("does not save incomplete or out-of-range drafts and allows retrying after a failed save", async () => {
     const save = vi.fn().mockRejectedValueOnce(new Error("无法保存阈值"))
       .mockImplementation(async ({ key }: { key: ThresholdKey }, value: number) => ({ ...DEFAULT_RECOGNITION_SETTINGS, [key]: value }));
-    renderWithTheme(<RecognitionThresholdSettings active loadSettings={loadSettings} saveThreshold={save} />);
+    renderWithTheme(<RecognitionThresholdSettings scope="test" active loadSettings={loadSettings} saveThreshold={save} />);
     const input = await findInput();
     for (const value of ["", "0", "0.59", "0.86"]) {
       fireEvent.change(input, { target: { value } });
@@ -90,7 +90,7 @@ describe("RecognitionThresholdSettings automatic saving", () => {
     let finish!: (settings: RecognitionSettings) => void;
     const save = vi.fn().mockImplementationOnce(() => new Promise<RecognitionSettings>((resolve) => { finish = resolve; }))
       .mockResolvedValue(DEFAULT_RECOGNITION_SETTINGS);
-    renderWithTheme(<RecognitionThresholdSettings active loadSettings={loadSettings} saveThreshold={save} />);
+    renderWithTheme(<RecognitionThresholdSettings scope="test" active loadSettings={loadSettings} saveThreshold={save} />);
     const input = await findInput();
     fireEvent.change(input, { target: { value: "0.65" } });
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
@@ -99,5 +99,36 @@ describe("RecognitionThresholdSettings automatic saving", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ key: "supportCeThreshold" }), 0.7, { restoreDefault: true });
     expect(input).toHaveValue(0.7);
+  });
+
+  it("finishes old page edits before reloading and saving from a reopened page", async () => {
+    let stored = { ...DEFAULT_RECOGNITION_SETTINGS };
+    let finish!: () => void;
+    const persist = vi.fn(async ({ key }: { key: ThresholdKey }, value: number) => {
+      stored = { ...stored, [key]: value };
+      return stored;
+    });
+    const save = vi.fn().mockImplementationOnce(async (config, value) => {
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return persist(config, value);
+    }).mockImplementation(persist);
+    const load = vi.fn(async () => stored);
+    const first = renderWithTheme(<RecognitionThresholdSettings scope="global" active
+      loadSettings={load} saveThreshold={save} />);
+    const input = await findInput();
+    fireEvent.change(input, { target: { value: "0.65" } });
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: "0.66" } });
+    first.unmount();
+    renderWithTheme(<RecognitionThresholdSettings scope="global" active
+      loadSettings={load} saveThreshold={save} />);
+    expect(load).toHaveBeenCalledOnce();
+    await act(async () => finish());
+    const reopenedInput = await findInput();
+    expect(reopenedInput).toHaveValue(0.66);
+    fireEvent.change(reopenedInput, { target: { value: "0.75" } });
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
+    expect(stored.supportCeThreshold).toBe(0.75);
+    expect(persist.mock.calls.map(([, value]) => value)).toEqual([0.65, 0.66, 0.75]);
   });
 });

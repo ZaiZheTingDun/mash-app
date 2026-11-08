@@ -4,6 +4,7 @@ import { ImageIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
+import { FooterNote } from "../../components/common/FooterNote";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import { convertFileSrc, invoke, listen } from "../../tauri";
 import { ProjectBar } from "../projects/ProjectBar";
@@ -227,10 +228,9 @@ export function RankUpQuestPage({
       </Flex>
 
       <Flex justify="between" className="page-footer rank-up-quest-footer" gap="4">
-        <div className="task-status" role={statusError ? "alert" : "status"} data-error={!!statusError}>
-          <i aria-hidden="true" />
-          <span>{statusMessage}</span>
-        </div>
+        <FooterNote className="task-status" role={statusError ? "alert" : "status"}>
+          {statusMessage}
+        </FooterNote>
         <TaskActionButton label={running ? "停止" : "开始强化任务"} running={running} disabled={!running && !canStart}
           onClick={running ? () => void invoke("stop_automation") : handleStart} />
       </Flex>

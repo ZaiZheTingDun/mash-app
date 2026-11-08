@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
+import { FooterNote } from "../../components/common/FooterNote";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import { invoke, listen } from "../../tauri";
 import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
@@ -111,10 +112,9 @@ export function FriendPointSummonPage({
       </Flex>
 
       <Flex justify="between" gap="4" className="page-footer friend-point-summon-footer">
-        <div className="task-status" role="status">
-          <i aria-hidden="true" />
-          <span>当前页面：{currentScreen ? SCREEN_LABELS[currentScreen] ?? currentScreen : running ? "正在识别…" : "等待启动"}</span>
-        </div>
+        <FooterNote className="task-status" role="status">
+          当前页面：{currentScreen ? SCREEN_LABELS[currentScreen] ?? currentScreen : running ? "正在识别…" : "等待启动"}
+        </FooterNote>
         <TaskActionButton label={running ? "停止" : "开始"} running={running} onClick={running ? handleStop : handleStart} />
       </Flex>
     </main>
