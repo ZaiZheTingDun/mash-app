@@ -144,6 +144,14 @@ fn fake_with_cancellation(
     s: Scenario,
     cancellation: &OperationCancellation,
 ) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Request>) {
+    fake_with_debug(s, cancellation, &mut |_| {})
+}
+
+fn fake_with_debug(
+    s: Scenario,
+    cancellation: &OperationCancellation,
+    debug: &mut dyn FnMut(&str),
+) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Request>) {
     let server = s.server.unwrap_or(Server::Cn);
     let package = s.package.unwrap_or(target::package(server));
     let mut commands = Vec::new();
@@ -335,6 +343,7 @@ fn fake_with_cancellation(
         },
         &mut || {},
         cancellation,
+        debug,
     );
     (result, commands, requests)
 }
@@ -594,6 +603,7 @@ fn start_on_authorized_device() {
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy/scrcpy-server.jar"),
         &credentials::AuthorizationStore::default(),
         &mut |_| {},
+        &mut |_| {},
     )
     .unwrap();
     println!("{}: {}", result.serial, result.message);
@@ -764,43 +774,80 @@ fn cancelling_during_game_launch_does_not_start_response_watching() {
 fn launcher_resolution_uses_the_selected_component_and_retains_failure_details() {
     let package = "com.bilibili.fatego";
     let mut commands = Vec::new();
-    launch_game(package, &mut |command| {
-        commands.push(command.to_string());
-        if command.starts_with("cmd package resolve-activity") {
-            Ok(
+    launch_game(
+        package,
+        &mut |command| {
+            commands.push(command.to_string());
+            if command.starts_with("cmd package resolve-activity") {
+                Ok(
                 b"priority=0 preferredOrder=0 match=0x108000\ncom.bilibili.fatego/.EmptyClass\n"
                     .to_vec(),
             )
-        } else {
-            assert_eq!(
-                command,
-                "am start -W --user 0 -n 'com.bilibili.fatego/.EmptyClass'"
-            );
-            Ok(
+            } else {
+                assert_eq!(
+                    command,
+                    "am start -W --user 0 -n 'com.bilibili.fatego/.EmptyClass'"
+                );
+                Ok(
                 b"Starting: Intent { cmp=com.bilibili.fatego/.EmptyClass }\nStatus: ok\nComplete\n"
                     .to_vec(),
             )
-        }
-    })
+            }
+        },
+        &mut |_| {},
+    )
     .unwrap();
     assert_eq!(commands.len(), 2);
     for resolved in ["No activity found", "other.app/.Entry"] {
         let mut calls = 0;
-        let error = launch_game(package, &mut |_| {
-            calls += 1;
-            Ok(resolved.as_bytes().to_vec())
-        })
+        let error = launch_game(
+            package,
+            &mut |_| {
+                calls += 1;
+                Ok(resolved.as_bytes().to_vec())
+            },
+            &mut |_| {},
+        )
         .unwrap_err();
         assert_eq!(calls, 1);
         assert!(error.contains(resolved));
     }
-    let error = launch_game(package, &mut |command| {
-        Ok(if command.starts_with("cmd package resolve-activity") {
-            b"com.bilibili.fatego/.EmptyClass\n".to_vec()
-        } else {
-            b"Error: Activity not started, unable to resolve Intent".to_vec()
-        })
-    })
+    let error = launch_game(
+        package,
+        &mut |command| {
+            Ok(if command.starts_with("cmd package resolve-activity") {
+                b"com.bilibili.fatego/.EmptyClass\n".to_vec()
+            } else {
+                b"Error: Activity not started, unable to resolve Intent".to_vec()
+            })
+        },
+        &mut |_| {},
+    )
     .unwrap_err();
     assert!(error.contains("unable to resolve Intent"));
+}
+
+#[test]
+fn startup_trace_identifies_the_device_baseline_vpn_and_game_stages() {
+    let mut logs = Vec::new();
+    let (result, _, _) = fake_with_debug(
+        Scenario::default(),
+        &OperationCancellation::default(),
+        &mut |message| logs.push(message.to_string()),
+    );
+    assert!(result.is_ok());
+    let text = logs.join("\n");
+    for expected in [
+        "开始准备国服抓包",
+        "已绑定抓包设备：device",
+        "初始状态已确认",
+        "旧记录识别完成",
+        "VPN 范围检查结果",
+        "开始解析游戏启动 Activity",
+        "已解析游戏启动 Activity",
+        "自动启动游戏完成",
+        "抓包启动流程结束",
+    ] {
+        assert!(text.contains(expected), "missing stage: {expected}");
+    }
 }

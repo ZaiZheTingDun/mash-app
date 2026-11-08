@@ -245,16 +245,58 @@ impl ResponseStore {
         };
     }
 
-    pub(crate) fn poll(&self, adb_path: &Path) -> ResponseState {
-        self.poll_authenticated_using(
+    pub(crate) fn poll(&self, adb_path: &Path, debug: &mut dyn FnMut(&str)) -> ResponseState {
+        let debug = std::cell::RefCell::new(debug);
+        let before = {
+            let inner = self.0.lock().unwrap();
+            (
+                inner.state.phase.clone(),
+                inner.state.message.clone(),
+                inner.state.warnings.len(),
+            )
+        };
+        let state = self.poll_authenticated_using(
             |server, serial, baseline, key| {
                 let client = client::Client::with_api_key(key)?;
                 client::on_device(adb_path, serial, |port, run| {
-                    scan_session(server, &client, port, serial, baseline, run)
+                    scan_session(
+                        server,
+                        &client,
+                        port,
+                        serial,
+                        baseline,
+                        run,
+                        &mut |message| debug.borrow_mut()(message),
+                    )
                 })
             },
-            |serial, key| super::stop::stop_capture(adb_path, serial, key),
-        )
+            |serial, key| {
+                debug.borrow_mut()("已保存完整响应到会话内存，开始自动停止 Reqable");
+                let began = Instant::now();
+                let result = super::stop::stop_capture(adb_path, serial, key);
+                debug.borrow_mut()(&format!(
+                    "自动停止 Reqable 完成，成功={}，耗时 {} ms",
+                    result.is_ok(),
+                    began.elapsed().as_millis()
+                ));
+                result
+            },
+        );
+        if before
+            != (
+                state.phase.clone(),
+                state.message.clone(),
+                state.warnings.len(),
+            )
+        {
+            debug.borrow_mut()(&format!(
+                "抓包状态更新：{:?}，提醒数={}，重试间隔={} ms",
+                state.phase,
+                state.warnings.len(),
+                state.retry_after_ms
+            ));
+        }
+        state
     }
 
     #[cfg(test)]
@@ -455,7 +497,14 @@ pub(super) fn baseline(
     client: &client::Client,
     port: u16,
 ) -> Result<Baseline, String> {
-    baseline_controlled(server, client, port, &mut || Ok(()), &mut |_| {})
+    baseline_controlled(
+        server,
+        client,
+        port,
+        &mut || Ok(()),
+        &mut |_| {},
+        &mut |_| {},
+    )
 }
 
 pub(super) fn baseline_controlled(
@@ -464,23 +513,52 @@ pub(super) fn baseline_controlled(
     port: u16,
     check: &mut dyn FnMut() -> Result<(), String>,
     progress: &mut dyn FnMut(&str),
+    debug: &mut dyn FnMut(&str),
 ) -> Result<Baseline, String> {
     check()?;
+    debug("开始查询已有登录记录列表");
+    let began = Instant::now();
     let ids = ids(server, client, port)?;
+    debug(&format!(
+        "已有记录列表查询完成，共 {} 条，耗时 {} ms",
+        ids.len(),
+        began.elapsed().as_millis()
+    ));
     let mut baseline = Baseline::default();
     for (index, id) in ids.iter().enumerate() {
         check()?;
         if index % 16 == 0 {
             progress(&format!("正在识别已有记录：{}/{}", index, ids.len()));
         }
+        debug(&format!(
+            "开始读取旧记录 {}/{}，ID={id}",
+            index + 1,
+            ids.len()
+        ));
+        let began = Instant::now();
         match record(client, port, *id) {
             Ok(record) => {
-                if target_url(server, &record.url).is_some() {
+                let matched = target_url(server, &record.url).is_some();
+                debug(&format!(
+                    "旧记录读取完成，ID={id}，匹配登录接口={matched}，耗时 {} ms",
+                    began.elapsed().as_millis()
+                ));
+                if matched {
                     baseline.uids.insert(record.uid);
                 }
             }
-            Err(error) if error == client::AUTHENTICATION_FAILED => return Err(error),
+            Err(error) if error == client::AUTHENTICATION_FAILED => {
+                debug(&format!(
+                    "旧记录读取认证失败，ID={id}，耗时 {} ms",
+                    began.elapsed().as_millis()
+                ));
+                return Err(error);
+            }
             Err(_) => {
+                debug(&format!(
+                    "旧记录读取失败，本次忽略 ID={id}，耗时 {} ms",
+                    began.elapsed().as_millis()
+                ));
                 baseline.ignored_ids.insert(*id);
             }
         }
@@ -492,6 +570,13 @@ pub(super) fn baseline_controlled(
             baseline.ignored_ids.len()
         ));
     }
+    debug(&format!(
+        "已有记录识别完成：{}/{}，基线 UID 数={}，忽略 ID 数={}",
+        ids.len(),
+        ids.len(),
+        baseline.uids.len(),
+        baseline.ignored_ids.len()
+    ));
     Ok(baseline)
 }
 
@@ -518,7 +603,8 @@ fn scan(
     baseline: &Baseline,
     run: &mut AdbCommand<'_>,
 ) -> Result<Option<LoginResponse>, String> {
-    scan_session(server, client, port, serial, baseline, run).map(|outcome| outcome.response)
+    scan_session(server, client, port, serial, baseline, run, &mut |_| {})
+        .map(|outcome| outcome.response)
 }
 
 fn scan_session(
@@ -528,6 +614,7 @@ fn scan_session(
     serial: &str,
     baseline: &Baseline,
     run: &mut AdbCommand<'_>,
+    debug: &mut dyn FnMut(&str),
 ) -> Result<ScanOutcome, String> {
     let mut baseline = baseline.clone();
     // Latest completed response wins; incomplete/transient records remain retryable.
@@ -563,6 +650,7 @@ fn scan_session(
             continue;
         };
         if !(200..300).contains(&code) {
+            debug(&format!("登录请求返回失败状态，ID={id}，HTTP={code}"));
             baseline.warn(format!(
                 "{} 请求失败（HTTP {code}），正在等待下一次登录",
                 target::response_label(server)
@@ -570,6 +658,8 @@ fn scan_session(
             baseline.uids.insert(record.uid);
             continue;
         }
+        debug(&format!("开始读取登录响应，ID={id}，HTTP={code}"));
+        let began = Instant::now();
         let result =
             body_bytes(body, &mut |path| read_cache(serial, path, run)).and_then(|bytes| {
                 let byte_length = bytes.len();
@@ -578,6 +668,10 @@ fn scan_session(
         let (byte_length, raw_format, raw_body) = match result {
             Ok(result) => result,
             Err(error) => {
+                debug(&format!(
+                    "登录响应读取失败，ID={id}，耗时 {} ms",
+                    began.elapsed().as_millis()
+                ));
                 baseline.warn(format!("记录 {id} 暂不可用：{error}；将继续等待"));
                 // Cache files and ADB can recover; malformed/unsupported bodies cannot.
                 if !error.contains("缓存") && !error.contains("读取") && !error.contains("ADB")
@@ -590,6 +684,10 @@ fn scan_session(
         if byte_length == 0 {
             continue;
         }
+        debug(&format!(
+            "登录响应读取完成，ID={id}，字节数={byte_length}，耗时 {} ms",
+            began.elapsed().as_millis()
+        ));
         let items = super::inventory::preview(&raw_body);
         let captured_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

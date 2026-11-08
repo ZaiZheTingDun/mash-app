@@ -136,7 +136,9 @@ pub(crate) async fn get_packet_capture_workspace(
     let history = history.inner().clone();
     let adb_path = crate::adb::resolve_adb_path(&app);
     tauri::async_runtime::spawn_blocking(move || {
-        let capture = responses.poll(&adb_path);
+        let capture = responses.poll(&adb_path, &mut |message| {
+            operation_log::emit_debug(&app, operation_log::DebugSource::App, message);
+        });
         let history = history.sync(&capture)?;
         Ok(PacketCaptureWorkspace {
             capture: capture.status(),
@@ -310,6 +312,9 @@ pub(crate) async fn start_packet_capture(
                     let _ = log_app.emit("packet-capture-start-progress", message);
                 }
             },
+            &mut |message| {
+                operation_log::emit_debug(&log_app, operation_log::DebugSource::App, message)
+            },
         )?;
         operation.cancellation.check()?;
         if let Some(error) = result.game_launch_error() {
@@ -320,6 +325,11 @@ pub(crate) async fn start_packet_capture(
             );
         }
         result.begin_response_watch(&operation.responses);
+        operation_log::emit_debug(
+            &log_app,
+            operation_log::DebugSource::App,
+            "抓包响应监听已就绪，等待新的登录响应",
+        );
         Ok(result)
     })
     .await
@@ -356,7 +366,11 @@ pub(crate) async fn get_packet_capture_response(
 ) -> Result<ResponseState, String> {
     let responses = responses.inner().clone();
     let adb_path = crate::adb::resolve_adb_path(&app);
-    tauri::async_runtime::spawn_blocking(move || responses.poll(&adb_path))
-        .await
-        .map_err(|_| "读取抓包响应任务失败".into())
+    tauri::async_runtime::spawn_blocking(move || {
+        responses.poll(&adb_path, &mut |message| {
+            operation_log::emit_debug(&app, operation_log::DebugSource::App, message);
+        })
+    })
+    .await
+    .map_err(|_| "读取抓包响应任务失败".into())
 }

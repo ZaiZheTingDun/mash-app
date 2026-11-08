@@ -639,13 +639,14 @@ fn display_toplogin_on_authorized_device() {
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy/scrcpy-server.jar"),
         &super::super::AuthorizationStore::default(),
         &mut |_| {},
+        &mut |_| {},
     )
     .unwrap();
     let store = ResponseStore::default();
     started.begin_response_watch(&store);
     println!("Waiting for a fresh CN toplogin response on {serial}");
     for _ in 0..600 {
-        let state = store.poll(&adb);
+        let state = store.poll(&adb, &mut |_| {});
         assert_ne!(state.phase, ResponsePhase::Error, "{}", state.message);
         if let Some(response) = state.response {
             // Only structural metadata enters test output. The account body
@@ -678,7 +679,7 @@ fn read_toplogin_cache_on_authorized_device() {
     // Test-only: validate cache decoding without forcing another game login.
     // Production always seeds the baseline from records present before Start.
     store.begin(serial, HashSet::new());
-    let state = store.poll(&adb);
+    let state = store.poll(&adb, &mut |_| {});
     assert_eq!(state.phase, ResponsePhase::Found, "{}", state.message);
     assert!(state.message.contains("抓包已停止"));
     let response = state.response.expect("an existing toplogin response");
@@ -776,9 +777,14 @@ fn more_than_128_old_records_and_a_malformed_record_do_not_prevent_a_fresh_captu
     replies.push(serde_json::json!({"invalid":"record"}));
     let (port, worker) = server(replies);
     let mut progress = Vec::new();
-    let baseline = baseline_controlled(Server::Cn, &api, port, &mut || Ok(()), &mut |message| {
-        progress.push(message.to_string())
-    })
+    let baseline = baseline_controlled(
+        Server::Cn,
+        &api,
+        port,
+        &mut || Ok(()),
+        &mut |message| progress.push(message.to_string()),
+        &mut |_| {},
+    )
     .unwrap();
     worker.join().unwrap();
     assert_eq!(baseline.uids.len(), 129);
@@ -831,6 +837,7 @@ fn failed_login_and_unsupported_body_do_not_hide_another_valid_response() {
             Some(serde_json::json!({"text":"complete","encoding":"utf8"})),
         ),
     ]);
+    let mut logs = Vec::new();
     let outcome = scan_session(
         Server::Cn,
         &api,
@@ -838,6 +845,7 @@ fn failed_login_and_unsupported_body_do_not_hide_another_valid_response() {
         "device",
         &Baseline::default(),
         &mut |_| panic!(),
+        &mut |message| logs.push(message.to_string()),
     )
     .unwrap();
     worker.join().unwrap();
@@ -845,6 +853,12 @@ fn failed_login_and_unsupported_body_do_not_hide_another_valid_response() {
     assert!(outcome.baseline.contains("failed"));
     assert!(outcome.baseline.contains("bad-body"));
     assert_eq!(outcome.baseline.warnings.len(), 2);
+    let text = logs.join("\n");
+    assert!(text.contains("开始读取登录响应，ID=1"));
+    assert!(text.contains("登录响应读取完成，ID=1，字节数=8"));
+    for sensitive in ["complete", "private", "secret", "https://", "bad-body"] {
+        assert!(!text.contains(sensitive));
+    }
 }
 
 #[test]
@@ -864,6 +878,7 @@ fn baseline_can_be_cancelled_between_records() {
                 Ok(())
             }
         },
+        &mut |_| {},
         &mut |_| {},
     );
     worker.join().unwrap();
@@ -889,4 +904,43 @@ fn game_launch_failure_stays_in_the_waiting_message_across_polls_and_recovers_af
         store.poll_using(|_, _| Ok(None), |_| panic!()).message,
         "等待数据中，请重新进入游戏……"
     );
+}
+
+#[test]
+fn baseline_debug_logs_record_progress_and_completion_without_account_data() {
+    let api = client::Client::new().unwrap();
+    let (port, worker) = server(vec![
+        serde_json::json!([7, 8]),
+        captured(7, "private-account-uid", None),
+        serde_json::json!({"private":"secret response"}),
+    ]);
+    let mut logs = Vec::new();
+    let result = baseline_controlled(
+        Server::Cn,
+        &api,
+        port,
+        &mut || Ok(()),
+        &mut |_| {},
+        &mut |message| logs.push(message.to_string()),
+    )
+    .unwrap();
+    worker.join().unwrap();
+    assert!(result.ignored_ids.contains(&8));
+    let text = logs.join("\n");
+    for expected in [
+        "开始查询已有登录记录列表",
+        "共 2 条",
+        "开始读取旧记录 1/2，ID=7",
+        "旧记录读取完成，ID=7",
+        "本次忽略 ID=8",
+        "已有记录识别完成：2/2",
+    ] {
+        assert!(text.contains(expected), "missing stage: {expected}");
+    }
+    for sensitive in ["private", "secret", "_userId", "token=", "https://"] {
+        assert!(
+            !text.contains(sensitive),
+            "unexpected sensitive content: {sensitive}"
+        );
+    }
 }

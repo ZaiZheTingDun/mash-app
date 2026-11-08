@@ -20,7 +20,13 @@ fn operation(kind: DeviceOperation) -> (DeviceOperationCoordinator, CaptureOpera
 
 fn status(operation: &CaptureOperation) -> serde_json::Value {
     // These cases never enter Waiting, so polling cannot access a device.
-    serde_json::to_value(operation.responses.poll(&operation.adb_path).status()).unwrap()
+    serde_json::to_value(
+        operation
+            .responses
+            .poll(&operation.adb_path, &mut |_| {})
+            .status(),
+    )
+    .unwrap()
 }
 
 #[test]

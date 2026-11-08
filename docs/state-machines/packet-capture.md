@@ -28,6 +28,8 @@
 
 系统画中画权限依据 Android 的 [ActivityRecord 权限检查](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android13-release/services/core/java/com/android/server/wm/ActivityRecord.java)及 [AppOps 命令实现](https://android.googlesource.com/platform/frameworks/base/+/b9c4862b8605b653153be29ed902142539f4ffe2/services/core/java/com/android/server/appop/AppOpsService.java)。权限回读测试覆盖命令未生效、UID 覆盖和连接失败。
 
+抓包调试日志通过现有“显示调试”入口查看，并随诊断日志保留。日志记录设备和客户端绑定、Reqable 配置与授权完成、控制接口请求及耗时、旧记录列表数量、逐条读取和最终完成计数、VPN 检查结果、游戏 Activity 解析与启动、登录响应字节数、自动停止及状态变化。逐条记录使用 Reqable 数字 ID；日志仅输出过程元数据。
+
 控制接口分别限制连接和请求时间：建立连接最多等待 2 秒，完整请求及响应读取最多等待 30 秒，以容纳记录筛选等较慢操作。连接失败、连接超时和接口响应超时分别报告。
 
 ## 版本与 API key 授权
