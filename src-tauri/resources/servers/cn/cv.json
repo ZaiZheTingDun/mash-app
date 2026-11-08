@@ -17,6 +17,7 @@
           "elements": {
             "scroll_start": {
               "template": "shared/ui_scroll_bar_start",
+              "masked": true,
               "region": {
                 "x": 0.945,
                 "y": 0.12,
@@ -27,11 +28,12 @@
             },
             "scroll_end": {
               "template": "shared/ui_scroll_bar_end",
+              "masked": true,
               "region": {
                 "x": 0.945,
-                "y": 0.82,
+                "y": 0.73,
                 "w": 0.055,
-                "h": 0.18
+                "h": 0.1
               },
               "threshold": 0.8
             }

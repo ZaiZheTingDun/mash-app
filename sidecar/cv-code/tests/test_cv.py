@@ -6602,6 +6602,19 @@ def test_craft_essence_scroll_end_probe_rejects_top_of_list(width):
     assert result["found"] is False
 
 
+@pytest.mark.parametrize("width", (1280, 1920, 2560))
+def test_craft_essence_scroll_end_probe_recognizes_captured_bottom_of_list(width):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_inventory_bottom_sparse.png")
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img, "CraftEssenceEnhancement", "element_enhancement_ce_scroll_end",
+    )
+    assert result["found"], result
+
+
 @pytest.mark.parametrize("width", (1920, 2560))
 @pytest.mark.parametrize(
     ("fixture", "expected_y", "expected_at_top"),

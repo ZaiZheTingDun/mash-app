@@ -24,6 +24,11 @@ pub(super) fn support_search_screen_exited(previous: Screen, current: Screen) ->
         && current != Screen::Unknown
 }
 
+pub(super) fn support_select_entry_wait(previous: Screen, current: Screen) -> Option<Duration> {
+    (current == Screen::SupportSelect && previous != Screen::SupportSelect)
+        .then_some(Duration::from_secs(2))
+}
+
 impl Runner {
     // -- main loop -----------------------------------------------------------
 
@@ -128,7 +133,15 @@ impl Runner {
                 }
                 Screen::SupportSelect => {
                     unknown_count = 0;
+                    let entry_wait = support_select_entry_wait(last_detected_screen, screen);
                     last_detected_screen = screen;
+                    if let Some(wait) = entry_wait {
+                        self.emit("SupportSelect", "等待助战页面就绪…");
+                        thread::sleep(wait);
+                        // Detect again after the entry animation before any
+                        // class-filter, CE-only, or first-row selection tap.
+                        continue;
+                    }
                     self.handle_support_select()?;
                 }
                 Screen::ServantSelect => {

@@ -90,7 +90,7 @@ function renderPage(overrides: Partial<ComponentProps<typeof RankUpQuestPage>> =
     onAutomationStartFailed: vi.fn(),
     onLogEntry: vi.fn(),
   };
-  renderWithTheme(
+  const view = renderWithTheme(
     <RankUpQuestPage
       server="CN"
       projects={[PROJECT]}
@@ -100,7 +100,17 @@ function renderPage(overrides: Partial<ComponentProps<typeof RankUpQuestPage>> =
       {...overrides}
     />,
   );
-  return callbacks;
+  return { ...callbacks, rerender: (props: Partial<ComponentProps<typeof RankUpQuestPage>>) => view.rerender(
+    <RankUpQuestPage
+      server="CN"
+      projects={[PROJECT]}
+      projectCatalog={{ schemaVersion: 1, groups: [], ungroupedProjectIds: [PROJECT.id] }}
+      activeProjectId={PROJECT.id}
+      {...callbacks}
+      {...overrides}
+      {...props}
+    />,
+  ) };
 }
 
 describe("RankUpQuestPage", () => {
@@ -226,11 +236,56 @@ describe("RankUpQuestPage", () => {
     );
   });
 
-  it("disables the workflow on the Japanese server", async () => {
+  it("captures and starts a selected quest on the Japanese server", async () => {
+    mockCommands();
+    const user = userEvent.setup();
     renderPage({ server: "JP" });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("强化任务自动化仅支持国服。");
+    await user.click(screen.getByRole("button", { name: "截取游戏画面" }));
+    await user.click(await screen.findByRole("button", { name: "选择可强化任务" }));
+    await user.click(screen.getByRole("button", { name: "开始强化任务" }));
+    expect(invoke).toHaveBeenCalledWith("start_rank_up_quest_automation", expect.objectContaining({
+      workflow: { mode: "single", captureId: "capture-1", candidateId: "capture-1:0" },
+    }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("starts all quests on the Japanese server without a capture", async () => {
+    mockCommands();
+    const user = userEvent.setup();
+    renderPage({ server: "JP" });
+    await user.click(screen.getByRole("radio", { name: "按顺序完成所有强化任务" }));
+    await user.click(screen.getByRole("button", { name: "开始强化任务" }));
+    expect(invoke).toHaveBeenCalledWith("start_rank_up_quest_automation", expect.objectContaining({
+      workflow: { mode: "all", captureId: null, candidateId: null },
+    }));
+  });
+
+  it("clears the selected screenshot after switching servers", async () => {
+    mockCommands();
+    const user = userEvent.setup();
+    const page = renderPage();
+    await user.click(screen.getByRole("button", { name: "截取游戏画面" }));
+    await user.click(await screen.findByRole("button", { name: "选择可强化任务" }));
+    expect(screen.getByRole("button", { name: "开始强化任务" })).toBeEnabled();
+    page.rerender({ server: "JP" });
+    expect(screen.queryByRole("img", { name: "强化任务截图" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始强化任务" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "截取游戏画面" })).toBeEnabled();
+  });
+
+  it("ignores an old server's capture that completes after switching servers", async () => {
+    let finishCapture!: (value: unknown) => void;
+    vi.mocked(invoke).mockImplementation((command: string) => command === "capture_rank_up_quest_page"
+      ? new Promise((resolve) => { finishCapture = resolve; })
+      : Promise.resolve(null));
+    const user = userEvent.setup();
+    const page = renderPage();
+    await user.click(screen.getByRole("button", { name: "截取游戏画面" }));
+    page.rerender({ server: "JP" });
+    await act(async () => { finishCapture({ captureId: "old", imagePath: "/tmp/old.png", rows: [] }); });
+    expect(screen.queryByRole("img", { name: "强化任务截图" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "截取游戏画面" })).toBeEnabled();
   });
 
   it("keeps actions disabled until the backend server is known", () => {

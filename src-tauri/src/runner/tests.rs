@@ -900,6 +900,30 @@ fn support_search_worker_releases_only_after_a_confirmed_screen_exit() {
 }
 
 #[test]
+fn support_selection_waits_two_seconds_on_entry_and_each_reentry() {
+    use super::engine::support_select_entry_wait;
+
+    for previous in [Screen::Unknown, Screen::RankUpQuest, Screen::TeamConfirm] {
+        assert_eq!(
+            support_select_entry_wait(previous, Screen::SupportSelect),
+            Some(Duration::from_secs(2))
+        );
+    }
+    assert_eq!(
+        support_select_entry_wait(Screen::SupportSelect, Screen::SupportSelect),
+        None
+    );
+    assert_eq!(
+        support_select_entry_wait(Screen::SupportSelect, Screen::Unknown),
+        None
+    );
+    assert_eq!(
+        support_select_entry_wait(Screen::RankUpQuest, Screen::TeamConfirm),
+        None
+    );
+}
+
+#[test]
 fn bond_level_up_screenshot_path_uses_dedicated_directory_and_sortable_name() {
     let root = PathBuf::from("/tmp/mash-app-test");
     let timestamp = std::time::UNIX_EPOCH + Duration::from_millis(12_345);
