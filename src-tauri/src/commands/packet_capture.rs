@@ -40,7 +40,11 @@ pub(crate) async fn get_packet_capture_apps(
     let adb_path = crate::adb::resolve_adb_path(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let _lease = lease;
-        targets.list(server, &adb_path, selected.as_deref())
+        let result = targets.list(server, &adb_path, selected.as_deref());
+        if let Some(warning) = targets.take_warning() {
+            operation_log::emit(&app, LogLevel::Warn, warning);
+        }
+        result
     })
     .await
     .map_err(|_| "读取客户端列表失败".to_string())?
@@ -68,13 +72,17 @@ pub(crate) async fn select_packet_capture_app(
     let adb_path = crate::adb::resolve_adb_path(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let _lease = lease;
-        targets.select(
+        let result = targets.select(
             server,
             &adb_path,
             selected.as_deref(),
             &serial,
             &package_name,
-        )
+        );
+        if let Some(warning) = targets.take_warning() {
+            operation_log::emit(&app, LogLevel::Warn, warning);
+        }
+        result
     })
     .await
     .map_err(|_| "选择客户端失败".to_string())?
@@ -304,6 +312,13 @@ pub(crate) async fn start_packet_capture(
             },
         )?;
         operation.cancellation.check()?;
+        if let Some(error) = result.game_launch_error() {
+            operation_log::emit_debug(
+                &log_app,
+                operation_log::DebugSource::App,
+                format!("自动启动游戏失败（{}）：{error}", target.package),
+            );
+        }
         result.begin_response_watch(&operation.responses);
         Ok(result)
     })

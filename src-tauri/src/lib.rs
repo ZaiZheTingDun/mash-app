@@ -99,7 +99,9 @@ pub fn run() {
             app.manage(DeviceOperationCoordinator::default());
             app.manage(packet_capture::ResponseStore::default());
             app.manage(packet_capture::AuthorizationStore::default());
-            app.manage(packet_capture::CaptureTargetStore::default());
+            app.manage(packet_capture::CaptureTargetStore::new(
+                paths::app_data_dir(app.handle()).join("packet-capture/clients.json"),
+            ));
             app.manage(Arc::new(packet_capture::HistoryStore::new(
                 paths::app_data_dir(app.handle()).join("packet-capture"),
             )));

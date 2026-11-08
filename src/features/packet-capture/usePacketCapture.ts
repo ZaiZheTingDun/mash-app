@@ -21,7 +21,7 @@ export function usePacketCapture() {
   const clientGeneration = useRef(0);
   const clientSnapshot = useRef<CaptureAppList | null>(null);
   const clientContextStale = useRef(false);
-  const clientRefreshPending = useRef(false);
+  const clientRefreshPending = useRef(true);
   const [clientContextVersion, setClientContextVersion] = useState(0);
   const [workspace, setWorkspace] = useState<PacketCaptureWorkspace | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
@@ -257,10 +257,10 @@ export function usePacketCapture() {
 
   useEffect(() => {
     // Wait for the old query/operation to release its device lease before reload.
-    if (!clientRefreshPending.current || operation || clientOperation || hasCaptureTask || awaitingCaptureStatus) return;
+    if (!workspace || !clientRefreshPending.current || operation || clientOperation || hasCaptureTask || awaitingCaptureStatus) return;
     clientRefreshPending.current = false;
     void performClientRequest("load", getPacketCaptureApps);
-  }, [clientContextVersion, operation, clientOperation, hasCaptureTask, awaitingCaptureStatus, performClientRequest]);
+  }, [workspace, clientContextVersion, operation, clientOperation, hasCaptureTask, awaitingCaptureStatus, performClientRequest]);
 
   const currentClientContext = (): CaptureClientContext | undefined => {
     if (clientContextStale.current) throw new Error("客户端信息已变更，请刷新客户端列表后重试");

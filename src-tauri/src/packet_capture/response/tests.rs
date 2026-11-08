@@ -8,6 +8,7 @@ fn session_key_is_used_for_polling_and_stop_and_is_never_serialized() {
         "device".into(),
         Baseline::default(),
         Some("synthetic-private-key".into()),
+        false,
     );
     let state = store.poll_authenticated_using(
         |_, serial, _, key| {
@@ -46,6 +47,7 @@ fn superseded_poll_uses_its_original_key_and_cannot_stop_the_new_session() {
         "old".into(),
         Baseline::default(),
         Some("old-private-key".into()),
+        false,
     );
     let state = store.poll_authenticated_using(
         |server, serial, _, key| {
@@ -55,6 +57,7 @@ fn superseded_poll_uses_its_original_key_and_cannot_stop_the_new_session() {
                 "new".into(),
                 Baseline::default(),
                 Some("new-private-key".into()),
+                false,
             );
             assert_eq!(serial, "old");
             assert_eq!(key, Some("old-private-key"));
@@ -122,7 +125,13 @@ fn jp_matching_requires_the_exact_host_and_login_path_and_removes_private_querie
 fn jp_response_session_keeps_its_server_through_polling_and_automatic_stop() {
     for stop_fails in [false, true] {
         let store = ResponseStore::default();
-        store.begin_authenticated(Server::Jp, "device".into(), Baseline::default(), None);
+        store.begin_authenticated(
+            Server::Jp,
+            "device".into(),
+            Baseline::default(),
+            None,
+            false,
+        );
         let state = store.poll_authenticated_using(
             |server, _, _, _| {
                 assert_eq!(server, Server::Jp);
@@ -859,4 +868,25 @@ fn baseline_can_be_cancelled_between_records() {
     );
     worker.join().unwrap();
     assert!(result.is_err());
+}
+
+#[test]
+fn game_launch_failure_stays_in_the_waiting_message_across_polls_and_recovers_after_restart() {
+    let store = ResponseStore::default();
+    store.begin_authenticated(Server::Cn, "device".into(), Baseline::default(), None, true);
+    for _ in 0..2 {
+        let state = store.poll_using(|_, _| Ok(None), |_| panic!());
+        assert_eq!(
+            state.message,
+            "等待数据中，自动启动游戏失败，请重新进入游戏……"
+        );
+        assert!(state.warnings.is_empty());
+        assert_eq!(state.phase, ResponsePhase::Waiting);
+    }
+    store.reset();
+    store.begin("device".into(), HashSet::new());
+    assert_eq!(
+        store.poll_using(|_, _| Ok(None), |_| panic!()).message,
+        "等待数据中，请重新进入游戏……"
+    );
 }

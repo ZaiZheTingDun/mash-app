@@ -260,3 +260,132 @@ fn discovery_filters_foreign_servers_and_deduplicates_package_names() {
     assert_eq!(jp.apps.len(), 1);
     assert_eq!(jp.apps[0].package_name, "com.aniplex.fategrandorder");
 }
+
+#[test]
+fn saved_choices_survive_restart_and_remain_scoped_to_device_and_server() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("packet-capture/clients.json");
+    let packages = [
+        "com.bilibili.fatego",
+        "com.bilibili.fgo.mi",
+        "com.aniplex.fategrandorder",
+    ];
+    let store = CaptureTargetStore::new(path.clone());
+    store
+        .select_using(
+            Server::Cn,
+            None,
+            "first",
+            packages[1],
+            &mut device("first", &packages),
+        )
+        .unwrap();
+    store
+        .select_using(
+            Server::Cn,
+            None,
+            "second",
+            packages[0],
+            &mut device("second", &packages),
+        )
+        .unwrap();
+    store
+        .select_using(
+            Server::Jp,
+            None,
+            "first",
+            packages[2],
+            &mut device("first", &packages),
+        )
+        .unwrap();
+    drop(store);
+    let restored = CaptureTargetStore::new(path);
+    for (server, serial, package) in [
+        (Server::Cn, "first", packages[1]),
+        (Server::Cn, "second", packages[0]),
+        (Server::Jp, "first", packages[2]),
+    ] {
+        let list = restored
+            .list_using(server, None, &mut device(serial, &packages))
+            .unwrap();
+        assert_eq!(list.selected_package.as_deref(), Some(package));
+    }
+    let removed = restored
+        .list_using(Server::Cn, None, &mut device("first", &[packages[0]]))
+        .unwrap();
+    assert!(removed.selected_package.is_none());
+}
+
+#[test]
+fn an_automatically_selected_client_is_remembered_after_another_client_is_installed() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("clients.json");
+    let store = CaptureTargetStore::new(path.clone());
+    store
+        .list_using(
+            Server::Cn,
+            None,
+            &mut device("first", &["com.bilibili.fgo.mi"]),
+        )
+        .unwrap();
+    let restored = CaptureTargetStore::new(path);
+    let list = restored
+        .list_using(
+            Server::Cn,
+            None,
+            &mut device("first", &["com.bilibili.fatego", "com.bilibili.fgo.mi"]),
+        )
+        .unwrap();
+    assert_eq!(
+        list.selected_package.as_deref(),
+        Some("com.bilibili.fgo.mi")
+    );
+}
+
+#[test]
+fn persistence_failure_keeps_the_current_choice_available_and_reports_a_warning() {
+    let directory = tempfile::tempdir().unwrap();
+    let blocked = directory.path().join("blocked");
+    let store = CaptureTargetStore::new(blocked.join("clients.json"));
+    std::fs::write(&blocked, "a file cannot contain preferences").unwrap();
+    let packages = ["com.bilibili.fatego", "com.bilibili.fgo.mi"];
+    store
+        .select_using(
+            Server::Cn,
+            None,
+            "first",
+            packages[1],
+            &mut device("first", &packages),
+        )
+        .unwrap();
+    assert!(store.take_warning().unwrap().contains("本次运行"));
+    let list = store
+        .list_using(Server::Cn, None, &mut device("first", &packages))
+        .unwrap();
+    assert_eq!(list.selected_package.as_deref(), Some(packages[1]));
+}
+
+#[test]
+fn unreadable_preferences_are_preserved_while_manual_selection_still_works() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("clients.json");
+    std::fs::write(&path, "invalid preferences").unwrap();
+    let store = CaptureTargetStore::new(path.clone());
+    assert!(store.take_warning().is_some());
+    let packages = ["com.bilibili.fatego", "com.bilibili.fgo.mi"];
+    let list = store
+        .select_using(
+            Server::Cn,
+            None,
+            "first",
+            packages[1],
+            &mut device("first", &packages),
+        )
+        .unwrap();
+    assert_eq!(list.selected_package.as_deref(), Some(packages[1]));
+    assert!(store.take_warning().is_some());
+    assert_eq!(
+        std::fs::read_to_string(path).unwrap(),
+        "invalid preferences"
+    );
+}

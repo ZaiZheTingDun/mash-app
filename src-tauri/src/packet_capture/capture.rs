@@ -1,7 +1,8 @@
 use super::response::Baseline;
 use super::target;
 use super::{
-    client, configuration, credentials, response, run_adb, select_serial, AdbCommand, ApiKeyStore,
+    client, configuration, credentials, response, run_adb, select_serial, shell_quote, AdbCommand,
+    ApiKeyStore,
 };
 use crate::device_operation::OperationCancellation;
 use crate::Server;
@@ -20,9 +21,15 @@ pub(crate) struct CaptureStarted {
     pub(super) baseline: Baseline,
     #[serde(skip)]
     api_key: Option<String>,
+    #[serde(skip)]
+    game_launch_error: Option<String>,
 }
 
 impl CaptureStarted {
+    pub(crate) fn game_launch_error(&self) -> Option<&str> {
+        self.game_launch_error.as_deref()
+    }
+
     pub(crate) fn begin_response_watch(&self, store: &response::ResponseStore) {
         let mut baseline = self.baseline.clone();
         baseline.warnings.extend(
@@ -37,6 +44,7 @@ impl CaptureStarted {
             self.serial.clone(),
             baseline,
             self.api_key.clone(),
+            self.game_launch_error.is_some(),
         );
     }
 }
@@ -221,6 +229,34 @@ fn vpn_only_game(output: &[u8], uid: u32) -> bool {
     vpn_scope(output, uid, Some(10082)) == VpnScope::OnlyGame
 }
 
+fn launch_game(
+    package: &str,
+    shell: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<(), String> {
+    let resolved = shell(&format!(
+        "cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {package}"
+    ))?;
+    let resolved = String::from_utf8_lossy(&resolved);
+    let component = resolved
+        .lines()
+        .map(str::trim)
+        .find(|line| {
+            line.split_once('/')
+                .is_some_and(|(owner, activity)| owner == package && !activity.is_empty())
+        })
+        .ok_or_else(|| format!("无法解析所选客户端的启动 Activity：{}", resolved.trim()))?;
+    let output = shell(&format!(
+        "am start -W --user 0 -n {}",
+        shell_quote(component)
+    ))?;
+    let output = String::from_utf8_lossy(&output);
+    if output.lines().any(|line| line.trim() == "Status: ok") && !output.contains("Error:") {
+        Ok(())
+    } else {
+        Err(format!("启动游戏 Activity 失败：{}", output.trim()))
+    }
+}
+
 fn start_controlled_using(
     server: Server,
     package: &str,
@@ -350,12 +386,19 @@ fn start_controlled_using(
                         VpnScope::OnlyGame => {}
                     }
                     warnings.extend(baseline.warnings.iter().cloned());
+                    // Launch the pinned client's launcher only after capture is active.
+                    let game_launch_error = launch_game(package, &mut |command| {
+                        forward(&["-s", &serial, "shell", command])
+                    })
+                    .err();
+                    cancellation.check()?;
                     return Ok(CaptureStarted {
                         serial: serial.clone(),
                         server,
                         already_active,
                         baseline,
                         api_key: None,
+                        game_launch_error,
                         warnings,
                         message: if already_active {
                             format!("{}抓包已在运行", target::label(server))

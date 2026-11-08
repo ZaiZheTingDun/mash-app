@@ -129,6 +129,7 @@ struct Inner {
     server: Server,
     baseline: Baseline,
     failures: u32,
+    game_launch_failed: bool,
     next_poll: Option<Instant>,
     state: ResponseState,
     interrupted_stop_target: Option<String>,
@@ -204,6 +205,7 @@ impl ResponseStore {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
         inner.baseline = Baseline::default();
+        inner.game_launch_failed = false;
         inner.failures = 0;
         inner.next_poll = None;
         inner.api_key = None;
@@ -213,7 +215,7 @@ impl ResponseStore {
 
     #[cfg(test)]
     pub(crate) fn begin(&self, serial: String, baseline: HashSet<String>) {
-        self.begin_authenticated(Server::Cn, serial, baseline.into(), None);
+        self.begin_authenticated(Server::Cn, serial, baseline.into(), None, false);
     }
 
     pub(super) fn begin_authenticated(
@@ -222,6 +224,7 @@ impl ResponseStore {
         serial: String,
         baseline: Baseline,
         key: Option<String>,
+        game_launch_failed: bool,
     ) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
@@ -230,11 +233,12 @@ impl ResponseStore {
         inner.failures = 0;
         inner.next_poll = None;
         inner.api_key = key;
+        inner.game_launch_failed = game_launch_failed;
         inner.interrupted_stop_target = None;
         inner.state = ResponseState {
             phase: ResponsePhase::Waiting,
             serial: Some(serial),
-            message: "等待数据中，请重新进入游戏……".into(),
+            message: waiting_message(game_launch_failed).into(),
             response: None,
             warnings: inner.baseline.warnings.clone(),
             retry_after_ms: 1000,
@@ -302,7 +306,7 @@ impl ResponseStore {
                     inner.next_poll = None;
                     inner.state.retry_after_ms = 1000;
                     let Some(response) = outcome.response else {
-                        inner.state.message = "等待数据中，请重新进入游戏……".into();
+                        inner.state.message = waiting_message(inner.game_launch_failed).into();
                         return inner.state.clone();
                     };
                     inner.state.response = Some(response);
@@ -338,6 +342,14 @@ impl ResponseStore {
             }
         }
         inner.state.clone()
+    }
+}
+
+fn waiting_message(game_launch_failed: bool) -> &'static str {
+    if game_launch_failed {
+        "等待数据中，自动启动游戏失败，请重新进入游戏……"
+    } else {
+        "等待数据中，请重新进入游戏……"
     }
 }
 
