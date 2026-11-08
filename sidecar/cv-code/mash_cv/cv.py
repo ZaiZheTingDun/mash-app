@@ -1983,14 +1983,13 @@ def _rank_up_quest_row_color_stats(img: np.ndarray, row: dict) -> tuple[float, f
 def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
     row_config = config.get("screens", {}).get("RankUpQuest", {}).get("rowDetection", {})
     width_scales = tuple(row_config.get("anchorWidthScales", (1.0,)))
-    # JP stretches the quest title horizontally to fit the servant name.
-    match_options = {"width_scales": width_scales} if width_scales != (1.0,) else {}
+    pair_by_left_edge = row_config.get("anchorPairAlignment", "center") == "left"
     rank_anchors = _find_all_template_matches(
         img,
         RANK_UP_QUEST_ROW_TEMPLATE,
         RANK_UP_QUEST_LIST_REGION,
         RANK_UP_QUEST_ANCHOR_THRESHOLD,
-        **match_options,
+        width_scales=width_scales,
     )
     cost_anchors = _find_all_template_matches(
         img,
@@ -2008,7 +2007,7 @@ def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
                 continue
             rank_cx = rank["x"] + rank["w"] / 2.0
             dy = cost["y"] - rank["y"]
-            dx = abs(cost["x"] - rank["x"]) if match_options else abs(cost_cx - rank_cx)
+            dx = abs(cost["x"] - rank["x"]) if pair_by_left_edge else abs(cost_cx - rank_cx)
             if not (RANK_UP_QUEST_PAIR_DY_MIN <= dy <= RANK_UP_QUEST_PAIR_DY_MAX):
                 continue
             if dx > RANK_UP_QUEST_PAIR_DX_MAX:

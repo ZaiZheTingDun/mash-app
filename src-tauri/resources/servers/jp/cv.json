@@ -41,6 +41,7 @@
         }
       },
       "rowDetection": {
+        "anchorPairAlignment": "left",
         "anchorWidthScales": [
           0.8,
           0.82,
