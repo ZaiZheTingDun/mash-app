@@ -6,14 +6,17 @@ fn session_key_is_used_for_polling_and_stop_and_is_never_serialized() {
     store.begin_authenticated(
         Server::Cn,
         "device".into(),
-        HashSet::new(),
+        Baseline::default(),
         Some("synthetic-private-key".into()),
     );
     let state = store.poll_authenticated_using(
         |_, serial, _, key| {
             assert_eq!(serial, "device");
             assert_eq!(key, Some("synthetic-private-key"));
-            Ok(Some(complete_response()))
+            Ok(ScanOutcome {
+                response: Some(complete_response()),
+                baseline: Baseline::default(),
+            })
         },
         |serial, key| {
             assert_eq!(serial, "device");
@@ -41,7 +44,7 @@ fn superseded_poll_uses_its_original_key_and_cannot_stop_the_new_session() {
     store.begin_authenticated(
         Server::Cn,
         "old".into(),
-        HashSet::new(),
+        Baseline::default(),
         Some("old-private-key".into()),
     );
     let state = store.poll_authenticated_using(
@@ -50,12 +53,15 @@ fn superseded_poll_uses_its_original_key_and_cannot_stop_the_new_session() {
             store.begin_authenticated(
                 Server::Jp,
                 "new".into(),
-                HashSet::new(),
+                Baseline::default(),
                 Some("new-private-key".into()),
             );
             assert_eq!(serial, "old");
             assert_eq!(key, Some("old-private-key"));
-            Ok(Some(complete_response()))
+            Ok(ScanOutcome {
+                response: Some(complete_response()),
+                baseline: Baseline::default(),
+            })
         },
         |_, _| panic!("old poll must not stop a new capture"),
     );
@@ -116,13 +122,16 @@ fn jp_matching_requires_the_exact_host_and_login_path_and_removes_private_querie
 fn jp_response_session_keeps_its_server_through_polling_and_automatic_stop() {
     for stop_fails in [false, true] {
         let store = ResponseStore::default();
-        store.begin_authenticated(Server::Jp, "device".into(), HashSet::new(), None);
+        store.begin_authenticated(Server::Jp, "device".into(), Baseline::default(), None);
         let state = store.poll_authenticated_using(
             |server, _, _, _| {
                 assert_eq!(server, Server::Jp);
                 let mut response = complete_response();
                 response.url = target_url(server, JP_URL).unwrap();
-                Ok(Some(response))
+                Ok(ScanOutcome {
+                    response: Some(response),
+                    baseline: Baseline::default(),
+                })
             },
             |serial, _| {
                 assert_eq!(serial, "device");
@@ -352,11 +361,11 @@ fn state_survives_navigation_but_stale_polls_cannot_replace_a_new_session() {
         store
             .poll_using(|_, _| Err("连接断开".into()), |_| panic!())
             .phase,
-        ResponsePhase::Error
+        ResponsePhase::Waiting
     );
     assert_eq!(
         store.poll_using(|_, _| panic!(), |_| panic!()).phase,
-        ResponsePhase::Error
+        ResponsePhase::Waiting
     );
 }
 
@@ -380,12 +389,14 @@ fn workspace_status_never_serializes_the_complete_response() {
         phase: ResponsePhase::Found,
         serial: Some("device".into()),
         message: "已获取响应".into(),
+        warnings: vec![],
+        retry_after_ms: 1000,
         response: Some(complete_response()),
     };
     let status = serde_json::to_value(state.status()).unwrap();
     assert_eq!(
         status,
-        serde_json::json!({ "phase": "found", "serial": "device", "message": "已获取响应" })
+        serde_json::json!({ "phase": "found", "serial": "device", "message": "已获取响应", "warnings": [], "retryAfterMs": 1000 })
     );
     assert!(state.response.is_some());
 }
@@ -511,7 +522,8 @@ fn jp_polling_excludes_old_and_cn_responses_and_preserves_raw_json_and_preview()
         captured(2, "old-cn", None),
     ]);
     let old = baseline(Server::Jp, &api, port).unwrap();
-    assert_eq!(old, HashSet::from(["old-jp".into()]));
+    assert!(old.contains("old-jp"));
+    assert!(!old.contains("old-cn"));
     assert_eq!(
         worker.join().unwrap()[0].1["filters"][0]["pattern"],
         "/login/top"
@@ -616,6 +628,7 @@ fn display_toplogin_on_authorized_device() {
         &crate::device_operation::OperationCancellation::default(),
         &super::super::ApiKeyStore::new(tempfile::tempdir().unwrap().path().join("api-keys.json")),
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy/scrcpy-server.jar"),
+        &super::super::AuthorizationStore::default(),
         &mut |_| {},
     )
     .unwrap();
@@ -716,4 +729,134 @@ fn waiting_copy_is_generic_and_a_stopped_task_cannot_be_revived_by_a_late_poll()
     );
     assert_eq!(state.phase, ResponsePhase::Idle);
     assert_eq!(state.message, "环境配置已停止");
+}
+
+#[test]
+fn transient_scan_failures_back_off_then_recover_without_a_restart() {
+    let store = ResponseStore::default();
+    store.begin("device".into(), HashSet::new());
+    let failed = store.poll_using(|_, _| Err("ADB temporarily offline".into()), |_| panic!());
+    assert_eq!(failed.phase, ResponsePhase::Waiting);
+    assert_eq!(failed.retry_after_ms, 2000);
+    assert!(failed.message.contains("自动继续"));
+    store.poll_using(|_, _| panic!("must respect retry deadline"), |_| panic!());
+    store.0.lock().unwrap().next_poll = Some(Instant::now());
+    let recovered = store.poll_using(|_, _| Ok(Some(complete_response())), |_| Ok(()));
+    assert_eq!(recovered.phase, ResponsePhase::Found);
+    assert!(recovered.response.is_some());
+}
+
+#[test]
+fn authentication_failure_still_ends_waiting_without_claiming_capture_has_stopped() {
+    let store = ResponseStore::default();
+    store.begin("device".into(), HashSet::new());
+    let result = store.poll_using(
+        |_, _| Err(client::AUTHENTICATION_FAILED.into()),
+        |_| panic!(),
+    );
+    assert_eq!(result.phase, ResponsePhase::Error);
+    assert!(result.serial.is_some());
+    assert!(store.ensure_client_selection_allowed().is_err());
+}
+
+#[test]
+fn more_than_128_old_records_and_a_malformed_record_do_not_prevent_a_fresh_capture() {
+    let api = client::Client::new().unwrap();
+    let mut replies = vec![serde_json::json!((0..130).collect::<Vec<_>>())];
+    replies.extend((0..129).map(|id| captured(id, &format!("old-{id}"), None)));
+    replies.push(serde_json::json!({"invalid":"record"}));
+    let (port, worker) = server(replies);
+    let mut progress = Vec::new();
+    let baseline = baseline_controlled(Server::Cn, &api, port, &mut || Ok(()), &mut |message| {
+        progress.push(message.to_string())
+    })
+    .unwrap();
+    worker.join().unwrap();
+    assert_eq!(baseline.uids.len(), 129);
+    assert!(baseline.ignored_ids.contains(&129));
+    assert!(!baseline.warnings.is_empty());
+    assert!(progress.len() > 1);
+    // An unreadable old ID remains excluded even if it later becomes readable.
+    let (port, worker) = server(vec![
+        serde_json::json!([129, 130]),
+        captured(
+            130,
+            "fresh",
+            Some(serde_json::json!({"text":"complete","encoding":"utf8"})),
+        ),
+    ]);
+    let response = scan(
+        Server::Cn,
+        &api,
+        port,
+        "device",
+        &baseline,
+        &mut |_| panic!(),
+    )
+    .unwrap()
+    .unwrap();
+    worker.join().unwrap();
+    assert_eq!(response.body, "complete");
+}
+
+#[test]
+fn failed_login_and_unsupported_body_do_not_hide_another_valid_response() {
+    let api = client::Client::new().unwrap();
+    let mut failed = captured(
+        3,
+        "failed",
+        Some(serde_json::json!({"text":"error","encoding":"utf8"})),
+    );
+    failed["response"]["code"] = 503.into();
+    let (port, worker) = server(vec![
+        serde_json::json!([1, 2, 3]),
+        failed,
+        captured(
+            2,
+            "bad-body",
+            Some(serde_json::json!({"text":"invalid","encoding":"unsupported"})),
+        ),
+        captured(
+            1,
+            "good",
+            Some(serde_json::json!({"text":"complete","encoding":"utf8"})),
+        ),
+    ]);
+    let outcome = scan_session(
+        Server::Cn,
+        &api,
+        port,
+        "device",
+        &Baseline::default(),
+        &mut |_| panic!(),
+    )
+    .unwrap();
+    worker.join().unwrap();
+    assert_eq!(outcome.response.unwrap().body, "complete");
+    assert!(outcome.baseline.contains("failed"));
+    assert!(outcome.baseline.contains("bad-body"));
+    assert_eq!(outcome.baseline.warnings.len(), 2);
+}
+
+#[test]
+fn baseline_can_be_cancelled_between_records() {
+    let api = client::Client::new().unwrap();
+    let (port, worker) = server(vec![serde_json::json!([1, 2]), captured(1, "old", None)]);
+    let mut checks = 0;
+    let result = baseline_controlled(
+        Server::Cn,
+        &api,
+        port,
+        &mut || {
+            checks += 1;
+            if checks >= 3 {
+                Err("cancelled".into())
+            } else {
+                Ok(())
+            }
+        },
+        &mut |_| {},
+    );
+    worker.join().unwrap();
+    assert!(result.is_err());
 }

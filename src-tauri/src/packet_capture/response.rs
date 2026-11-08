@@ -10,11 +10,45 @@ use std::{
     io::Read,
     path::Path,
     sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 const MAX_BODY: usize = 16 * 1024 * 1024;
 const MAX_RECORD: usize = 24 * 1024 * 1024;
-const MAX_IDS: usize = 128;
+// Retain the existing bounded filter payload, rather than an arbitrary record count.
+const MAX_ID_BYTES: usize = 128 * 1024;
+
+#[derive(Clone, Default, Debug)]
+pub(super) struct Baseline {
+    pub(super) uids: HashSet<String>,
+    pub(super) ignored_ids: HashSet<u64>,
+    pub(super) warnings: Vec<String>,
+}
+
+impl Baseline {
+    pub(super) fn contains(&self, uid: &str) -> bool {
+        self.uids.contains(uid)
+    }
+    fn warn(&mut self, warning: String) {
+        if !self.warnings.contains(&warning) {
+            self.warnings.push(warning);
+        }
+    }
+}
+
+impl From<HashSet<String>> for Baseline {
+    fn from(uids: HashSet<String>) -> Self {
+        Self {
+            uids,
+            ..Default::default()
+        }
+    }
+}
+
+struct ScanOutcome {
+    response: Option<LoginResponse>,
+    baseline: Baseline,
+}
 
 #[derive(Clone, Default, Serialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +67,8 @@ pub(crate) struct ResponseState {
     pub(super) serial: Option<String>,
     pub(super) message: String,
     pub(super) response: Option<LoginResponse>,
+    pub(super) warnings: Vec<String>,
+    pub(super) retry_after_ms: u64,
 }
 
 #[derive(Serialize)]
@@ -41,6 +77,8 @@ pub(crate) struct ResponseStatus {
     phase: ResponsePhase,
     serial: Option<String>,
     message: String,
+    warnings: Vec<String>,
+    retry_after_ms: u64,
 }
 
 impl ResponseState {
@@ -49,6 +87,8 @@ impl ResponseState {
             phase: self.phase.clone(),
             serial: self.serial.clone(),
             message: self.message.clone(),
+            warnings: self.warnings.clone(),
+            retry_after_ms: self.retry_after_ms,
         }
     }
 }
@@ -87,7 +127,9 @@ impl LoginResponse {
 struct Inner {
     generation: u64,
     server: Server,
-    baseline: HashSet<String>,
+    baseline: Baseline,
+    failures: u32,
+    next_poll: Option<Instant>,
     state: ResponseState,
     interrupted_stop_target: Option<String>,
     api_key: Option<String>,
@@ -154,10 +196,16 @@ impl ResponseStore {
         Ok(())
     }
 
+    pub(crate) fn set_warnings(&self, warnings: Vec<String>) {
+        self.0.lock().unwrap().state.warnings = warnings;
+    }
+
     pub(crate) fn reset(&self) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
-        inner.baseline.clear();
+        inner.baseline = Baseline::default();
+        inner.failures = 0;
+        inner.next_poll = None;
         inner.api_key = None;
         inner.state = ResponseState::default();
         inner.interrupted_stop_target = None;
@@ -165,20 +213,22 @@ impl ResponseStore {
 
     #[cfg(test)]
     pub(crate) fn begin(&self, serial: String, baseline: HashSet<String>) {
-        self.begin_authenticated(Server::Cn, serial, baseline, None);
+        self.begin_authenticated(Server::Cn, serial, baseline.into(), None);
     }
 
-    pub(crate) fn begin_authenticated(
+    pub(super) fn begin_authenticated(
         &self,
         server: Server,
         serial: String,
-        baseline: HashSet<String>,
+        baseline: Baseline,
         key: Option<String>,
     ) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
         inner.server = server;
         inner.baseline = baseline;
+        inner.failures = 0;
+        inner.next_poll = None;
         inner.api_key = key;
         inner.interrupted_stop_target = None;
         inner.state = ResponseState {
@@ -186,6 +236,8 @@ impl ResponseStore {
             serial: Some(serial),
             message: "等待数据中，请重新进入游戏……".into(),
             response: None,
+            warnings: inner.baseline.warnings.clone(),
+            retry_after_ms: 1000,
         };
     }
 
@@ -194,7 +246,7 @@ impl ResponseStore {
             |server, serial, baseline, key| {
                 let client = client::Client::with_api_key(key)?;
                 client::on_device(adb_path, serial, |port, run| {
-                    scan(server, &client, port, serial, baseline, run)
+                    scan_session(server, &client, port, serial, baseline, run)
                 })
             },
             |serial, key| super::stop::stop_capture(adb_path, serial, key),
@@ -208,24 +260,26 @@ impl ResponseStore {
         stop: impl FnOnce(&str) -> Result<(), String>,
     ) -> ResponseState {
         self.poll_authenticated_using(
-            |_, serial, baseline, _| scan(serial, baseline),
+            |_, serial, baseline, _| {
+                scan(serial, &baseline.uids).map(|response| ScanOutcome {
+                    response,
+                    baseline: baseline.clone(),
+                })
+            },
             |serial, _| stop(serial),
         )
     }
 
     fn poll_authenticated_using(
         &self,
-        scan: impl FnOnce(
-            Server,
-            &str,
-            &HashSet<String>,
-            Option<&str>,
-        ) -> Result<Option<LoginResponse>, String>,
+        scan: impl FnOnce(Server, &str, &Baseline, Option<&str>) -> Result<ScanOutcome, String>,
         stop: impl FnOnce(&str, Option<&str>) -> Result<(), String>,
     ) -> ResponseState {
         let (generation, server, serial, baseline, key) = {
             let inner = self.0.lock().unwrap();
-            if inner.state.phase != ResponsePhase::Waiting {
+            if inner.state.phase != ResponsePhase::Waiting
+                || inner.next_poll.is_some_and(|time| Instant::now() < time)
+            {
                 return inner.state.clone();
             }
             (
@@ -241,7 +295,16 @@ impl ResponseStore {
         // A configuration change or a new start supersedes any in-flight poll.
         if inner.generation == generation && inner.state.phase == ResponsePhase::Waiting {
             match result {
-                Ok(Some(response)) => {
+                Ok(outcome) => {
+                    inner.baseline = outcome.baseline;
+                    inner.state.warnings = inner.baseline.warnings.clone();
+                    inner.failures = 0;
+                    inner.next_poll = None;
+                    inner.state.retry_after_ms = 1000;
+                    let Some(response) = outcome.response else {
+                        inner.state.message = "等待数据中，请重新进入游戏……".into();
+                        return inner.state.clone();
+                    };
                     inner.state.response = Some(response);
                     // Keep the complete body before stopping: Reqable may release
                     // its temporary files. Serialize stop with reset/begin so a
@@ -261,10 +324,16 @@ impl ResponseStore {
                         }
                     }
                 }
-                Ok(None) => {}
-                Err(error) => {
+                Err(error) if fatal_scan_error(&error) => {
                     inner.state.phase = ResponsePhase::Error;
-                    inner.state.message = format!("{error}；请重新开始抓包后登录游戏");
+                    inner.state.message = format!("{error}；请停止后重新开始抓包");
+                }
+                Err(error) => {
+                    inner.failures = inner.failures.saturating_add(1);
+                    let delay = Duration::from_secs(1 << inner.failures.min(3));
+                    inner.next_poll = Some(Instant::now() + delay);
+                    inner.state.retry_after_ms = delay.as_millis() as u64;
+                    inner.state.message = format!("{error}；连接恢复后将自动继续等待");
                 }
             }
         }
@@ -353,12 +422,9 @@ fn ids(server: Server, client: &client::Client, port: u16) -> Result<Vec<u64>, S
         Some(
             &serde_json::json!({"filters":[{"type":"keyword","pattern":target::selector(server)}]}),
         ),
-        128 * 1024,
+        MAX_ID_BYTES,
     )?;
     let ids: Vec<u64> = serde_json::from_slice(&bytes).map_err(|_| "Reqable 记录列表无效")?;
-    if ids.len() > MAX_IDS {
-        return Err("匹配记录过多，请清理 Reqable 旧记录后重试".into());
-    }
     Ok(ids)
 }
 
@@ -371,32 +437,104 @@ fn record(client: &client::Client, port: u16, id: u64) -> Result<Record, String>
     Ok(record)
 }
 
+#[cfg(test)]
 pub(super) fn baseline(
     server: Server,
     client: &client::Client,
     port: u16,
-) -> Result<HashSet<String>, String> {
-    let mut baseline = HashSet::new();
-    for id in ids(server, client, port)? {
-        let record = record(client, port, id)?;
-        if target_url(server, &record.url).is_some() {
-            baseline.insert(record.uid);
+) -> Result<Baseline, String> {
+    baseline_controlled(server, client, port, &mut || Ok(()), &mut |_| {})
+}
+
+pub(super) fn baseline_controlled(
+    server: Server,
+    client: &client::Client,
+    port: u16,
+    check: &mut dyn FnMut() -> Result<(), String>,
+    progress: &mut dyn FnMut(&str),
+) -> Result<Baseline, String> {
+    check()?;
+    let ids = ids(server, client, port)?;
+    let mut baseline = Baseline::default();
+    for (index, id) in ids.iter().enumerate() {
+        check()?;
+        if index % 16 == 0 {
+            progress(&format!("正在识别已有记录：{}/{}", index, ids.len()));
         }
+        match record(client, port, *id) {
+            Ok(record) => {
+                if target_url(server, &record.url).is_some() {
+                    baseline.uids.insert(record.uid);
+                }
+            }
+            Err(error) if error == client::AUTHENTICATION_FAILED => return Err(error),
+            Err(_) => {
+                baseline.ignored_ids.insert(*id);
+            }
+        }
+        check()?;
+    }
+    if !baseline.ignored_ids.is_empty() {
+        baseline.warn(format!(
+            "{} 条旧记录无法识别，本次将忽略这些记录 ID，避免读取旧响应",
+            baseline.ignored_ids.len()
+        ));
     }
     Ok(baseline)
 }
 
+fn fatal_scan_error(error: &str) -> bool {
+    matches!(
+        error,
+        client::AUTHENTICATION_FAILED
+            | client::API_DISABLED
+            | "Reqable 抓包已停止"
+            | "Reqable 抓包状态无效"
+            | "Reqable 返回了未知抓包状态"
+            | "Reqable 记录列表无效"
+            | "Reqable 响应超过读取上限"
+    )
+}
+
+// Keep the original test helper focused on response selection.
+#[cfg(test)]
 fn scan(
     server: Server,
     client: &client::Client,
     port: u16,
     serial: &str,
-    baseline: &HashSet<String>,
+    baseline: &Baseline,
     run: &mut AdbCommand<'_>,
 ) -> Result<Option<LoginResponse>, String> {
-    // Latest completed response wins; pending records are retried on the next poll.
+    scan_session(server, client, port, serial, baseline, run).map(|outcome| outcome.response)
+}
+
+fn scan_session(
+    server: Server,
+    client: &client::Client,
+    port: u16,
+    serial: &str,
+    baseline: &Baseline,
+    run: &mut AdbCommand<'_>,
+) -> Result<ScanOutcome, String> {
+    let mut baseline = baseline.clone();
+    // Latest completed response wins; incomplete/transient records remain retryable.
     for id in ids(server, client, port)?.into_iter().rev() {
-        let record = record(client, port, id)?;
+        if baseline.ignored_ids.contains(&id) {
+            continue;
+        }
+        let record = match record(client, port, id) {
+            Ok(record) => record,
+            Err(error)
+                if error == client::AUTHENTICATION_FAILED || error == client::API_DISABLED =>
+            {
+                return Err(error)
+            }
+            Err(error) => {
+                baseline.warn(format!("记录 {id} 暂时无法读取：{error}；将继续等待"));
+                continue;
+            }
+        };
         if baseline.contains(&record.uid) {
             continue;
         }
@@ -413,38 +551,60 @@ fn scan(
             continue;
         };
         if !(200..300).contains(&code) {
-            return Err(format!(
-                "{} 请求失败（HTTP {code}）",
+            baseline.warn(format!(
+                "{} 请求失败（HTTP {code}），正在等待下一次登录",
                 target::response_label(server)
             ));
-        }
-        let bytes = body_bytes(body, &mut |path| read_cache(serial, path, run))?;
-        if bytes.is_empty() {
+            baseline.uids.insert(record.uid);
             continue;
         }
-        let byte_length = bytes.len();
-        let (raw_format, raw_body) = raw_body(bytes)?;
+        let result =
+            body_bytes(body, &mut |path| read_cache(serial, path, run)).and_then(|bytes| {
+                let byte_length = bytes.len();
+                raw_body(bytes).map(|(format, body)| (byte_length, format, body))
+            });
+        let (byte_length, raw_format, raw_body) = match result {
+            Ok(result) => result,
+            Err(error) => {
+                baseline.warn(format!("记录 {id} 暂不可用：{error}；将继续等待"));
+                // Cache files and ADB can recover; malformed/unsupported bodies cannot.
+                if !error.contains("缓存") && !error.contains("读取") && !error.contains("ADB")
+                {
+                    baseline.uids.insert(record.uid);
+                }
+                continue;
+            }
+        };
+        if byte_length == 0 {
+            continue;
+        }
         let items = super::inventory::preview(&raw_body);
         let captured_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|_| "系统时间无效")?
             .as_millis() as u64;
-        return Ok(Some(LoginResponse {
-            capture_id: uuid::Uuid::new_v4().to_string(),
-            captured_at,
-            record_id: id,
-            url,
-            status_code: code,
-            byte_length,
-            format: raw_format,
-            body: raw_body,
-            items,
-        }));
+        return Ok(ScanOutcome {
+            response: Some(LoginResponse {
+                capture_id: uuid::Uuid::new_v4().to_string(),
+                captured_at,
+                record_id: id,
+                url,
+                status_code: code,
+                byte_length,
+                format: raw_format,
+                body: raw_body,
+                items,
+            }),
+            baseline,
+        });
     }
     if !super::capture::decode_status(&client.request(port, "status", None, 4096)?)? {
         return Err("Reqable 抓包已停止".into());
     }
-    Ok(None)
+    Ok(ScanOutcome {
+        response: None,
+        baseline,
+    })
 }
 
 fn body_bytes(

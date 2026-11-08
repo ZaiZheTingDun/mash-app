@@ -4,6 +4,8 @@ use std::{io::Read, path::Path, time::Duration};
 
 pub(super) const AUTHENTICATION_FAILED: &str =
     "Reqable 控制接口认证失败，请检查 API 服务的访问令牌设置";
+pub(super) const API_DISABLED: &str =
+    "Reqable API 服务未启用，请在 Reqable 设置中开启 API 服务后重试";
 const CONNECTION_FAILED: &str = "无法连接设备上的 Reqable 控制接口";
 const CONNECTION_TIMEOUT: &str = "连接设备上的 Reqable 控制接口超时";
 const RESPONSE_TIMEOUT: &str = "Reqable 控制接口响应超时，请保持 Reqable 运行后重试";
@@ -106,7 +108,7 @@ impl Client {
                 if status == reqwest::StatusCode::FORBIDDEN
                     && String::from_utf8_lossy(&bytes).contains("Please enable API Service")
                 {
-                    "Reqable API 服务未启用，请在 Reqable 设置中开启 API 服务后重试".into()
+                    API_DISABLED.into()
                 } else if status == reqwest::StatusCode::UNAUTHORIZED
                     || status == reqwest::StatusCode::FORBIDDEN
                 {

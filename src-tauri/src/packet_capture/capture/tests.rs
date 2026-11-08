@@ -1,5 +1,6 @@
 use super::super::tests::encoded_shell_output;
 use super::*;
+use std::collections::HashSet;
 
 #[test]
 fn channel_capture_uses_the_chosen_package_and_rejects_another_clients_config() {
@@ -17,7 +18,7 @@ fn channel_capture_uses_the_chosen_package_and_rejects_another_clients_config() 
         configured_package: Some("com.bilibili.fatego"),
         ..Default::default()
     });
-    assert!(result.unwrap_err().contains("所选国服 FGO 客户端"));
+    assert!(result.unwrap_err().contains("未覆盖所选客户端"));
     assert!(!requests.contains(&Request::Start));
 }
 
@@ -47,7 +48,7 @@ fn changing_servers_requires_matching_configuration_and_vpn_isolation() {
             configured_server: Some(configured_server),
             ..Default::default()
         });
-        assert!(result.unwrap_err().contains(target::label(server)));
+        assert!(result.unwrap_err().contains("未覆盖所选客户端"));
         assert!(!requests.contains(&Request::Start));
     }
     let (result, _, requests) = fake(Scenario {
@@ -55,14 +56,14 @@ fn changing_servers_requires_matching_configuration_and_vpn_isolation() {
         missing_game: true,
         ..Default::default()
     });
-    assert!(result.is_err());
-    assert!(!requests.contains(&Request::Start));
+    assert!(result.is_ok());
+    assert!(requests.contains(&Request::Start));
     let (result, _, requests) = fake(Scenario {
         server: Some(Server::Jp),
-        wide_vpn: true,
+        excluded_vpn: true,
         ..Default::default()
     });
-    assert!(result.unwrap_err().contains("无法确认仅抓日服"));
+    assert!(result.unwrap_err().contains("未覆盖所选客户端"));
     assert!(requests.contains(&Request::Stop));
 }
 
@@ -120,6 +121,8 @@ struct Scenario {
     unavailable: bool,
     api_error: Option<&'static str>,
     wide_vpn: bool,
+    excluded_vpn: bool,
+    unknown_vpn: bool,
     post_failed: bool,
     status_disconnect: bool,
     stop_failed: bool,
@@ -158,9 +161,11 @@ fn fake_with_cancellation(
             let command = args[2..].join(" ");
             commands.push(command.clone());
             match command.as_str() {
-                "shell dumpsys package com.reqable.android" => {
-                    Ok(format!("versionName={}\n", s.version.unwrap_or("3.3.5")).into_bytes())
-                }
+                "shell dumpsys package com.reqable.android" => Ok(format!(
+                    "userId=10082\nversionName={}\n",
+                    s.version.unwrap_or("3.3.5")
+                )
+                .into_bytes()),
                 _ if command == format!("shell dumpsys package {package}") => {
                     Ok(if s.missing_game {
                         Vec::new()
@@ -178,7 +183,12 @@ fn fake_with_cancellation(
                 | "forward tcp:41001 tcp:9016"
                 | "wait-for-device"
                 | "shell am force-stop com.reqable.android" => Ok(Vec::new()),
-                "shell dumpsys connectivity" => Ok(vpn(if s.wide_vpn {
+                "shell dumpsys connectivity" if s.unknown_vpn => {
+                    Ok(b"unknown dump format".to_vec())
+                }
+                "shell dumpsys connectivity" => Ok(vpn(if s.excluded_vpn {
+                    "10080"
+                } else if s.wide_vpn {
                     "0-99999"
                 } else {
                     "10081-10081, 20081-20081"
@@ -286,7 +296,7 @@ fn fake_with_cancellation(
                 return Err("baseline unavailable".into());
             }
             prepared.set(true);
-            Ok(HashSet::from(["previous-response".into()]))
+            Ok(HashSet::from(["previous-response".into()]).into())
         },
         &mut || {},
         cancellation,
@@ -438,7 +448,7 @@ fn start_disables_system_pip_before_launch_and_accepts_legacy_config_without_rec
 }
 
 #[test]
-fn failed_or_unconfirmed_system_pip_change_does_not_launch_or_start_capture() {
+fn failed_or_unconfirmed_system_pip_change_warns_but_allows_capture() {
     for scenario in [
         Scenario {
             pip_read_failure: true,
@@ -454,12 +464,13 @@ fn failed_or_unconfirmed_system_pip_change_does_not_launch_or_start_capture() {
             ..Default::default()
         },
     ] {
-        let (result, commands, requests) = fake(scenario);
-        assert!(result.unwrap_err().contains("系统画中画权限"));
-        assert!(requests.is_empty());
-        assert!(!commands
+        let (result, _, requests) = fake(scenario);
+        assert!(result
+            .unwrap()
+            .warnings
             .iter()
-            .any(|c| c.starts_with("forward") || c.contains("am start -W")));
+            .any(|warning| warning.contains("系统画中画权限")));
+        assert!(requests.contains(&Request::Start));
     }
 }
 
@@ -475,7 +486,7 @@ fn post_acknowledgement_is_not_success_and_failed_or_uncertain_starts_are_cancel
             ..Default::default()
         },
         Scenario {
-            wide_vpn: true,
+            excluded_vpn: true,
             ..Default::default()
         },
     ] {
@@ -489,7 +500,7 @@ fn post_acknowledgement_is_not_success_and_failed_or_uncertain_starts_are_cancel
     }
     let (result, commands, _) = fake(Scenario {
         already_active: true,
-        wide_vpn: true,
+        excluded_vpn: true,
         stop_failed: true,
         ..Default::default()
     });
@@ -546,6 +557,7 @@ fn start_on_authorized_device() {
         &crate::device_operation::OperationCancellation::default(),
         &ApiKeyStore::new(tempfile::tempdir().unwrap().path().join("api-keys.json")),
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy/scrcpy-server.jar"),
+        &credentials::AuthorizationStore::default(),
         &mut |_| {},
     )
     .unwrap();
@@ -581,4 +593,31 @@ fn stopping_startup_interrupts_api_waits_and_baseline_and_prevents_late_confirma
             assert_eq!(requests.last(), Some(&Request::Start));
         }
     }
+}
+
+#[test]
+fn wider_or_unreadable_vpn_ranges_warn_without_stopping_capture() {
+    for scenario in [
+        Scenario {
+            wide_vpn: true,
+            ..Default::default()
+        },
+        Scenario {
+            unknown_vpn: true,
+            ..Default::default()
+        },
+        Scenario {
+            missing_game: true,
+            ..Default::default()
+        },
+    ] {
+        let (result, _, requests) = fake(scenario);
+        assert!(!result.unwrap().warnings.is_empty());
+        assert!(!requests.contains(&Request::Stop));
+    }
+    assert_eq!(vpn_scope(&vpn("10080"), 10081, None), VpnScope::Unknown);
+    assert_eq!(
+        vpn_scope(&vpn("10080"), 10081, Some(99999)),
+        VpnScope::Unknown
+    );
 }

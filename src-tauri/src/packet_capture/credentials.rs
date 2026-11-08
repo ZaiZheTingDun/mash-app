@@ -2,11 +2,13 @@
 use super::{capture::decode_status, client, clipboard::ClipboardReader, run_adb};
 use crate::device_operation::OperationCancellation;
 use std::{
-    cell::RefCell,
     collections::BTreeMap,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+
+mod manual;
+pub(crate) use manual::{AuthorizationPrompt, AuthorizationStore};
 
 pub(crate) struct ApiKeyStore(PathBuf);
 
@@ -38,11 +40,7 @@ impl ApiKeyStore {
 }
 
 pub(super) fn needs_api_key(version: &str) -> bool {
-    let parts: Vec<u32> = version
-        .split('.')
-        .filter_map(|part| part.parse().ok())
-        .collect();
-    parts.as_slice() >= [3, 3, 9].as_slice()
+    super::version::parse(version).is_some_and(|parts| parts >= [3, 3, 9])
 }
 
 fn candidate(text: &str) -> Option<&str> {
@@ -64,6 +62,7 @@ pub(super) fn authorize(
     serial: &str,
     port: u16,
     cancellation: &OperationCancellation,
+    authorization: &AuthorizationStore,
     progress: &mut dyn FnMut(&str),
 ) -> Result<String, String> {
     cancellation.check()?;
@@ -87,62 +86,94 @@ pub(super) fn authorize(
         }
     }
     cancellation.check()?;
-    let mut clipboard = ClipboardReader::start(adb_path, jar_path, serial, cancellation)?;
-    let progress = RefCell::new(progress);
-    progress.borrow_mut()("API 服务开启后，请创建 API key 并点击复制，mash 将自动验证并保存");
+    let session = authorization.begin(serial, cancellation);
+    let mut clipboard = match ClipboardReader::start(adb_path, jar_path, serial, cancellation) {
+        Ok(reader) => Some(reader),
+        Err(_) => {
+            cancellation.check()?;
+            session.feedback("自动读取剪贴板不可用，请手动输入 Reqable API key");
+            None
+        }
+    };
+    progress("API 服务开启后，请创建 API key 并点击复制，或手动输入");
     let started = Instant::now();
-    let key = wait_for_key(
-        saved.as_deref(),
-        &mut || {
-            cancellation.check()?;
-            let text = clipboard.next_text()?;
-            if let Some(text) = &text {
-                if candidate(text).is_none() {
-                    progress.borrow_mut()(
-                        "已收到剪贴板内容，但不是 API key 格式，请在 Reqable 中复制生成的 API key",
-                    );
-                    return Ok(None);
+    let mut previous_auto = None;
+    loop {
+        cancellation.check()?;
+        if started.elapsed() >= Duration::from_secs(120) {
+            return Err("等待 API key 超时，请重新开始并复制或手动输入 API key".into());
+        }
+        let mut text = session.take_key();
+        if text.is_none() {
+            if let Some(reader) = clipboard.as_mut() {
+                match reader.next_text() {
+                    Ok(Some(value)) if candidate(&value).is_some() => {
+                        match check_reqable_focus(&mut |command| {
+                            run_adb(adb_path, &["-s", serial, "shell", command])
+                        }) {
+                            Ok(true) if previous_auto.as_ref() != Some(&value) => {
+                                previous_auto = Some(value.clone());
+                                text = Some(value);
+                            }
+                            Ok(true) => {}
+                            Ok(false) => {
+                                session.feedback("请切回 Reqable 再次复制，或手动输入 API key")
+                            }
+                            Err(_) => session.feedback("无法确认前台窗口，请手动输入 API key"),
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(_) => {
+                        session.feedback("剪贴板连接已断开，请手动输入 Reqable API key");
+                        clipboard = None;
+                    }
                 }
-                // Clipboard notifications do not identify their source. Only
-                // accept candidates while Reqable is the focused Android window.
-                if !check_reqable_focus(&mut |command| {
-                    run_adb(adb_path, &["-s", serial, "shell", command])
-                })? {
-                    progress.borrow_mut()("已收到复制内容，但 Reqable 不在前台，请切回 Reqable 并再次点击复制 API key");
-                    return Ok(None);
-                }
+            } else {
+                cancellation.wait(Duration::from_millis(100));
             }
-            Ok(text)
-        },
-        &mut |key| {
-            progress.borrow_mut()("已读取 API key，正在验证…");
-            let result = validate(port, key);
-            if result
-                .as_ref()
-                .is_err_and(|error| error == client::AUTHENTICATION_FAILED)
-            {
-                progress.borrow_mut()(
-                    "复制的 API key 认证失败，请在 Reqable 中确认 key 有效并重新创建、复制",
-                );
+        }
+        let Some(text) = text else {
+            continue;
+        };
+        let Some(key) = candidate(&text) else {
+            continue;
+        };
+        session.verifying();
+        let result = validate_saved_key(
+            &mut |timeout| validate_with_timeout(port, key, timeout),
+            &mut || cancellation.wait(Duration::from_millis(250)),
+            cancellation,
+        );
+        match result {
+            Ok(()) => {
+                cancellation.check()?;
+                drop(clipboard);
+                cancellation.check()?;
+                store.save(serial, key)?;
+                progress("API key 已验证并保存，正在启动抓包…");
+                return Ok(key.into());
             }
-            result
-        },
-        &mut || {
-            cancellation.check()?;
-            if started.elapsed() >= Duration::from_secs(120) {
-                return Err(
-                    "等待 API key 超时，请重新开始并在 Reqable 中创建 key 后点击复制".into(),
-                );
+            Err(error) if error == client::AUTHENTICATION_FAILED => {
+                session.feedback("API key 认证失败，请检查后重新复制或输入");
             }
-            Ok(())
+            Err(error) => {
+                cancellation.check()?;
+                session.feedback(&format!("{error}；请恢复连接后重新提交 API key"));
+            }
+        }
+    }
+}
+
+pub(super) fn probe_access(port: u16, cancellation: &OperationCancellation) -> Result<(), String> {
+    validate_saved_key(
+        &mut |timeout| {
+            let bytes =
+                client::Client::new()?.request_with_timeout(port, "status", None, 4096, timeout)?;
+            decode_status(&bytes).map(|_| ())
         },
-    )?;
-    // Close the temporary clipboard listener before persisting/starting capture.
-    drop(clipboard);
-    cancellation.check()?;
-    store.save(serial, &key)?;
-    progress.borrow_mut()("API key 已验证并保存，正在启动抓包…");
-    Ok(key)
+        &mut || cancellation.wait(Duration::from_millis(250)),
+        cancellation,
+    )
 }
 
 fn check_reqable_focus(
@@ -174,9 +205,9 @@ fn reqable_has_focus(window: &[u8]) -> Option<bool> {
     }))
 }
 
-fn validate(port: u16, key: &str) -> Result<(), String> {
+fn validate_with_timeout(port: u16, key: &str, timeout: Duration) -> Result<(), String> {
     let client = client::Client::with_api_key(Some(key))?;
-    let bytes = client.request(port, "status", None, 4096)?;
+    let bytes = client.request_with_timeout(port, "status", None, 4096, timeout)?;
     decode_status(&bytes).map(|_| ())
 }
 
@@ -208,37 +239,6 @@ fn validate_saved_key(
         }
     }
     unreachable!("the final validation attempt always returns")
-}
-
-fn wait_for_key(
-    rejected: Option<&str>,
-    read: &mut dyn FnMut() -> Result<Option<String>, String>,
-    validate: &mut dyn FnMut(&str) -> Result<(), String>,
-    check: &mut dyn FnMut() -> Result<(), String>,
-) -> Result<String, String> {
-    let mut previous = rejected.map(str::to_owned);
-    loop {
-        check()?;
-        let Some(text) = read()? else {
-            continue;
-        };
-        let Some(key) = candidate(&text) else {
-            continue;
-        };
-        if previous.as_deref() == Some(key) {
-            continue;
-        }
-        previous = Some(key.into());
-        check()?;
-        match validate(key) {
-            Ok(()) => {
-                check()?;
-                return Ok(key.into());
-            }
-            Err(error) if error == client::AUTHENTICATION_FAILED => {}
-            Err(error) => return Err(error),
-        }
-    }
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CaptureAppList, CaptureClientContext, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
+import type { CaptureAuthorizationPrompt, CaptureAppList, CaptureClientContext, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
 import { listen, type UnlistenFn } from "../../tauri";
-import { getPacketCaptureApps, selectPacketCaptureApp, copyPacketCaptureResponse, deletePacketCaptureRecord, exportPacketCaptureResponse, getPacketCaptureWorkspace, selectPacketCaptureRecord, setupPacketCapture, startPacketCapture, stopPacketCapture } from "./packetCaptureApi";
+import { getPacketCaptureAuthorization, submitPacketCaptureApiKey, getPacketCaptureApps, selectPacketCaptureApp, copyPacketCaptureResponse, deletePacketCaptureRecord, exportPacketCaptureResponse, getPacketCaptureWorkspace, selectPacketCaptureRecord, setupPacketCapture, startPacketCapture, stopPacketCapture } from "./packetCaptureApi";
 
 type Operation = "setup" | "start" | "stop" | "delete" | "copy" | "export";
 const pendingMessages: Partial<Record<Operation, string>> = {
@@ -12,6 +12,7 @@ const pendingMessages: Partial<Record<Operation, string>> = {
 };
 
 export function usePacketCapture() {
+  const [authorization, setAuthorization] = useState<CaptureAuthorizationPrompt | null>(null);
   const [clients, setClients] = useState<CaptureAppList | null>(null);
   const [clientOperation, setClientOperation] = useState<"load" | "select" | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
@@ -85,6 +86,24 @@ export function usePacketCapture() {
   }, []);
 
   useEffect(() => {
+    if (operation !== "start") { setAuthorization(null); return; }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const prompt = await getPacketCaptureAuthorization();
+        if (!cancelled) setAuthorization(prompt);
+      } catch {
+        // The start operation remains authoritative; a failed status read is retried.
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void refresh(), 500);
+      }
+    };
+    void refresh();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [operation]);
+
+  useEffect(() => {
     if (operation !== null) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -97,7 +116,7 @@ export function usePacketCapture() {
         setWorkspace(next);
         setAwaitingCaptureStatus(false);
         setReadError(null);
-        if (next.capture.phase === "waiting") timer = setTimeout(() => void refresh(), 1000);
+        if (next.capture.phase === "waiting") timer = setTimeout(() => void refresh(), next.capture.retryAfterMs);
       } catch (error) {
         if (cancelled) return;
         setReadError(String(error));
@@ -254,7 +273,7 @@ export function usePacketCapture() {
   const initialLoading = workspace === null && readError === null;
   const recordLoading = selectedId !== null && selected === null && detailError === null;
   return {
-    workspace, clients, clientOperation, clientError, clientBusy: clientOperation !== null, operation, capturing, copied, exported, selectedId, selected, initialLoading, recordLoading, recordError: detailError,
+    workspace, authorization: operation === "start" ? authorization : null, submitApiKey: submitPacketCaptureApiKey, clients, clientOperation, clientError, clientBusy: clientOperation !== null, operation, capturing, copied, exported, selectedId, selected, initialLoading, recordLoading, recordError: detailError,
     canStop: hasCaptureTask || awaitingCaptureStatus || operation === "setup" || operation === "start" || operation === "stop",
     navigationLocked: initialLoading || operation !== null || hasCaptureTask || awaitingCaptureStatus,
     busy: operation !== null,

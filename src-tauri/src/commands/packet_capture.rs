@@ -9,7 +9,7 @@ use crate::packet_capture::{
 };
 use crate::runner::LogLevel;
 use std::sync::{Arc, Mutex};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::DialogExt;
 
@@ -89,7 +89,7 @@ pub(crate) async fn setup_packet_capture(
     let log_app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let target = operation.prepare(client_context.as_ref())?;
-        packet_capture::setup(
+        let configured = packet_capture::setup(
             target.server,
             &target.package,
             &operation.adb_path,
@@ -104,7 +104,11 @@ pub(crate) async fn setup_packet_capture(
                 }
             },
             &operation.cancellation,
-        )
+        )?;
+        operation
+            .responses
+            .set_warnings(configured.warnings.clone());
+        Ok(configured)
     })
     .await
     .map_err(|error| {
@@ -251,11 +255,31 @@ pub(crate) async fn install_capture_certificate(
 }
 
 #[tauri::command]
+pub(crate) fn get_packet_capture_authorization(
+    authorization: tauri::State<'_, packet_capture::AuthorizationStore>,
+) -> Option<packet_capture::AuthorizationPrompt> {
+    authorization.prompt()
+}
+
+#[tauri::command]
+pub(crate) fn submit_packet_capture_api_key(
+    request_id: String,
+    key: String,
+    authorization: tauri::State<'_, packet_capture::AuthorizationStore>,
+) -> Result<(), String> {
+    authorization.submit(&request_id, &key)
+}
+
+#[tauri::command]
 pub(crate) async fn start_packet_capture(
     app: tauri::AppHandle,
     client_context: Option<CaptureClientContext>,
 ) -> Result<CaptureStarted, String> {
     let operation = CaptureOperation::reserve(&app, DeviceOperation::StartPacketCapture)?;
+    let authorization = app
+        .state::<packet_capture::AuthorizationStore>()
+        .inner()
+        .clone();
     let keys = packet_capture::ApiKeyStore::new(
         crate::paths::app_data_dir(&app).join("packet-capture/api-keys.json"),
     );
@@ -271,6 +295,7 @@ pub(crate) async fn start_packet_capture(
             &operation.cancellation,
             &keys,
             &jar_path,
+            &authorization,
             &mut |message| {
                 if !operation.cancellation.is_cancelled() {
                     operation_log::emit(&log_app, LogLevel::Info, message);
@@ -293,13 +318,17 @@ pub(crate) async fn configure_packet_capture(
     let operation = CaptureOperation::reserve(&app, DeviceOperation::ConfigurePacketCapture)?;
     tauri::async_runtime::spawn_blocking(move || {
         let target = operation.prepare(None)?;
-        packet_capture::configure(
+        let configured = packet_capture::configure(
             target.server,
             &target.package,
             &operation.adb_path,
             Some(&target.serial),
             &operation.cancellation,
-        )
+        )?;
+        operation
+            .responses
+            .set_warnings(configured.warnings.clone());
+        Ok(configured)
     })
     .await
     .map_err(|error| format!("Reqable 配置任务失败：{error}"))?

@@ -4,6 +4,13 @@
 
 **mash** is a desktop application built with **Tauri 2** (Rust backend) + **React 18** (TypeScript frontend) + **Vite 6**. It uses **pnpm** as the package manager (pinned version in `package.json`).
 
+## Implementation Scope and Failure Handling
+
+- Before implementing anything not covered by the requirements or plan, explain the proposed addition, its rationale, and its impact, and wait for user confirmation.
+- Do not introduce unrequested prerequisites, blocking conditions, or limits. Necessary validation must have a clear basis.
+- Distinguish confirmed unmet conditions from conditions that cannot be verified. Failed auxiliary checks, unrecognized formats, or transient errors should not directly block the main workflow; consider warnings, bounded retries, or a manual path instead.
+- Tests should verify requirements and user-visible behavior, rather than merely lock in implementation choices. Completion reports must list any new restrictions, or explicitly state "None".
+
 ## Directory Structure
 
 ```
