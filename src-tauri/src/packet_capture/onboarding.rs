@@ -247,15 +247,17 @@ pub(super) fn certificate_after_confirmation(
     cancellation: &crate::device_operation::OperationCancellation,
 ) -> Result<(&'static str, Vec<u8>), String> {
     let started = Instant::now();
-    wait_using(
+    wait_controlled_using(
         root,
         shell,
         log,
         &mut |duration| cancellation.wait(duration),
         &|| started.elapsed(),
+        &|| cancellation.check(),
     )
 }
 
+#[cfg(test)]
 fn wait_using(
     root: &str,
     shell: &mut Shell<'_>,
@@ -263,12 +265,66 @@ fn wait_using(
     pause: &mut dyn FnMut(Duration),
     elapsed: &dyn Fn() -> Duration,
 ) -> Result<(&'static str, Vec<u8>), String> {
+    wait_controlled_using(root, shell, log, pause, elapsed, &|| Ok(()))
+}
+
+fn wait_controlled_using(
+    root: &str,
+    shell: &mut Shell<'_>,
+    log: &mut dyn FnMut(LogLevel, &str),
+    pause: &mut dyn FnMut(Duration),
+    elapsed: &dyn Fn() -> Duration,
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<(&'static str, Vec<u8>), String> {
     let mut waiting = false;
     let mut mode_detected = false;
     let mut mode_selected = false;
     let mut next_attempted = false;
+    let mut ui_warning = false;
     loop {
-        let page = probe(shell)?;
+        check()?;
+        let page = match probe(shell) {
+            Ok(page) => page,
+            Err(error) => {
+                check()?;
+                // A previously initialized device can proceed with a verified CA
+                // when UI automation is unavailable. A known agreement page still waits.
+                if !waiting && !mode_detected {
+                    for path in CERT_PATHS {
+                        if let Ok(bytes) =
+                            read_shell_bytes(root, &format!("head -c 65537 {path}"), shell)
+                        {
+                            if super::certificate::parse(&bytes).is_ok() {
+                                log(
+                                    LogLevel::Warn,
+                                    "Reqable 界面暂不可读，已验证现有 CA，继续环境配置",
+                                );
+                                return Ok((path, bytes));
+                            }
+                        }
+                    }
+                }
+                if !ui_warning {
+                    log(
+                        LogLevel::Warn,
+                        "Reqable 界面暂不可读，正在重试；请在设备上完成初始化",
+                    );
+                    ui_warning = true;
+                }
+                let timeout = if waiting {
+                    CONFIRMATION_TIMEOUT
+                } else if mode_detected {
+                    MODE_TIMEOUT
+                } else {
+                    INITIALIZATION_TIMEOUT
+                };
+                if elapsed() >= timeout {
+                    return Err(error);
+                }
+                pause(Duration::from_millis(300));
+                continue;
+            }
+        };
         if let UiState::Agreement(page) = page {
             if !waiting {
                 let message = if page.accept_enabled {

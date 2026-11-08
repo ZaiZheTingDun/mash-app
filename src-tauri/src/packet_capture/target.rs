@@ -2,12 +2,30 @@ use super::{run_adb, select_serial, AdbCommand};
 use crate::Server;
 use std::{
     collections::HashMap,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
 #[derive(Clone, Default)]
-pub(crate) struct CaptureTargetStore(Arc<Mutex<HashMap<(Server, String), String>>>);
+pub(crate) struct CaptureTargetStore {
+    inner: Arc<Mutex<SavedClients>>,
+    path: Option<PathBuf>,
+    read_error: Option<String>,
+}
+
+#[derive(Default)]
+struct SavedClients {
+    selections: HashMap<(Server, String), String>,
+    warning: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SavedClient {
+    server: Server,
+    serial: String,
+    package_name: String,
+}
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,6 +52,62 @@ struct CaptureApp {
 }
 
 impl CaptureTargetStore {
+    pub(crate) fn new(path: PathBuf) -> Self {
+        match crate::storage::read_json_or_default::<Vec<SavedClient>>(&path, "抓包客户端选择")
+        {
+            Ok(clients) => Self {
+                inner: Arc::new(Mutex::new(SavedClients {
+                    selections: clients
+                        .into_iter()
+                        .map(|client| ((client.server, client.serial), client.package_name))
+                        .collect(),
+                    warning: None,
+                })),
+                path: Some(path),
+                read_error: None,
+            },
+            Err(error) => Self {
+                inner: Arc::new(Mutex::new(SavedClients {
+                    warning: Some(format!("{error}；客户端选择将在本次运行中保留")),
+                    ..Default::default()
+                })),
+                path: Some(path),
+                read_error: Some(error),
+            },
+        }
+    }
+
+    pub(crate) fn take_warning(&self) -> Option<String> {
+        self.inner.lock().unwrap().warning.take()
+    }
+
+    fn remember(&self, saved: &mut SavedClients, server: Server, serial: &str, package: &str) {
+        saved
+            .selections
+            .insert((server, serial.into()), package.into());
+        let result = if let Some(error) = &self.read_error {
+            // Preserve unreadable preferences while allowing the current session to proceed.
+            Err(error.clone())
+        } else if let Some(path) = &self.path {
+            let mut clients: Vec<_> = saved
+                .selections
+                .iter()
+                .map(|((server, serial), package)| SavedClient {
+                    server: *server,
+                    serial: serial.clone(),
+                    package_name: package.clone(),
+                })
+                .collect();
+            clients.sort_by(|a, b| (label(a.server), &a.serial).cmp(&(label(b.server), &b.serial)));
+            crate::storage::write_json_atomic(path, &clients, "抓包客户端选择")
+        } else {
+            Ok(())
+        };
+        if let Err(error) = result {
+            saved.warning = Some(format!("{error}；客户端选择将在本次运行中保留"));
+        }
+    }
+
     pub(crate) fn list(
         &self,
         server: Server,
@@ -109,10 +183,10 @@ impl CaptureTargetStore {
         let mut apps = installed_apps(server, &String::from_utf8_lossy(&packages));
         apps.sort_by(|a, b| a.package_name.cmp(&b.package_name));
         apps.dedup_by(|a, b| a.package_name == b.package_name);
-        let selections = self.0.lock().unwrap();
-        let saved = selections.get(&(server, serial.clone()));
+        let mut saved = self.inner.lock().unwrap();
+        let previous = saved.selections.get(&(server, serial.clone()));
         // A removed explicit choice must never silently switch to another account.
-        let selected_package = match saved {
+        let selected_package = match previous {
             Some(saved) => apps
                 .iter()
                 .find(|app| &app.package_name == saved)
@@ -120,6 +194,11 @@ impl CaptureTargetStore {
             None if apps.len() == 1 => Some(apps[0].package_name.clone()),
             None => None,
         };
+        if previous.is_none() {
+            if let Some(package) = &selected_package {
+                self.remember(&mut saved, server, &serial, package);
+            }
+        }
         Ok(CaptureAppList {
             serial,
             server,
@@ -143,10 +222,12 @@ impl CaptureTargetStore {
         if !list.apps.iter().any(|app| app.package_name == package_name) {
             return Err("所选客户端已卸载或不属于当前服务器，请刷新列表后重试".into());
         }
-        self.0
-            .lock()
-            .unwrap()
-            .insert((server, serial.into()), package_name.into());
+        self.remember(
+            &mut self.inner.lock().unwrap(),
+            server,
+            serial,
+            package_name,
+        );
         list.selected_package = Some(package_name.into());
         Ok(list)
     }

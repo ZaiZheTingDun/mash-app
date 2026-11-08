@@ -1,12 +1,18 @@
 use super::*;
-use std::{cell::Cell, collections::VecDeque};
 
 #[test]
 fn version_boundary_uses_numeric_comparison() {
     for version in ["3.3.5", "3.3.8"] {
         assert!(!needs_api_key(version));
     }
-    for version in ["3.3.9", "3.3.10", "3.4.0", "4.0.0"] {
+    for version in [
+        "3.3.9",
+        "3.3.9.1",
+        "v3.3.9-beta.1",
+        "3.3.10",
+        "3.4.0",
+        "4.0.0",
+    ] {
         assert!(needs_api_key(version));
     }
 }
@@ -159,6 +165,7 @@ fn check_saved_key_reuse(cold_start: bool, delay: Duration) {
         "device",
         port,
         &OperationCancellation::default(),
+        &AuthorizationStore::default(),
         &mut |_| panic!("must not ask to copy again"),
     )
     .unwrap();
@@ -237,86 +244,6 @@ fn saved_key_validation_observes_cancellation_during_retry_or_a_successful_reque
 }
 
 #[test]
-fn unrelated_duplicate_and_rejected_clipboard_values_are_not_imported() {
-    let mut messages = VecDeque::from([
-        None,
-        Some("".into()),
-        Some("not an API key".into()),
-        Some("old-invalid-key".into()),
-        Some("new-invalid-key".into()),
-        Some("new-invalid-key".into()),
-        Some("  valid-copied-key  ".into()),
-    ]);
-    let mut attempted = Vec::new();
-    let key = wait_for_key(
-        Some("old-invalid-key"),
-        &mut || {
-            Ok(messages
-                .pop_front()
-                .expect("valid key should finish the workflow"))
-        },
-        &mut |key| {
-            attempted.push(key.to_owned());
-            if key == "valid-copied-key" {
-                Ok(())
-            } else {
-                Err(client::AUTHENTICATION_FAILED.into())
-            }
-        },
-        &mut || Ok(()),
-    )
-    .unwrap();
-    assert_eq!(key, "valid-copied-key");
-    assert_eq!(attempted, ["new-invalid-key", "valid-copied-key"]);
-}
-
-#[test]
-fn cancellation_after_validation_prevents_committing_a_late_key() {
-    let cancelled = Cell::new(false);
-    let result = wait_for_key(
-        None,
-        &mut || Ok(Some("valid-copied-key".into())),
-        &mut |_| {
-            cancelled.set(true);
-            Ok(())
-        },
-        &mut || {
-            if cancelled.get() {
-                Err("操作已停止".into())
-            } else {
-                Ok(())
-            }
-        },
-    );
-    assert_eq!(result.unwrap_err(), "操作已停止");
-}
-
-#[test]
-fn timeout_disconnect_and_api_service_errors_stop_waiting_without_echoing_keys() {
-    let error = wait_for_key(None, &mut || Ok(None), &mut |_| panic!(), &mut || {
-        Err("等待超时".into())
-    })
-    .unwrap_err();
-    assert_eq!(error, "等待超时");
-    let error = wait_for_key(
-        None,
-        &mut || Err("剪贴板断开".into()),
-        &mut |_| panic!(),
-        &mut || Ok(()),
-    )
-    .unwrap_err();
-    assert_eq!(error, "剪贴板断开");
-    let error = wait_for_key(
-        None,
-        &mut || Ok(Some("private-copied-key".into())),
-        &mut |_| Err("API 服务未启用".into()),
-        &mut || Ok(()),
-    )
-    .unwrap_err();
-    assert_eq!(error, "API 服务未启用");
-}
-
-#[test]
 fn bearer_candidates_are_bounded_and_reject_header_injection() {
     for text in [
         "short",
@@ -328,4 +255,119 @@ fn bearer_candidates_are_bounded_and_reject_header_injection() {
     }
     assert!(candidate(&"a".repeat(4097)).is_none());
     assert_eq!(candidate(" key-12345._~+/= "), Some("key-12345._~+/="));
+}
+
+#[test]
+fn manual_authorization_survives_a_rejected_key_without_clipboard_and_cleans_up() {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = std::thread::spawn(move || {
+        for status in [401, 200] {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut byte = [0];
+                stream.read_exact(&mut byte).unwrap();
+                request.push(byte[0]);
+            }
+            let body = r#"{"status":"inactive"}"#;
+            write!(
+                stream,
+                "HTTP/1.1 {status} Result\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        }
+    });
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("keys.json");
+    let saved_path = path.clone();
+    let authorization = AuthorizationStore::default();
+    let worker_store = authorization.clone();
+    let worker = std::thread::spawn(move || {
+        authorize(
+            &ApiKeyStore::new(path),
+            Path::new("missing-adb"),
+            Path::new("missing-jar"),
+            "device",
+            port,
+            &OperationCancellation::default(),
+            &worker_store,
+            &mut |_| {},
+        )
+    });
+    let wait_for = |ready: &dyn Fn(&serde_json::Value) -> bool| {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let prompt = serde_json::to_value(authorization.prompt()).unwrap();
+            if ready(&prompt) {
+                break prompt;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "authorization prompt did not become ready"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+    let prompt = wait_for(&|prompt| {
+        prompt["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("手动输入"))
+    });
+    let id = prompt["requestId"].as_str().unwrap();
+    authorization.submit(id, "manual-test-private-key").unwrap();
+    wait_for(&|prompt| {
+        prompt["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("认证失败"))
+    });
+    authorization.submit(id, "manual-test-private-key").unwrap();
+    assert_eq!(worker.join().unwrap().unwrap(), "manual-test-private-key");
+    server.join().unwrap();
+    assert!(authorization.prompt().is_none());
+    assert!(authorization.submit(id, "manual-test-private-key").is_err());
+    assert_eq!(
+        ApiKeyStore::new(saved_path)
+            .get("device")
+            .unwrap()
+            .as_deref(),
+        Some("manual-test-private-key")
+    );
+}
+
+#[test]
+fn cancellation_while_awaiting_manual_input_clears_the_prompt_without_saving_a_key() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("keys.json");
+    let saved_path = path.clone();
+    let authorization = AuthorizationStore::default();
+    let worker_store = authorization.clone();
+    let cancellation = OperationCancellation::default();
+    let worker_cancel = cancellation.clone();
+    let worker = std::thread::spawn(move || {
+        authorize(
+            &ApiKeyStore::new(path),
+            Path::new("missing-adb"),
+            Path::new("missing-jar"),
+            "device",
+            1,
+            &worker_cancel,
+            &worker_store,
+            &mut |_| {},
+        )
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while authorization.prompt().is_none() {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    cancellation.cancel();
+    assert_eq!(worker.join().unwrap().unwrap_err(), "操作已停止");
+    assert!(authorization.prompt().is_none());
+    assert!(!saved_path.exists());
 }

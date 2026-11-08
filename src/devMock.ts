@@ -568,6 +568,10 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return { importedProjects: [] } as T;
     case "check_adb":
       return { connected: selectedAdbSerial != null, deviceName: selectedAdbSerial } as T;
+    case "get_packet_capture_authorization":
+      return null as T;
+    case "submit_packet_capture_api_key":
+      return undefined as T;
     case "get_packet_capture_apps":
     case "select_packet_capture_app":
     case "install_capture_certificate":
@@ -577,7 +581,7 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "start_packet_capture":
       throw new Error("请在 Mash 桌面端连接设备后执行此操作");
     case "get_packet_capture_workspace":
-      return { capture: { phase: "idle", serial: null, message: "" }, history: { records: [], defaultRecordId: null } } satisfies PacketCaptureWorkspace as T;
+      return { capture: { phase: "idle", serial: null, message: "", warnings: [], retryAfterMs: 1000 }, history: { records: [], defaultRecordId: null } } satisfies PacketCaptureWorkspace as T;
     case "select_packet_capture_record":
       throw new Error("抓包记录不存在");
     case "delete_packet_capture_record":
@@ -585,7 +589,7 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "copy_packet_capture_response":
       throw new Error("暂无可复制的抓包结果");
     case "get_packet_capture_response":
-      return { phase: "idle", serial: null, message: "", response: null } as T;
+      return { phase: "idle", serial: null, message: "", warnings: [], retryAfterMs: 1000, response: null } as T;
     case "get_device_resolution":
       return deviceResolutionStatus() as T;
     case "reset_device_resolution": {

@@ -19,9 +19,10 @@ mod picture_in_picture;
 mod response;
 mod stop;
 mod target;
+mod version;
 pub(crate) use capture::{start_capture, CaptureStarted};
 pub(crate) use configuration::{configure, CaptureConfiguration};
-pub(crate) use credentials::ApiKeyStore;
+pub(crate) use credentials::{ApiKeyStore, AuthorizationPrompt, AuthorizationStore};
 pub(crate) use history::{CaptureHistoryState, CaptureRecord, HistoryStore};
 pub(crate) use lifecycle::stop_task;
 pub(crate) use response::{ResponseState, ResponseStatus, ResponseStore};
@@ -113,7 +114,12 @@ fn setup_controlled_using(
             cancellation,
         )
         .map_err(|error| format!("证书已安装，环境配置未完成：{error}"))?;
-        log(LogLevel::Info, "已关闭并验证 Reqable 的系统画中画权限");
+        for warning in &configured.warnings {
+            log(LogLevel::Warn, warning);
+        }
+        if configured.warnings.is_empty() {
+            log(LogLevel::Info, "已关闭并验证 Reqable 的系统画中画权限");
+        }
         configured.message = "环境配置完成，请点击开始按钮（设备重启后可能需要重新配置）".into();
         Ok(configured)
     })();

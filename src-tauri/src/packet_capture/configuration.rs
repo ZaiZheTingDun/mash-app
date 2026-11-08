@@ -18,14 +18,9 @@ fn reqable_version(info: &[u8]) -> Result<String, String> {
     let version = info
         .lines()
         .find_map(|line| line.trim().strip_prefix("versionName="))
-        .ok_or("无法读取 Reqable 版本")?;
-    let parts: Vec<u32> = version
-        .split('.')
-        .map(str::parse)
-        .collect::<Result<_, _>>()
-        .map_err(|_| "无法识别 Reqable 版本号")?;
-    let parts: [u32; 3] = parts.try_into().map_err(|_| "无法识别 Reqable 版本号")?;
-    if parts < MIN_VERSION {
+        .filter(|version| !version.is_empty())
+        .unwrap_or("未知");
+    if super::version::parse(version).is_some_and(|parts| parts < MIN_VERSION) {
         return Err(format!(
             "需要 Reqable {}.{}.{} 或以上版本（当前版本：{version}）",
             MIN_VERSION[0], MIN_VERSION[1], MIN_VERSION[2]
@@ -38,7 +33,7 @@ pub(super) fn prepare_capture_configuration(
     server: Server,
     package: &str,
     shell: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
-) -> Result<String, String> {
+) -> Result<(String, Vec<String>), String> {
     let info = shell("dumpsys package com.reqable.android")?;
     let version = reqable_version(&info)?;
     let root = find_root(shell)?;
@@ -54,14 +49,14 @@ pub(super) fn prepare_capture_configuration(
         )
     })?;
     let config = parse_config(&bytes)?;
-    if game_config(package, config.clone()) != config {
-        return Err(format!(
-            "请先点击环境配置，将 Reqable 设置为仅抓所选{} FGO 客户端",
-            target::label(server)
-        ));
+    let mut warnings = capture_warnings(package, &config)?;
+    if let Err(error) = super::picture_in_picture::disable(root, shell) {
+        warnings.push(format!("{error}（不影响本次抓包）"));
     }
-    super::picture_in_picture::disable(root, shell)?;
-    Ok(version)
+    if super::version::parse(&version).is_none() {
+        warnings.push("无法识别 Reqable 版本，将通过控制接口验证可用性".into());
+    }
+    Ok((version, warnings))
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -71,6 +66,7 @@ pub(crate) struct CaptureConfiguration {
     package_name: String,
     reqable_version: String,
     pub(super) message: String,
+    pub(crate) warnings: Vec<String>,
 }
 
 pub(crate) fn configure(
@@ -97,17 +93,51 @@ fn parse_config(bytes: &[u8]) -> Result<Value, String> {
         serde_json::from_slice(bytes).map_err(|_| "Reqable 配置格式无效，未修改原配置")?;
     let object = config.as_object().ok_or("Reqable 配置格式无效")?;
     for key in ["vpnMode", "hostMode", "androidAppsBypass", "autoCapture"] {
-        if !object.get(key).is_some_and(Value::is_boolean) {
+        if object.get(key).is_some_and(|value| !value.is_boolean()) {
             return Err(format!("Reqable 配置字段 {key} 不兼容，未修改原配置"));
         }
     }
-    if !object.get("androidApps").is_some_and(|apps| {
-        apps.as_array()
+    if object.get("androidApps").is_some_and(|apps| {
+        !apps
+            .as_array()
             .is_some_and(|apps| apps.iter().all(Value::is_string))
     }) {
         return Err("Reqable 应用选择配置不兼容，未修改原配置".into());
     }
     Ok(config)
+}
+
+fn capture_warnings(package: &str, config: &Value) -> Result<Vec<String>, String> {
+    if config.get("vpnMode") == Some(&Value::Bool(false)) {
+        return Err("Reqable 未开启 VPN 模式，请重新进行环境配置".into());
+    }
+    let mut warnings = Vec::new();
+    let apps = config.get("androidApps").and_then(Value::as_array);
+    let bypass = config.get("androidAppsBypass").and_then(Value::as_bool);
+    if let (Some(apps), Some(bypass)) = (apps, bypass) {
+        let selected = apps.iter().any(|app| app.as_str() == Some(package));
+        if (bypass && selected) || (!bypass && !apps.is_empty() && !selected) {
+            return Err("Reqable 应用筛选未覆盖所选客户端，请重新进行环境配置".into());
+        }
+        if bypass || apps.len() != 1 || !selected {
+            warnings.push("Reqable 应用筛选可能包含其他应用，已继续抓包".into());
+        }
+    } else {
+        warnings.push("无法确认 Reqable 应用筛选范围，已继续抓包".into());
+    }
+    Ok(warnings)
+}
+
+fn managed_fields_match(desired: &Value, actual: &Value) -> bool {
+    [
+        "androidApps",
+        "androidAppsBypass",
+        "vpnMode",
+        "hostMode",
+        "autoCapture",
+    ]
+    .iter()
+    .all(|key| desired.get(*key) == actual.get(*key))
 }
 
 fn game_config(package: &str, mut config: Value) -> Value {
@@ -255,12 +285,20 @@ mv -f "$stage" "$p"
 echo MASH_CONFIG_WRITTEN"#,
         json = shell_quote(std::str::from_utf8(&bytes).unwrap()),
     );
+    let mut warnings = Vec::new();
+    if super::version::parse(&reqable_version).is_none() {
+        warnings.push(
+            "无法识别 Reqable 版本，已按已验证的配置字段完成配置；启动时将验证控制接口".into(),
+        );
+    }
     let attempt = (|| -> Result<(), String> {
         let result = forward(&root_shell(root, &apply)).map_err(|_| "写入 Reqable 配置失败")?;
         if result.trim_ascii() != b"MASH_CONFIG_WRITTEN" {
             return Err("Reqable 配置写入未返回验证结果".into());
         }
-        super::picture_in_picture::disable(root, &mut forward)?;
+        if let Err(error) = super::picture_in_picture::disable(root, &mut forward) {
+            warnings.push(format!("{error}（不影响本次抓包）"));
+        }
         let launch = forward("am start -W -n com.reqable.android/.MainActivity")
             .map_err(|_| "无法重新打开 Reqable")?;
         if !opened(&launch) {
@@ -269,12 +307,7 @@ echo MASH_CONFIG_WRITTEN"#,
         let actual =
             read_shell_bytes(root, &read, &mut forward).map_err(|_| "无法回读 Reqable 配置")?;
         let actual = parse_config(&actual)?;
-        if !desired
-            .as_object()
-            .unwrap()
-            .iter()
-            .all(|(key, value)| actual.get(key) == Some(value))
-        {
+        if !managed_fields_match(&desired, &actual) {
             return Err("Reqable 配置回读不一致".into());
         }
         Ok(())
@@ -324,6 +357,7 @@ echo MASH_CONFIG_RESTORED"#
         serial,
         package_name: package.into(),
         reqable_version,
+        warnings,
         message: format!(
             "Reqable 已配置为仅抓{} FGO，抓包未开启",
             target::label(server)

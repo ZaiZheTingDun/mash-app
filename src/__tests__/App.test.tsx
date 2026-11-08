@@ -56,7 +56,7 @@ function installAppMock(
   mockInvoke(async (cmd: string) => {
     switch (cmd) {
       case "get_packet_capture_workspace":
-        return { capture: { phase: "idle", serial: null, message: "" }, history: { records: [], defaultRecordId: null } };
+        return { capture: { phase: "idle", serial: null, message: "", warnings: [], retryAfterMs: 1000 }, history: { records: [], defaultRecordId: null } };
       case "setup_packet_capture":
         return { serial: "device", packageName: "com.bilibili.fatego", reqableVersion: "3.3.5", message: "环境配置完成" };
       case "get_runtime_status":
@@ -156,14 +156,14 @@ describe("App active project restore", () => {
     });
     installAppMock("project-1");
     let workspace: PacketCaptureWorkspace = {
-      capture: { phase: "waiting", serial: "device", message: "等待游戏响应" },
+      capture: { phase: "waiting", serial: "device", message: "等待游戏响应", warnings: [], retryAfterMs: 1000 },
       history: { records: [], defaultRecordId: null },
     };
     const appInvoke = vi.mocked(invoke).getMockImplementation()!;
     vi.mocked(invoke).mockImplementation(async (command, args) => {
       if (command === "get_packet_capture_workspace") return workspace;
       if (command === "stop_packet_capture") {
-        workspace = { ...workspace, capture: { phase: "idle", serial: null, message: "抓包已停止" } };
+        workspace = { ...workspace, capture: { phase: "idle", serial: null, message: "抓包已停止", warnings: [], retryAfterMs: 1000 } };
         return;
       }
       return appInvoke(command, args);
@@ -991,7 +991,7 @@ describe("App active project restore", () => {
     mockInvoke(async (cmd: string) => {
       switch (cmd) {
         case "get_packet_capture_workspace":
-        return { capture: { phase: "idle", serial: null, message: "" }, history: { records: [], defaultRecordId: null } };
+        return { capture: { phase: "idle", serial: null, message: "", warnings: [], retryAfterMs: 1000 }, history: { records: [], defaultRecordId: null } };
       case "setup_packet_capture":
         return { serial: "device", packageName: "com.bilibili.fatego", reqableVersion: "3.3.5", message: "环境配置完成" };
       case "get_runtime_status":
@@ -1057,7 +1057,7 @@ describe("App active project restore", () => {
       if (cmd === "save_adb_screenshot") return "/tmp/mash-screenshot.png";
       switch (cmd) {
         case "get_packet_capture_workspace":
-        return { capture: { phase: "idle", serial: null, message: "" }, history: { records: [], defaultRecordId: null } };
+        return { capture: { phase: "idle", serial: null, message: "", warnings: [], retryAfterMs: 1000 }, history: { records: [], defaultRecordId: null } };
       case "setup_packet_capture":
         return { serial: "device", packageName: "com.bilibili.fatego", reqableVersion: "3.3.5", message: "环境配置完成" };
       case "get_runtime_status":

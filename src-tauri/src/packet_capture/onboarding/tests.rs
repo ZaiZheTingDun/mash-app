@@ -214,12 +214,13 @@ fn waits_for_certificate_generation_after_the_dialog_closes_and_times_out_withou
 
 #[test]
 fn reports_dump_failures_without_logging_device_ui_and_keeps_normal_initialization_short() {
+    let elapsed = Cell::new(Duration::ZERO);
     let error = wait_using(
         "",
         &mut |_| Err("private-device-output".into()),
-        &mut |_, _| panic!(),
-        &mut |_| panic!(),
-        &|| Duration::ZERO,
+        &mut |_, _| {},
+        &mut |duration| elapsed.set(elapsed.get() + duration),
+        &|| elapsed.get(),
     )
     .unwrap_err();
     assert!(error.contains("无法读取 Reqable 界面结构"));
@@ -498,4 +499,33 @@ fn a_mode_timeout_after_accepting_the_license_requests_the_remaining_next_step()
     assert_eq!(taps, 2);
     assert!(error.contains("选择独立模式并进入下一步"));
     assert!(!error.contains("许可协议确认"));
+}
+
+#[test]
+fn unreadable_ui_can_use_a_verified_existing_certificate_and_retries_when_missing() {
+    let elapsed = Cell::new(Duration::ZERO);
+    let mut probes = 0;
+    let mut warnings = Vec::new();
+    let result = wait_using(
+        "",
+        &mut |command| {
+            if command.contains("uiautomator dump") {
+                probes += 1;
+                return Err("unsupported UI automation".into());
+            }
+            if probes < 2 {
+                return Err("certificate not ready".into());
+            }
+            Ok(encoded_shell_output(include_bytes!(
+                "../../../tests/fixtures/packet-capture/ca.pem"
+            )))
+        },
+        &mut |_, message| warnings.push(message.to_string()),
+        &mut |duration| elapsed.set(elapsed.get() + duration),
+        &|| elapsed.get(),
+    )
+    .unwrap();
+    assert!(super::super::certificate::parse(&result.1).is_ok());
+    assert_eq!(probes, 2);
+    assert!(warnings.iter().any(|message| message.contains("现有 CA")));
 }

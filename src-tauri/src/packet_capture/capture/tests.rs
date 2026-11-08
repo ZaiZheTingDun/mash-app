@@ -1,5 +1,6 @@
 use super::super::tests::encoded_shell_output;
 use super::*;
+use std::collections::HashSet;
 
 #[test]
 fn channel_capture_uses_the_chosen_package_and_rejects_another_clients_config() {
@@ -17,7 +18,7 @@ fn channel_capture_uses_the_chosen_package_and_rejects_another_clients_config() 
         configured_package: Some("com.bilibili.fatego"),
         ..Default::default()
     });
-    assert!(result.unwrap_err().contains("所选国服 FGO 客户端"));
+    assert!(result.unwrap_err().contains("未覆盖所选客户端"));
     assert!(!requests.contains(&Request::Start));
 }
 
@@ -47,7 +48,7 @@ fn changing_servers_requires_matching_configuration_and_vpn_isolation() {
             configured_server: Some(configured_server),
             ..Default::default()
         });
-        assert!(result.unwrap_err().contains(target::label(server)));
+        assert!(result.unwrap_err().contains("未覆盖所选客户端"));
         assert!(!requests.contains(&Request::Start));
     }
     let (result, _, requests) = fake(Scenario {
@@ -55,14 +56,14 @@ fn changing_servers_requires_matching_configuration_and_vpn_isolation() {
         missing_game: true,
         ..Default::default()
     });
-    assert!(result.is_err());
-    assert!(!requests.contains(&Request::Start));
+    assert!(result.is_ok());
+    assert!(requests.contains(&Request::Start));
     let (result, _, requests) = fake(Scenario {
         server: Some(Server::Jp),
-        wide_vpn: true,
+        excluded_vpn: true,
         ..Default::default()
     });
-    assert!(result.unwrap_err().contains("无法确认仅抓日服"));
+    assert!(result.unwrap_err().contains("未覆盖所选客户端"));
     assert!(requests.contains(&Request::Stop));
 }
 
@@ -120,6 +121,8 @@ struct Scenario {
     unavailable: bool,
     api_error: Option<&'static str>,
     wide_vpn: bool,
+    excluded_vpn: bool,
+    unknown_vpn: bool,
     post_failed: bool,
     status_disconnect: bool,
     stop_failed: bool,
@@ -127,6 +130,10 @@ struct Scenario {
     cancel_after_start: bool,
     cancel_during_baseline: bool,
     cancel_while_waiting: bool,
+    game_launch_error: bool,
+    game_launch_unconfirmed: bool,
+    cancel_before_game_launch: bool,
+    cancel_during_game_launch: bool,
 }
 
 fn fake(s: Scenario) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Request>) {
@@ -137,6 +144,14 @@ fn fake_with_cancellation(
     s: Scenario,
     cancellation: &OperationCancellation,
 ) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Request>) {
+    fake_with_debug(s, cancellation, &mut |_| {})
+}
+
+fn fake_with_debug(
+    s: Scenario,
+    cancellation: &OperationCancellation,
+    debug: &mut dyn FnMut(&str),
+) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Request>) {
     let server = s.server.unwrap_or(Server::Cn);
     let package = s.package.unwrap_or(target::package(server));
     let mut commands = Vec::new();
@@ -146,6 +161,7 @@ fn fake_with_cancellation(
     let mut disconnected = false;
     let mut pip_disabled = !s.pip_allowed;
     let prepared = std::cell::Cell::new(false);
+    let active_confirmed = std::cell::Cell::new(false);
     let result = start_controlled_using(
         server,
         package,
@@ -158,9 +174,11 @@ fn fake_with_cancellation(
             let command = args[2..].join(" ");
             commands.push(command.clone());
             match command.as_str() {
-                "shell dumpsys package com.reqable.android" => {
-                    Ok(format!("versionName={}\n", s.version.unwrap_or("3.3.5")).into_bytes())
-                }
+                "shell dumpsys package com.reqable.android" => Ok(format!(
+                    "userId=10082\nversionName={}\n",
+                    s.version.unwrap_or("3.3.5")
+                )
+                .into_bytes()),
                 _ if command == format!("shell dumpsys package {package}") => {
                     Ok(if s.missing_game {
                         Vec::new()
@@ -173,16 +191,48 @@ fn fake_with_cancellation(
                 "shell am start -W -n com.reqable.android/.MainActivity" => {
                     Ok(b"Status: ok\n".to_vec())
                 }
+                _ if command == format!("shell cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {package}") => {
+                    assert!(prepared.get());
+                    assert!(active_confirmed.get());
+                    Ok(format!("priority=0 preferredOrder=0 match=0x108000\n{package}/.Entry\n").into_bytes())
+                }
+                _ if command == game_launch_command(package) => {
+                    assert!(prepared.get(), "capture baseline must precede game launch");
+                    assert!(
+                        active_confirmed.get(),
+                        "capture must be active before game launch"
+                    );
+                    if s.cancel_during_game_launch {
+                        cancellation.cancel();
+                    }
+                    if s.game_launch_error {
+                        Err("device temporarily offline".into())
+                    } else if s.game_launch_unconfirmed {
+                        Ok(b"Error: Activity not started\n".to_vec())
+                    } else {
+                        Ok(b"Status: ok\n".to_vec())
+                    }
+                }
                 "forward tcp:0 tcp:9016" => Ok(b"41001\n".to_vec()),
                 "forward --remove tcp:41001"
                 | "forward tcp:41001 tcp:9016"
                 | "wait-for-device"
                 | "shell am force-stop com.reqable.android" => Ok(Vec::new()),
-                "shell dumpsys connectivity" => Ok(vpn(if s.wide_vpn {
-                    "0-99999"
-                } else {
-                    "10081-10081, 20081-20081"
-                })),
+                "shell dumpsys connectivity" if s.unknown_vpn => {
+                    Ok(b"unknown dump format".to_vec())
+                }
+                "shell dumpsys connectivity" => {
+                    if s.cancel_before_game_launch {
+                        cancellation.cancel();
+                    }
+                    Ok(vpn(if s.excluded_vpn {
+                        "10080"
+                    } else if s.wide_vpn {
+                        "0-99999"
+                    } else {
+                        "10081-10081, 20081-20081"
+                    }))
+                }
                 _ if command
                     .contains("cmd appops get --user 0 com.reqable.android PICTURE_IN_PICTURE") =>
                 {
@@ -253,9 +303,12 @@ fn fake_with_cancellation(
                         disconnected = true;
                         return Err("connection reset".into());
                     }
-                    Ok(Some(
-                        (started && !s.never_active && !stopped) || (s.stop_failed && stopped),
-                    ))
+                    let active =
+                        (started && !s.never_active && !stopped) || (s.stop_failed && stopped);
+                    if active {
+                        active_confirmed.set(true);
+                    }
+                    Ok(Some(active))
                 }
                 Request::Start => {
                     if s.cancel_after_start {
@@ -286,10 +339,11 @@ fn fake_with_cancellation(
                 return Err("baseline unavailable".into());
             }
             prepared.set(true);
-            Ok(HashSet::from(["previous-response".into()]))
+            Ok(HashSet::from(["previous-response".into()]).into())
         },
         &mut || {},
         cancellation,
+        debug,
     );
     (result, commands, requests)
 }
@@ -438,7 +492,7 @@ fn start_disables_system_pip_before_launch_and_accepts_legacy_config_without_rec
 }
 
 #[test]
-fn failed_or_unconfirmed_system_pip_change_does_not_launch_or_start_capture() {
+fn failed_or_unconfirmed_system_pip_change_warns_but_allows_capture() {
     for scenario in [
         Scenario {
             pip_read_failure: true,
@@ -454,12 +508,13 @@ fn failed_or_unconfirmed_system_pip_change_does_not_launch_or_start_capture() {
             ..Default::default()
         },
     ] {
-        let (result, commands, requests) = fake(scenario);
-        assert!(result.unwrap_err().contains("系统画中画权限"));
-        assert!(requests.is_empty());
-        assert!(!commands
+        let (result, _, requests) = fake(scenario);
+        assert!(result
+            .unwrap()
+            .warnings
             .iter()
-            .any(|c| c.starts_with("forward") || c.contains("am start -W")));
+            .any(|warning| warning.contains("系统画中画权限")));
+        assert!(requests.contains(&Request::Start));
     }
 }
 
@@ -475,7 +530,7 @@ fn post_acknowledgement_is_not_success_and_failed_or_uncertain_starts_are_cancel
             ..Default::default()
         },
         Scenario {
-            wide_vpn: true,
+            excluded_vpn: true,
             ..Default::default()
         },
     ] {
@@ -489,7 +544,7 @@ fn post_acknowledgement_is_not_success_and_failed_or_uncertain_starts_are_cancel
     }
     let (result, commands, _) = fake(Scenario {
         already_active: true,
-        wide_vpn: true,
+        excluded_vpn: true,
         stop_failed: true,
         ..Default::default()
     });
@@ -546,6 +601,8 @@ fn start_on_authorized_device() {
         &crate::device_operation::OperationCancellation::default(),
         &ApiKeyStore::new(tempfile::tempdir().unwrap().path().join("api-keys.json")),
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy/scrcpy-server.jar"),
+        &credentials::AuthorizationStore::default(),
+        &mut |_| {},
         &mut |_| {},
     )
     .unwrap();
@@ -580,5 +637,217 @@ fn stopping_startup_interrupts_api_waits_and_baseline_and_prevents_late_confirma
         if posted {
             assert_eq!(requests.last(), Some(&Request::Start));
         }
+    }
+}
+
+#[test]
+fn wider_or_unreadable_vpn_ranges_warn_without_stopping_capture() {
+    for scenario in [
+        Scenario {
+            wide_vpn: true,
+            ..Default::default()
+        },
+        Scenario {
+            unknown_vpn: true,
+            ..Default::default()
+        },
+        Scenario {
+            missing_game: true,
+            ..Default::default()
+        },
+    ] {
+        let (result, _, requests) = fake(scenario);
+        assert!(!result.unwrap().warnings.is_empty());
+        assert!(!requests.contains(&Request::Stop));
+    }
+    assert_eq!(vpn_scope(&vpn("10080"), 10081, None), VpnScope::Unknown);
+    assert_eq!(
+        vpn_scope(&vpn("10080"), 10081, Some(99999)),
+        VpnScope::Unknown
+    );
+}
+
+fn game_launch_command(package: &str) -> String {
+    format!("shell am start -W --user 0 -n '{package}/.Entry'")
+}
+
+#[test]
+fn active_capture_opens_the_pinned_cn_channel_or_jp_client() {
+    for (server, package) in [
+        (Server::Cn, "com.bilibili.fatego"),
+        (Server::Cn, "com.bilibili.fgo.mi"),
+        (Server::Jp, "com.aniplex.fategrandorder"),
+    ] {
+        for already_active in [false, true] {
+            let (result, commands, _) = fake(Scenario {
+                server: Some(server),
+                package: Some(package),
+                already_active,
+                ..Default::default()
+            });
+            assert!(result.is_ok());
+            let launch = game_launch_command(package);
+            assert_eq!(
+                commands
+                    .iter()
+                    .filter(|command| *command == &launch)
+                    .count(),
+                1
+            );
+            let vpn = commands
+                .iter()
+                .position(|command| command == "shell dumpsys connectivity")
+                .unwrap();
+            let game = commands
+                .iter()
+                .position(|command| command == &launch)
+                .unwrap();
+            assert!(vpn < game);
+        }
+    }
+}
+
+#[test]
+fn game_launch_failure_is_kept_for_the_waiting_message_and_preserves_capture() {
+    for scenario in [
+        Scenario {
+            game_launch_error: true,
+            ..Default::default()
+        },
+        Scenario {
+            game_launch_unconfirmed: true,
+            ..Default::default()
+        },
+    ] {
+        let (result, _, requests) = fake(scenario);
+        let result = result.unwrap();
+        assert!(result.game_launch_error().is_some());
+        assert!(!result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("自动打开游戏失败")));
+        assert!(!requests.contains(&Request::Stop));
+        let store = response::ResponseStore::default();
+        result.begin_response_watch(&store);
+        assert!(store.ensure_client_selection_allowed().is_err());
+    }
+}
+
+#[test]
+fn unsuccessful_or_cancelled_starts_do_not_open_the_game() {
+    for scenario in [
+        Scenario {
+            never_active: true,
+            ..Default::default()
+        },
+        Scenario {
+            auth_failure: true,
+            ..Default::default()
+        },
+        Scenario {
+            excluded_vpn: true,
+            ..Default::default()
+        },
+        Scenario {
+            cancel_before_game_launch: true,
+            ..Default::default()
+        },
+    ] {
+        let (result, commands, _) = fake(scenario);
+        assert!(result.is_err());
+        assert!(!commands
+            .iter()
+            .any(|command| command == &game_launch_command(target::package(Server::Cn))));
+    }
+}
+
+#[test]
+fn cancelling_during_game_launch_does_not_start_response_watching() {
+    let (result, _, _) = fake(Scenario {
+        cancel_during_game_launch: true,
+        ..Default::default()
+    });
+    assert_eq!(result.unwrap_err(), "抓包启动已停止");
+}
+
+#[test]
+fn launcher_resolution_uses_the_selected_component_and_retains_failure_details() {
+    let package = "com.bilibili.fatego";
+    let mut commands = Vec::new();
+    launch_game(
+        package,
+        &mut |command| {
+            commands.push(command.to_string());
+            if command.starts_with("cmd package resolve-activity") {
+                Ok(
+                b"priority=0 preferredOrder=0 match=0x108000\ncom.bilibili.fatego/.EmptyClass\n"
+                    .to_vec(),
+            )
+            } else {
+                assert_eq!(
+                    command,
+                    "am start -W --user 0 -n 'com.bilibili.fatego/.EmptyClass'"
+                );
+                Ok(
+                b"Starting: Intent { cmp=com.bilibili.fatego/.EmptyClass }\nStatus: ok\nComplete\n"
+                    .to_vec(),
+            )
+            }
+        },
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(commands.len(), 2);
+    for resolved in ["No activity found", "other.app/.Entry"] {
+        let mut calls = 0;
+        let error = launch_game(
+            package,
+            &mut |_| {
+                calls += 1;
+                Ok(resolved.as_bytes().to_vec())
+            },
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert_eq!(calls, 1);
+        assert!(error.contains(resolved));
+    }
+    let error = launch_game(
+        package,
+        &mut |command| {
+            Ok(if command.starts_with("cmd package resolve-activity") {
+                b"com.bilibili.fatego/.EmptyClass\n".to_vec()
+            } else {
+                b"Error: Activity not started, unable to resolve Intent".to_vec()
+            })
+        },
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert!(error.contains("unable to resolve Intent"));
+}
+
+#[test]
+fn startup_trace_identifies_the_device_baseline_vpn_and_game_stages() {
+    let mut logs = Vec::new();
+    let (result, _, _) = fake_with_debug(
+        Scenario::default(),
+        &OperationCancellation::default(),
+        &mut |message| logs.push(message.to_string()),
+    );
+    assert!(result.is_ok());
+    let text = logs.join("\n");
+    for expected in [
+        "开始准备国服抓包",
+        "已绑定抓包设备：device",
+        "初始状态已确认",
+        "旧记录识别完成",
+        "VPN 范围检查结果",
+        "开始解析游戏启动 Activity",
+        "已解析游戏启动 Activity",
+        "自动启动游戏完成",
+        "抓包启动流程结束",
+    ] {
+        assert!(text.contains(expected), "missing stage: {expected}");
     }
 }

@@ -1,10 +1,15 @@
+use super::response::Baseline;
 use super::target;
 use super::{
-    client, configuration, credentials, response, run_adb, select_serial, AdbCommand, ApiKeyStore,
+    client, configuration, credentials, response, run_adb, select_serial, shell_quote, AdbCommand,
+    ApiKeyStore,
 };
 use crate::device_operation::OperationCancellation;
 use crate::Server;
-use std::{collections::HashSet, path::Path, time::Duration};
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,19 +19,35 @@ pub(crate) struct CaptureStarted {
     server: Server,
     already_active: bool,
     message: String,
+    warnings: Vec<String>,
     #[serde(skip)]
-    pub(super) baseline: HashSet<String>,
+    pub(super) baseline: Baseline,
     #[serde(skip)]
     api_key: Option<String>,
+    #[serde(skip)]
+    game_launch_error: Option<String>,
 }
 
 impl CaptureStarted {
+    pub(crate) fn game_launch_error(&self) -> Option<&str> {
+        self.game_launch_error.as_deref()
+    }
+
     pub(crate) fn begin_response_watch(&self, store: &response::ResponseStore) {
+        let mut baseline = self.baseline.clone();
+        baseline.warnings.extend(
+            self.warnings
+                .iter()
+                .filter(|warning| !baseline.warnings.contains(warning))
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
         store.begin_authenticated(
             self.server,
             self.serial.clone(),
-            self.baseline.clone(),
+            baseline,
             self.api_key.clone(),
+            self.game_launch_error.is_some(),
         );
     }
 }
@@ -61,17 +82,33 @@ pub(crate) fn start_capture(
     cancellation: &OperationCancellation,
     keys: &ApiKeyStore,
     jar_path: &Path,
+    authorization: &credentials::AuthorizationStore,
     progress: &mut dyn FnMut(&str),
+    debug: &mut dyn FnMut(&str),
 ) -> Result<CaptureStarted, String> {
     let client = std::cell::RefCell::new(client::Client::new()?);
     let api_key = std::cell::RefCell::new(None);
+    let progress = std::cell::RefCell::new(progress);
+    let debug = std::cell::RefCell::new(debug);
     let mut started = start_controlled_using(
         server,
         package,
         selected,
         &mut |args| run_adb(adb_path, args),
         &mut |serial, port, version| {
-            if credentials::needs_api_key(version) {
+            debug.borrow_mut()("开始验证 Reqable 控制接口授权");
+            let began = Instant::now();
+            let requires_auth = if super::version::parse(version).is_none() {
+                let probe = credentials::probe_access(port, cancellation);
+                match probe {
+                    Ok(()) => false,
+                    Err(error) if error == client::AUTHENTICATION_FAILED => true,
+                    Err(error) => return Err(error),
+                }
+            } else {
+                credentials::needs_api_key(version)
+            };
+            if requires_auth {
                 let key = credentials::authorize(
                     keys,
                     adb_path,
@@ -79,11 +116,17 @@ pub(crate) fn start_capture(
                     serial,
                     port,
                     cancellation,
-                    progress,
+                    authorization,
+                    &mut |message| progress.borrow_mut()(message),
                 )?;
                 *client.borrow_mut() = client::Client::with_api_key(Some(&key))?;
                 *api_key.borrow_mut() = Some(key);
             }
+            debug.borrow_mut()(&format!(
+                "控制接口授权完成，使用 API key={}，耗时 {} ms",
+                requires_auth,
+                began.elapsed().as_millis()
+            ));
             Ok(())
         },
         &mut |port, request| {
@@ -92,16 +135,39 @@ pub(crate) fn start_capture(
                 Request::Start => "on",
                 Request::Stop => "off",
             };
-            let bytes = client.borrow().request(port, route, None, 4096)?;
-            if request == Request::Status {
-                Ok(Some(decode_status(&bytes)?))
-            } else {
-                Ok(None)
-            }
+            debug.borrow_mut()(&format!("Reqable 控制请求开始：{route}"));
+            let began = Instant::now();
+            let result = client
+                .borrow()
+                .request(port, route, None, 4096)
+                .and_then(|bytes| {
+                    if request == Request::Status {
+                        decode_status(&bytes).map(Some)
+                    } else {
+                        Ok(None)
+                    }
+                });
+            debug.borrow_mut()(&format!(
+                "Reqable 控制请求完成：{route}，成功={}，active={:?}，耗时 {} ms",
+                result.is_ok(),
+                result.as_ref().ok().copied().flatten(),
+                began.elapsed().as_millis()
+            ));
+            result
         },
-        &mut |port| response::baseline(server, &client.borrow(), port),
+        &mut |port| {
+            response::baseline_controlled(
+                server,
+                &client.borrow(),
+                port,
+                &mut || cancellation.check(),
+                &mut |message| progress.borrow_mut()(message),
+                &mut |message| debug.borrow_mut()(message),
+            )
+        },
         &mut || cancellation.wait(Duration::from_millis(250)),
         cancellation,
+        &mut |message| debug.borrow_mut()(message),
     )?;
     started.api_key = api_key.into_inner();
     Ok(started)
@@ -124,38 +190,111 @@ fn package_uid(info: &[u8]) -> Result<u32, String> {
         .ok_or_else(|| "未找到所选服务器的 FGO，请先安装游戏".into())
 }
 
-// Android 13 also assigns the application's SDK sandbox UID (app UID + 10000).
-// Reject broad ranges or unknown dump formats rather than claiming app isolation.
-fn vpn_only_game(output: &[u8], uid: u32) -> bool {
+#[derive(Debug, PartialEq, Eq)]
+enum VpnScope {
+    OnlyGame,
+    Wider,
+    ExcludesGame,
+    Unknown,
+}
+
+fn vpn_scope(output: &[u8], uid: u32, owner: Option<u32>) -> VpnScope {
     let text = String::from_utf8_lossy(output);
-    let mut vpns = text
+    let candidates: Vec<_> = text
         .lines()
-        .filter(|line| line.contains("ni{VPN CONNECTED"));
-    let Some(line) = vpns.next() else {
-        return false;
-    };
-    if vpns.next().is_some() {
-        return false;
+        .filter(|line| {
+            line.contains("VPN") && line.contains("CONNECTED") && !line.contains("DISCONNECTED")
+        })
+        .filter(|line| {
+            owner.is_none_or(|owner| {
+                line.split_once("OwnerUid:")
+                    .and_then(|(_, rest)| rest.split_whitespace().next())
+                    .and_then(|value| value.parse::<u32>().ok())
+                    == Some(owner)
+            })
+        })
+        .collect();
+    if candidates.len() != 1 {
+        return VpnScope::Unknown;
     }
-    let Some(ranges) = line
+    let Some(ranges) = candidates[0]
         .split_once("Uids: <{")
         .and_then(|(_, rest)| rest.split_once("}>"))
     else {
-        return false;
+        return VpnScope::Unknown;
     };
     let mut includes_game = false;
+    let mut wider = false;
     for range in ranges.0.split(',') {
         let range = range.trim();
         let (start, end) = range.split_once('-').unwrap_or((range, range));
         let (Ok(start), Ok(end)) = (start.parse::<u32>(), end.parse::<u32>()) else {
-            return false;
+            return VpnScope::Unknown;
         };
-        if start != end || (start != uid && start != uid + 10000) {
-            return false;
+        if start > end {
+            return VpnScope::Unknown;
         }
-        includes_game |= start == uid;
+        includes_game |= (start..=end).contains(&uid);
+        wider |= start != end || (start != uid && Some(start) != uid.checked_add(10000));
     }
-    includes_game
+    if !includes_game {
+        // Do not reject based on another VPN's dump or unverified ownership.
+        if owner.is_some() {
+            VpnScope::ExcludesGame
+        } else {
+            VpnScope::Unknown
+        }
+    } else if wider {
+        VpnScope::Wider
+    } else {
+        VpnScope::OnlyGame
+    }
+}
+
+#[cfg(test)]
+fn vpn_only_game(output: &[u8], uid: u32) -> bool {
+    vpn_scope(output, uid, Some(10082)) == VpnScope::OnlyGame
+}
+
+fn launch_game(
+    package: &str,
+    shell: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
+    debug: &mut dyn FnMut(&str),
+) -> Result<(), String> {
+    debug(&format!("开始解析游戏启动 Activity：{package}"));
+    let began = Instant::now();
+    let resolved = shell(&format!(
+        "cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {package}"
+    ))?;
+    let resolved = String::from_utf8_lossy(&resolved);
+    let component = resolved
+        .lines()
+        .map(str::trim)
+        .find(|line| {
+            line.split_once('/')
+                .is_some_and(|(owner, activity)| owner == package && !activity.is_empty())
+        })
+        .ok_or_else(|| format!("无法解析所选客户端的启动 Activity：{}", resolved.trim()))?;
+    debug(&format!(
+        "已解析游戏启动 Activity：{component}，耗时 {} ms",
+        began.elapsed().as_millis()
+    ));
+    debug("开始打开游戏 Activity");
+    let began = Instant::now();
+    let output = shell(&format!(
+        "am start -W --user 0 -n {}",
+        shell_quote(component)
+    ))?;
+    let output = String::from_utf8_lossy(&output);
+    debug(&format!(
+        "游戏 Activity 启动命令返回，耗时 {} ms",
+        began.elapsed().as_millis()
+    ));
+    if output.lines().any(|line| line.trim() == "Status: ok") && !output.contains("Error:") {
+        Ok(())
+    } else {
+        Err(format!("启动游戏 Activity 失败：{}", output.trim()))
+    }
 }
 
 fn start_controlled_using(
@@ -165,10 +304,15 @@ fn start_controlled_using(
     run: &mut AdbCommand<'_>,
     authorize: &mut dyn FnMut(&str, u16, &str) -> Result<(), String>,
     api: &mut Api<'_>,
-    prepare: &mut dyn FnMut(u16) -> Result<HashSet<String>, String>,
+    prepare: &mut dyn FnMut(u16) -> Result<Baseline, String>,
     pause: &mut dyn FnMut(),
     cancellation: &OperationCancellation,
+    debug: &mut dyn FnMut(&str),
 ) -> Result<CaptureStarted, String> {
+    debug(&format!(
+        "开始准备{}抓包，客户端={package}",
+        target::label(server)
+    ));
     if !target::matches_server(server, package) {
         return Err("客户端包名与服务器不匹配".into());
     }
@@ -180,15 +324,32 @@ fn start_controlled_using(
     let devices = forward(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
     cancellation.bind_device(&serial)?;
-    let version = configuration::prepare_capture_configuration(server, package, &mut |command| {
-        forward(&["-s", &serial, "shell", command])
-    })?;
-    let uid = package_uid(&forward(&[
+    debug(&format!("已绑定抓包设备：{serial}，开始检查 Reqable 配置"));
+    let (version, mut warnings) =
+        configuration::prepare_capture_configuration(server, package, &mut |command| {
+            forward(&["-s", &serial, "shell", command])
+        })?;
+    debug(&format!(
+        "Reqable 配置检查完成，版本={version}，提醒数={}",
+        warnings.len()
+    ));
+    let uid = forward(&[
         "-s",
         &serial,
         "shell",
         &format!("dumpsys package {package}"),
-    ])?)?;
+    ])
+    .ok()
+    .and_then(|bytes| package_uid(&bytes).ok());
+    let owner = forward(&[
+        "-s",
+        &serial,
+        "shell",
+        "dumpsys package com.reqable.android",
+    ])
+    .ok()
+    .and_then(|bytes| package_uid(&bytes).ok());
+    cancellation.check()?;
     let launch = forward(&[
         "-s",
         &serial,
@@ -209,6 +370,7 @@ fn start_controlled_using(
         .filter(|port| *port != 0)
         .ok_or("无法建立 Reqable 本机控制连接")?;
     let local = format!("tcp:{port}");
+    debug(&format!("Reqable 已打开，控制端口转发已建立：{local}"));
     let mut may_be_active = false;
     let mut requested_start = false;
     let result = (|| {
@@ -232,8 +394,14 @@ fn start_controlled_using(
             Some(error) => format!("Reqable 控制接口尚未就绪：{error}"),
             None => "Reqable 控制接口尚未就绪，请稍后重试".into(),
         })?;
+        debug(&format!("Reqable 初始状态已确认，active={already_active}"));
         cancellation.check()?;
         let baseline = prepare(port)?;
+        debug(&format!(
+            "旧记录识别完成，基线 UID 数={}，忽略 ID 数={}",
+            baseline.uids.len(),
+            baseline.ignored_ids.len()
+        ));
         cancellation.check()?;
         may_be_active = true;
         if !already_active {
@@ -247,20 +415,55 @@ fn start_controlled_using(
                 Ok(Some(true)) => {
                     // VPN toggling may briefly interrupt this emulator's ADB.
                     let _ = forward(&["-s", &serial, "wait-for-device"]);
-                    let vpn = forward(&["-s", &serial, "shell", "dumpsys connectivity"])?;
-                    cancellation.check()?;
-                    if !vpn_only_game(&vpn, uid) {
-                        return Err(format!(
-                            "无法确认仅抓{}，请重新进行环境配置后重试",
-                            target::label(server)
-                        ));
+                    pause();
+                    let mut scope = VpnScope::Unknown;
+                    if let Some(uid) = uid {
+                        for _ in 0..4 {
+                            cancellation.check()?;
+                            scope = forward(&["-s", &serial, "shell", "dumpsys connectivity"])
+                                .map(|bytes| vpn_scope(&bytes, uid, owner))
+                                .unwrap_or(VpnScope::Unknown);
+                            if matches!(scope, VpnScope::OnlyGame | VpnScope::Wider) {
+                                break;
+                            }
+                            pause();
+                        }
                     }
+                    cancellation.check()?;
+                    debug(&format!("抓包 active 已确认，VPN 范围检查结果={scope:?}"));
+                    match scope {
+                        VpnScope::ExcludesGame => {
+                            return Err(
+                                "Reqable VPN 未覆盖所选客户端，请重新进行环境配置后重试".into()
+                            )
+                        }
+                        VpnScope::Wider => warnings.push("VPN 范围包含其他应用，已继续抓包".into()),
+                        VpnScope::Unknown => {
+                            warnings.push("无法确认 VPN 的应用范围，已继续抓包".into())
+                        }
+                        VpnScope::OnlyGame => {}
+                    }
+                    warnings.extend(baseline.warnings.iter().cloned());
+                    // Launch the pinned client's launcher only after capture is active.
+                    let game_launch_error = launch_game(
+                        package,
+                        &mut |command| forward(&["-s", &serial, "shell", command]),
+                        debug,
+                    )
+                    .err();
+                    debug(&format!(
+                        "自动启动游戏完成，成功={}",
+                        game_launch_error.is_none()
+                    ));
+                    cancellation.check()?;
                     return Ok(CaptureStarted {
                         serial: serial.clone(),
                         server,
                         already_active,
                         baseline,
                         api_key: None,
+                        game_launch_error,
+                        warnings,
                         message: if already_active {
                             format!("{}抓包已在运行", target::label(server))
                         } else {
@@ -329,6 +532,11 @@ fn start_controlled_using(
     } else {
         result
     };
+    debug(&format!(
+        "抓包启动流程结束，成功={}，已取消={}",
+        result.is_ok(),
+        cancellation.is_cancelled()
+    ));
     // Only remove the ephemeral forwarding created by this invocation.
     let _ = run(&["-s", &serial, "wait-for-device"]);
     let _ = run(&["-s", &serial, "forward", "--remove", &local]);

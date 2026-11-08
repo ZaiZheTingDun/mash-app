@@ -82,8 +82,16 @@ fn original() -> Value {
 }
 
 #[test]
-fn version_requirement_compares_numbers_and_rejects_old_or_unreadable_versions() {
-    for version in ["3.3.5", "3.3.9", "3.3.10", "3.4.0", "4.0.0"] {
+fn version_requirement_compares_numbers_and_leaves_unknown_versions_for_capability_checks() {
+    for version in [
+        "3.3.5",
+        "3.3.9",
+        "3.3.9.1",
+        "3.3.9-beta.1",
+        "3.3.10",
+        "3.4.0",
+        "4.0.0",
+    ] {
         assert_eq!(
             reqable_version(format!("  versionName={version}\r\n").as_bytes()).unwrap(),
             version
@@ -103,13 +111,21 @@ fn version_requirement_compares_numbers_and_rejects_old_or_unreadable_versions()
         "versionName=3.3.9.1",
         "versionName=unknown",
     ] {
-        assert!(reqable_version(info.as_bytes()).is_err());
+        assert!(reqable_version(info.as_bytes()).is_ok());
     }
 }
 
 #[test]
 fn newer_versions_can_be_configured_and_report_the_installed_version() {
-    for version in ["3.3.5", "3.3.9", "3.3.10", "3.4.0", "4.0.0"] {
+    for version in [
+        "3.3.5",
+        "3.3.9",
+        "3.3.9.1",
+        "3.3.9-beta.1",
+        "3.3.10",
+        "3.4.0",
+        "4.0.0",
+    ] {
         let (result, _) = fake(Scenario {
             version: Some(version),
             ..Default::default()
@@ -323,7 +339,7 @@ fn fake_with_logs(
                 };
             }
             if scenario.invalid_config {
-                return Ok(encoded_shell_output(b"{}"));
+                return Ok(encoded_shell_output(b"[]"));
             }
             let value = if reads > 2 && written && !scenario.mismatch {
                 game_config(package, original())
@@ -516,14 +532,6 @@ fn failed_write_restart_or_readback_rolls_back_and_reports_uncertain_recovery() 
             mismatch: true,
             ..Default::default()
         },
-        Scenario {
-            pip_write_failure: true,
-            ..Default::default()
-        },
-        Scenario {
-            pip_unconfirmed: true,
-            ..Default::default()
-        },
     ] {
         let (result, commands) = fake(scenario);
         assert!(result.unwrap_err().contains("已恢复原配置"));
@@ -654,11 +662,6 @@ fn setup_logs_each_stage_and_reports_failures_without_claiming_success() {
             write_failure: true,
             ..Default::default()
         },
-        Scenario {
-            setup: true,
-            pip_unconfirmed: true,
-            ..Default::default()
-        },
     ] {
         let (result, _, logs) = fake_with_logs(scenario);
         let error = result.unwrap_err();
@@ -761,4 +764,57 @@ fn stopping_apex_setup_preserves_the_certificate_rollback_warning() {
     assert!(!logs
         .iter()
         .any(|(_, message)| message.starts_with("环境配置完成")));
+}
+
+#[test]
+fn pip_failure_is_an_advisory_and_does_not_roll_back_the_capture_configuration() {
+    for scenario in [
+        Scenario {
+            pip_write_failure: true,
+            ..Default::default()
+        },
+        Scenario {
+            pip_unconfirmed: true,
+            ..Default::default()
+        },
+    ] {
+        let (result, commands) = fake(scenario);
+        let result = result.unwrap();
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("画中画")));
+        assert!(!commands
+            .iter()
+            .any(|command| command.contains("MASH_CONFIG_RESTORED")));
+    }
+}
+
+#[test]
+fn missing_managed_fields_can_be_filled_and_unrelated_readback_changes_are_allowed() {
+    let partial = parse_config(br#"{"proxyPort":9123}"#).unwrap();
+    let desired = game_config(PACKAGE, partial);
+    assert_eq!(desired["proxyPort"], 9123);
+    let mut actual = desired.clone();
+    actual["proxyPort"] = serde_json::json!(9000);
+    assert!(managed_fields_match(&desired, &actual));
+    actual["vpnMode"] = serde_json::json!(false);
+    assert!(!managed_fields_match(&desired, &actual));
+}
+
+#[test]
+fn start_accepts_capture_preferences_but_rejects_a_filter_that_excludes_the_game() {
+    let mut config = game_config(PACKAGE, serde_json::json!({}));
+    config["autoCapture"] = true.into();
+    config["hostMode"] = true.into();
+    assert!(capture_warnings(PACKAGE, &config).unwrap().is_empty());
+    config["androidApps"] = serde_json::json!([PACKAGE, "other.app"]);
+    assert!(!capture_warnings(PACKAGE, &config).unwrap().is_empty());
+    config["androidAppsBypass"] = true.into();
+    assert!(capture_warnings(PACKAGE, &config).is_err());
+    config["androidApps"] = serde_json::json!(["other.app"]);
+    assert!(capture_warnings(PACKAGE, &config).is_ok());
+    config["androidAppsBypass"] = false.into();
+    assert!(capture_warnings(PACKAGE, &config).is_err());
+    assert!(capture_warnings(PACKAGE, &serde_json::json!({})).is_ok());
 }

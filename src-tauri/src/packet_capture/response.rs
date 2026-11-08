@@ -10,11 +10,86 @@ use std::{
     io::Read,
     path::Path,
     sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 const MAX_BODY: usize = 16 * 1024 * 1024;
 const MAX_RECORD: usize = 24 * 1024 * 1024;
-const MAX_IDS: usize = 128;
+// Retain the existing bounded filter payload, rather than an arbitrary record count.
+const MAX_ID_BYTES: usize = 128 * 1024;
+
+#[derive(Clone, Default, Debug)]
+pub(super) struct Baseline {
+    pub(super) uids: HashSet<String>,
+    pub(super) ignored_ids: HashSet<u64>,
+    pub(super) warnings: Vec<String>,
+}
+
+impl Baseline {
+    pub(super) fn contains(&self, uid: &str) -> bool {
+        self.uids.contains(uid)
+    }
+    fn warn(&mut self, warning: String) {
+        if !self.warnings.contains(&warning) {
+            self.warnings.push(warning);
+        }
+    }
+}
+
+impl From<HashSet<String>> for Baseline {
+    fn from(uids: HashSet<String>) -> Self {
+        Self {
+            uids,
+            ..Default::default()
+        }
+    }
+}
+
+struct ScanOutcome {
+    response: Option<LoginResponse>,
+    baseline: Baseline,
+}
+
+#[derive(Debug)]
+enum ScanError {
+    Retryable(String),
+    Fatal(String),
+    InvalidRecord(String),
+}
+
+impl ScanError {
+    fn is_fatal(&self) -> bool {
+        matches!(self, Self::Fatal(_))
+    }
+}
+
+impl std::fmt::Display for ScanError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Retryable(message) | Self::Fatal(message) | Self::InvalidRecord(message) => {
+                f.write_str(message)
+            }
+        }
+    }
+}
+
+// ADB forwarding and client creation failures remain retryable.
+impl From<String> for ScanError {
+    fn from(message: String) -> Self {
+        Self::Retryable(message)
+    }
+}
+
+impl From<client::Error> for ScanError {
+    fn from(error: client::Error) -> Self {
+        match error {
+            client::Error::AuthenticationFailed
+            | client::Error::ApiDisabled
+            | client::Error::ResponseTooLarge => Self::Fatal(error.to_string()),
+            _ => Self::Retryable(error.to_string()),
+        }
+    }
+}
 
 #[derive(Clone, Default, Serialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +108,8 @@ pub(crate) struct ResponseState {
     pub(super) serial: Option<String>,
     pub(super) message: String,
     pub(super) response: Option<LoginResponse>,
+    pub(super) warnings: Vec<String>,
+    pub(super) retry_after_ms: u64,
 }
 
 #[derive(Serialize)]
@@ -41,6 +118,8 @@ pub(crate) struct ResponseStatus {
     phase: ResponsePhase,
     serial: Option<String>,
     message: String,
+    warnings: Vec<String>,
+    retry_after_ms: u64,
 }
 
 impl ResponseState {
@@ -49,6 +128,8 @@ impl ResponseState {
             phase: self.phase.clone(),
             serial: self.serial.clone(),
             message: self.message.clone(),
+            warnings: self.warnings.clone(),
+            retry_after_ms: self.retry_after_ms,
         }
     }
 }
@@ -87,7 +168,10 @@ impl LoginResponse {
 struct Inner {
     generation: u64,
     server: Server,
-    baseline: HashSet<String>,
+    baseline: Baseline,
+    failures: u32,
+    game_launch_failed: bool,
+    next_poll: Option<Instant>,
     state: ResponseState,
     interrupted_stop_target: Option<String>,
     api_key: Option<String>,
@@ -154,10 +238,17 @@ impl ResponseStore {
         Ok(())
     }
 
+    pub(crate) fn set_warnings(&self, warnings: Vec<String>) {
+        self.0.lock().unwrap().state.warnings = warnings;
+    }
+
     pub(crate) fn reset(&self) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
-        inner.baseline.clear();
+        inner.baseline = Baseline::default();
+        inner.game_launch_failed = false;
+        inner.failures = 0;
+        inner.next_poll = None;
         inner.api_key = None;
         inner.state = ResponseState::default();
         inner.interrupted_stop_target = None;
@@ -165,67 +256,117 @@ impl ResponseStore {
 
     #[cfg(test)]
     pub(crate) fn begin(&self, serial: String, baseline: HashSet<String>) {
-        self.begin_authenticated(Server::Cn, serial, baseline, None);
+        self.begin_authenticated(Server::Cn, serial, baseline.into(), None, false);
     }
 
-    pub(crate) fn begin_authenticated(
+    pub(super) fn begin_authenticated(
         &self,
         server: Server,
         serial: String,
-        baseline: HashSet<String>,
+        baseline: Baseline,
         key: Option<String>,
+        game_launch_failed: bool,
     ) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
         inner.server = server;
         inner.baseline = baseline;
+        inner.failures = 0;
+        inner.next_poll = None;
         inner.api_key = key;
+        inner.game_launch_failed = game_launch_failed;
         inner.interrupted_stop_target = None;
         inner.state = ResponseState {
             phase: ResponsePhase::Waiting,
             serial: Some(serial),
-            message: "等待数据中，请重新进入游戏……".into(),
+            message: waiting_message(game_launch_failed).into(),
             response: None,
+            warnings: inner.baseline.warnings.clone(),
+            retry_after_ms: 1000,
         };
     }
 
-    pub(crate) fn poll(&self, adb_path: &Path) -> ResponseState {
-        self.poll_authenticated_using(
+    pub(crate) fn poll(&self, adb_path: &Path, debug: &mut dyn FnMut(&str)) -> ResponseState {
+        let debug = std::cell::RefCell::new(debug);
+        let before = {
+            let inner = self.0.lock().unwrap();
+            (
+                inner.state.phase.clone(),
+                inner.state.message.clone(),
+                inner.state.warnings.len(),
+            )
+        };
+        let state = self.poll_authenticated_using(
             |server, serial, baseline, key| {
                 let client = client::Client::with_api_key(key)?;
                 client::on_device(adb_path, serial, |port, run| {
-                    scan(server, &client, port, serial, baseline, run)
+                    scan_session(
+                        server,
+                        &client,
+                        port,
+                        serial,
+                        baseline,
+                        run,
+                        &mut |message| debug.borrow_mut()(message),
+                    )
                 })
             },
-            |serial, key| super::stop::stop_capture(adb_path, serial, key),
-        )
+            |serial, key| {
+                debug.borrow_mut()("已保存完整响应到会话内存，开始自动停止 Reqable");
+                let began = Instant::now();
+                let result = super::stop::stop_capture(adb_path, serial, key);
+                debug.borrow_mut()(&format!(
+                    "自动停止 Reqable 完成，成功={}，耗时 {} ms",
+                    result.is_ok(),
+                    began.elapsed().as_millis()
+                ));
+                result
+            },
+        );
+        if before
+            != (
+                state.phase.clone(),
+                state.message.clone(),
+                state.warnings.len(),
+            )
+        {
+            debug.borrow_mut()(&format!(
+                "抓包状态更新：{:?}，提醒数={}，重试间隔={} ms",
+                state.phase,
+                state.warnings.len(),
+                state.retry_after_ms
+            ));
+        }
+        state
     }
 
     #[cfg(test)]
     fn poll_using(
         &self,
-        scan: impl FnOnce(&str, &HashSet<String>) -> Result<Option<LoginResponse>, String>,
+        scan: impl FnOnce(&str, &HashSet<String>) -> Result<Option<LoginResponse>, ScanError>,
         stop: impl FnOnce(&str) -> Result<(), String>,
     ) -> ResponseState {
         self.poll_authenticated_using(
-            |_, serial, baseline, _| scan(serial, baseline),
+            |_, serial, baseline, _| {
+                scan(serial, &baseline.uids).map(|response| ScanOutcome {
+                    response,
+                    baseline: baseline.clone(),
+                })
+            },
             |serial, _| stop(serial),
         )
     }
 
     fn poll_authenticated_using(
         &self,
-        scan: impl FnOnce(
-            Server,
-            &str,
-            &HashSet<String>,
-            Option<&str>,
-        ) -> Result<Option<LoginResponse>, String>,
+        scan: impl FnOnce(Server, &str, &Baseline, Option<&str>) -> Result<ScanOutcome, ScanError>,
         stop: impl FnOnce(&str, Option<&str>) -> Result<(), String>,
     ) -> ResponseState {
         let (generation, server, serial, baseline, key) = {
             let inner = self.0.lock().unwrap();
-            if inner.state.phase != ResponsePhase::Waiting {
+            if inner.state.phase != ResponsePhase::Waiting
+                || inner.next_poll.is_some_and(|time| Instant::now() < time)
+            {
                 return inner.state.clone();
             }
             (
@@ -241,7 +382,16 @@ impl ResponseStore {
         // A configuration change or a new start supersedes any in-flight poll.
         if inner.generation == generation && inner.state.phase == ResponsePhase::Waiting {
             match result {
-                Ok(Some(response)) => {
+                Ok(outcome) => {
+                    inner.baseline = outcome.baseline;
+                    inner.state.warnings = inner.baseline.warnings.clone();
+                    inner.failures = 0;
+                    inner.next_poll = None;
+                    inner.state.retry_after_ms = 1000;
+                    let Some(response) = outcome.response else {
+                        inner.state.message = waiting_message(inner.game_launch_failed).into();
+                        return inner.state.clone();
+                    };
                     inner.state.response = Some(response);
                     // Keep the complete body before stopping: Reqable may release
                     // its temporary files. Serialize stop with reset/begin so a
@@ -261,14 +411,28 @@ impl ResponseStore {
                         }
                     }
                 }
-                Ok(None) => {}
-                Err(error) => {
+                Err(error) if error.is_fatal() => {
                     inner.state.phase = ResponsePhase::Error;
-                    inner.state.message = format!("{error}；请重新开始抓包后登录游戏");
+                    inner.state.message = format!("{error}；请停止后重新开始抓包");
+                }
+                Err(error) => {
+                    inner.failures = inner.failures.saturating_add(1);
+                    let delay = Duration::from_secs(1 << inner.failures.min(3));
+                    inner.next_poll = Some(Instant::now() + delay);
+                    inner.state.retry_after_ms = delay.as_millis() as u64;
+                    inner.state.message = format!("{error}；连接恢复后将自动继续等待");
                 }
             }
         }
         inner.state.clone()
+    }
+}
+
+fn waiting_message(game_launch_failed: bool) -> &'static str {
+    if game_launch_failed {
+        "等待数据中，自动启动游戏失败，请重新进入游戏……"
+    } else {
+        "等待数据中，请重新进入游戏……"
     }
 }
 
@@ -346,57 +510,163 @@ fn target_url(server: Server, raw: &str) -> Option<String> {
     Some(url.to_string())
 }
 
-fn ids(server: Server, client: &client::Client, port: u16) -> Result<Vec<u64>, String> {
-    let bytes = client.request(
+fn ids(server: Server, client: &client::Client, port: u16) -> Result<Vec<u64>, ScanError> {
+    let bytes = client.request_typed(
         port,
         "filter",
         Some(
             &serde_json::json!({"filters":[{"type":"keyword","pattern":target::selector(server)}]}),
         ),
-        128 * 1024,
+        MAX_ID_BYTES,
     )?;
-    let ids: Vec<u64> = serde_json::from_slice(&bytes).map_err(|_| "Reqable 记录列表无效")?;
-    if ids.len() > MAX_IDS {
-        return Err("匹配记录过多，请清理 Reqable 旧记录后重试".into());
-    }
+    let ids: Vec<u64> = serde_json::from_slice(&bytes)
+        .map_err(|_| ScanError::Fatal("Reqable 记录列表无效".into()))?;
     Ok(ids)
 }
 
-fn record(client: &client::Client, port: u16, id: u64) -> Result<Record, String> {
-    let bytes = client.request(port, "get", Some(&serde_json::json!({"id":id})), MAX_RECORD)?;
-    let record: Record = serde_json::from_slice(&bytes).map_err(|_| "Reqable 记录格式无效")?;
+fn record(client: &client::Client, port: u16, id: u64) -> Result<Record, ScanError> {
+    let bytes = client
+        .request_typed(port, "get", Some(&serde_json::json!({"id":id})), MAX_RECORD)
+        .map_err(|error| match error {
+            client::Error::Http(_) | client::Error::ResponseTooLarge => {
+                ScanError::InvalidRecord(error.to_string())
+            }
+            _ => error.into(),
+        })?;
+    let record: Record = serde_json::from_slice(&bytes)
+        .map_err(|_| ScanError::InvalidRecord("Reqable 记录格式无效".into()))?;
     if record.id != id || record.uid.is_empty() {
-        return Err("Reqable 记录标识无效".into());
+        return Err(ScanError::InvalidRecord("Reqable 记录标识无效".into()));
     }
     Ok(record)
 }
 
+#[cfg(test)]
 pub(super) fn baseline(
     server: Server,
     client: &client::Client,
     port: u16,
-) -> Result<HashSet<String>, String> {
-    let mut baseline = HashSet::new();
-    for id in ids(server, client, port)? {
-        let record = record(client, port, id)?;
-        if target_url(server, &record.url).is_some() {
-            baseline.insert(record.uid);
+) -> Result<Baseline, String> {
+    baseline_controlled(
+        server,
+        client,
+        port,
+        &mut || Ok(()),
+        &mut |_| {},
+        &mut |_| {},
+    )
+}
+
+pub(super) fn baseline_controlled(
+    server: Server,
+    client: &client::Client,
+    port: u16,
+    check: &mut dyn FnMut() -> Result<(), String>,
+    progress: &mut dyn FnMut(&str),
+    debug: &mut dyn FnMut(&str),
+) -> Result<Baseline, String> {
+    check()?;
+    debug("开始查询已有登录记录列表");
+    let began = Instant::now();
+    let ids = ids(server, client, port).map_err(|error| error.to_string())?;
+    debug(&format!(
+        "已有记录列表查询完成，共 {} 条，耗时 {} ms",
+        ids.len(),
+        began.elapsed().as_millis()
+    ));
+    let mut baseline = Baseline::default();
+    for (index, id) in ids.iter().enumerate() {
+        check()?;
+        if index % 16 == 0 {
+            progress(&format!("正在识别已有记录：{}/{}", index, ids.len()));
         }
+        debug(&format!(
+            "开始读取旧记录 {}/{}，ID={id}",
+            index + 1,
+            ids.len()
+        ));
+        let began = Instant::now();
+        match record(client, port, *id) {
+            Ok(record) => {
+                let matched = target_url(server, &record.url).is_some();
+                debug(&format!(
+                    "旧记录读取完成，ID={id}，匹配登录接口={matched}，耗时 {} ms",
+                    began.elapsed().as_millis()
+                ));
+                if matched {
+                    baseline.uids.insert(record.uid);
+                }
+            }
+            Err(error @ (ScanError::Fatal(_) | ScanError::Retryable(_))) => {
+                debug(&format!(
+                    "旧记录读取中断，ID={id}，耗时 {} ms",
+                    began.elapsed().as_millis()
+                ));
+                return Err(error.to_string());
+            }
+            Err(ScanError::InvalidRecord(_)) => {
+                debug(&format!(
+                    "旧记录读取失败，本次忽略 ID={id}，耗时 {} ms",
+                    began.elapsed().as_millis()
+                ));
+                baseline.ignored_ids.insert(*id);
+            }
+        }
+        check()?;
     }
+    if !baseline.ignored_ids.is_empty() {
+        baseline.warn(format!(
+            "{} 条旧记录无法识别，本次将忽略这些记录 ID，避免读取旧响应",
+            baseline.ignored_ids.len()
+        ));
+    }
+    debug(&format!(
+        "已有记录识别完成：{}/{}，基线 UID 数={}，忽略 ID 数={}",
+        ids.len(),
+        ids.len(),
+        baseline.uids.len(),
+        baseline.ignored_ids.len()
+    ));
     Ok(baseline)
 }
 
+// Keep the original test helper focused on response selection.
+#[cfg(test)]
 fn scan(
     server: Server,
     client: &client::Client,
     port: u16,
     serial: &str,
-    baseline: &HashSet<String>,
+    baseline: &Baseline,
     run: &mut AdbCommand<'_>,
-) -> Result<Option<LoginResponse>, String> {
-    // Latest completed response wins; pending records are retried on the next poll.
+) -> Result<Option<LoginResponse>, ScanError> {
+    scan_session(server, client, port, serial, baseline, run, &mut |_| {})
+        .map(|outcome| outcome.response)
+}
+
+fn scan_session(
+    server: Server,
+    client: &client::Client,
+    port: u16,
+    serial: &str,
+    baseline: &Baseline,
+    run: &mut AdbCommand<'_>,
+    debug: &mut dyn FnMut(&str),
+) -> Result<ScanOutcome, ScanError> {
+    let mut baseline = baseline.clone();
+    // Latest completed response wins; incomplete/transient records remain retryable.
     for id in ids(server, client, port)?.into_iter().rev() {
-        let record = record(client, port, id)?;
+        if baseline.ignored_ids.contains(&id) {
+            continue;
+        }
+        let record = match record(client, port, id) {
+            Ok(record) => record,
+            Err(error @ ScanError::InvalidRecord(_)) => {
+                baseline.warn(format!("记录 {id} 暂时无法读取：{error}；将继续等待"));
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
         if baseline.contains(&record.uid) {
             continue;
         }
@@ -413,54 +683,94 @@ fn scan(
             continue;
         };
         if !(200..300).contains(&code) {
-            return Err(format!(
-                "{} 请求失败（HTTP {code}）",
+            debug(&format!("登录请求返回失败状态，ID={id}，HTTP={code}"));
+            baseline.warn(format!(
+                "{} 请求失败（HTTP {code}），正在等待下一次登录",
                 target::response_label(server)
             ));
-        }
-        let bytes = body_bytes(body, &mut |path| read_cache(serial, path, run))?;
-        if bytes.is_empty() {
+            baseline.uids.insert(record.uid);
             continue;
         }
-        let byte_length = bytes.len();
-        let (raw_format, raw_body) = raw_body(bytes)?;
+        debug(&format!("开始读取登录响应，ID={id}，HTTP={code}"));
+        let began = Instant::now();
+        let result =
+            body_bytes(body, &mut |path| read_cache(serial, path, run)).and_then(|bytes| {
+                let byte_length = bytes.len();
+                raw_body(bytes).map(|(format, body)| (byte_length, format, body))
+            });
+        let (byte_length, raw_format, raw_body) = match result {
+            Ok(result) => result,
+            Err(error) => {
+                debug(&format!(
+                    "登录响应读取失败，ID={id}，耗时 {} ms",
+                    began.elapsed().as_millis()
+                ));
+                baseline.warn(format!("记录 {id} 暂不可用：{error}；将继续等待"));
+                // Cache files and ADB can recover; malformed/unsupported bodies cannot.
+                if matches!(error, ScanError::InvalidRecord(_)) {
+                    baseline.uids.insert(record.uid);
+                }
+                continue;
+            }
+        };
+        if byte_length == 0 {
+            continue;
+        }
+        debug(&format!(
+            "登录响应读取完成，ID={id}，字节数={byte_length}，耗时 {} ms",
+            began.elapsed().as_millis()
+        ));
         let items = super::inventory::preview(&raw_body);
         let captured_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| "系统时间无效")?
+            .map_err(|_| ScanError::Retryable("系统时间无效".into()))?
             .as_millis() as u64;
-        return Ok(Some(LoginResponse {
-            capture_id: uuid::Uuid::new_v4().to_string(),
-            captured_at,
-            record_id: id,
-            url,
-            status_code: code,
-            byte_length,
-            format: raw_format,
-            body: raw_body,
-            items,
-        }));
+        return Ok(ScanOutcome {
+            response: Some(LoginResponse {
+                capture_id: uuid::Uuid::new_v4().to_string(),
+                captured_at,
+                record_id: id,
+                url,
+                status_code: code,
+                byte_length,
+                format: raw_format,
+                body: raw_body,
+                items,
+            }),
+            baseline,
+        });
     }
-    if !super::capture::decode_status(&client.request(port, "status", None, 4096)?)? {
-        return Err("Reqable 抓包已停止".into());
+    if !super::capture::decode_status(&client.request_typed(port, "status", None, 4096)?)
+        .map_err(ScanError::Fatal)?
+    {
+        return Err(ScanError::Fatal("Reqable 抓包已停止".into()));
     }
-    Ok(None)
+    Ok(ScanOutcome {
+        response: None,
+        baseline,
+    })
 }
 
 fn body_bytes(
     body: Body,
-    read: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
-) -> Result<Vec<u8>, String> {
+    read: &mut dyn FnMut(&str) -> Result<Vec<u8>, ScanError>,
+) -> Result<Vec<u8>, ScanError> {
     let bytes = match body.encoding.as_str() {
         "utf8" => body.text.into_bytes(),
         "base64" => STANDARD
             .decode(body.text)
-            .map_err(|_| "响应的 Base64 编码无效")?,
-        "file" => read(&cache_path(&body.text)?)?,
-        _ => return Err("Reqable 响应使用了不支持的编码".into()),
+            .map_err(|_| ScanError::InvalidRecord("响应的 Base64 编码无效".into()))?,
+        "file" => read(&cache_path(&body.text).map_err(ScanError::InvalidRecord)?)?,
+        _ => {
+            return Err(ScanError::InvalidRecord(
+                "Reqable 响应使用了不支持的编码".into(),
+            ))
+        }
     };
     if bytes.len() > MAX_BODY {
-        return Err("响应超过 16 MiB，未截断展示，请在 Reqable 中查看".into());
+        return Err(ScanError::InvalidRecord(
+            "响应超过 16 MiB，未截断展示，请在 Reqable 中查看".into(),
+        ));
     }
     Ok(bytes)
 }
@@ -492,44 +802,50 @@ fn cache_path(raw: &str) -> Result<String, String> {
     Ok(path)
 }
 
-fn read_cache(serial: &str, path: &str, run: &mut AdbCommand<'_>) -> Result<Vec<u8>, String> {
+fn read_cache(serial: &str, path: &str, run: &mut AdbCommand<'_>) -> Result<Vec<u8>, ScanError> {
     let mut shell = |command: &str| run(&["-s", serial, "shell", command]);
     let root = find_root(&mut shell)?;
     let path = shell_quote(path);
     let resolved = shell(&root_shell(root, &format!("readlink -f {path}")))
-        .map_err(|_| "无法解析响应缓存文件")?;
-    let resolved = String::from_utf8(resolved).map_err(|_| "响应缓存路径无效")?;
-    let resolved = cache_path(resolved.trim())?;
+        .map_err(|_| ScanError::Retryable("无法解析响应缓存文件".into()))?;
+    let resolved = String::from_utf8(resolved)
+        .map_err(|_| ScanError::InvalidRecord("响应缓存路径无效".into()))?;
+    let resolved = cache_path(resolved.trim()).map_err(ScanError::InvalidRecord)?;
     let resolved = shell_quote(&resolved);
     let size = shell(&root_shell(
         root,
         &format!("test -f {resolved} && stat -c %s {resolved}"),
     ))
-    .map_err(|_| "响应缓存文件已失效")?;
+    .map_err(|_| ScanError::Retryable("响应缓存文件已失效".into()))?;
     let size: usize = String::from_utf8_lossy(&size)
         .trim()
         .parse()
-        .map_err(|_| "无法读取响应缓存大小")?;
+        .map_err(|_| ScanError::Retryable("无法读取响应缓存大小".into()))?;
     if size > MAX_BODY {
-        return Err("响应超过 16 MiB，请在 Reqable 中查看".into());
+        return Err(ScanError::InvalidRecord(
+            "响应超过 16 MiB，请在 Reqable 中查看".into(),
+        ));
     }
     let command = root_shell(root, &format!("head -c {} {resolved}", MAX_BODY + 1));
-    let bytes = run(&["-s", serial, "exec-out", &command]).map_err(|_| "无法读取响应缓存文件")?;
+    let bytes = run(&["-s", serial, "exec-out", &command])
+        .map_err(|_| ScanError::Retryable("无法读取响应缓存文件".into()))?;
     if bytes.len() != size {
-        return Err("响应缓存读取不完整，请重新登录后重试".into());
+        return Err(ScanError::Retryable(
+            "响应缓存读取不完整，请重新登录后重试".into(),
+        ));
     }
     Ok(bytes)
 }
 
-fn raw_body(mut bytes: Vec<u8>) -> Result<(String, String), String> {
+fn raw_body(mut bytes: Vec<u8>) -> Result<(String, String), ScanError> {
     if bytes.starts_with(&[0x1f, 0x8b]) {
         let mut expanded = Vec::new();
         flate2::read::GzDecoder::new(bytes.as_slice())
             .take((MAX_BODY + 1) as u64)
             .read_to_end(&mut expanded)
-            .map_err(|_| "响应 gzip 解压失败")?;
+            .map_err(|_| ScanError::InvalidRecord("响应 gzip 解压失败".into()))?;
         if expanded.len() > MAX_BODY {
-            return Err("解压后的响应超过 16 MiB".into());
+            return Err(ScanError::InvalidRecord("解压后的响应超过 16 MiB".into()));
         }
         bytes = expanded;
     }
