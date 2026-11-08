@@ -78,7 +78,7 @@ fn superseded_poll_uses_its_original_key_and_cannot_stop_the_new_session() {
 }
 use std::{
     io::{Read, Write},
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
     thread,
 };
 
@@ -360,7 +360,7 @@ fn state_survives_navigation_but_stale_polls_cannot_replace_a_new_session() {
     let late = store.poll_using(
         |_, _| {
             store.reset();
-            Err("late error".into())
+            Err(ScanError::Retryable("late error".into()))
         },
         |_| panic!("stale poll must not stop capture"),
     );
@@ -368,7 +368,10 @@ fn state_survives_navigation_but_stale_polls_cannot_replace_a_new_session() {
     store.begin("new-device".into(), HashSet::new());
     assert_eq!(
         store
-            .poll_using(|_, _| Err("连接断开".into()), |_| panic!())
+            .poll_using(
+                |_, _| Err(ScanError::Retryable("连接断开".into())),
+                |_| panic!(),
+            )
             .phase,
         ResponsePhase::Waiting
     );
@@ -469,35 +472,7 @@ fn server(
         let mut requests = Vec::new();
         for reply in replies {
             let (mut stream, _) = listener.accept().unwrap();
-            stream
-                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
-                .unwrap();
-            let mut buffer = Vec::new();
-            let header_end = loop {
-                let mut byte = [0];
-                stream.read_exact(&mut byte).unwrap();
-                buffer.push(byte[0]);
-                if buffer.ends_with(b"\r\n\r\n") {
-                    break buffer.len();
-                }
-            };
-            let headers = String::from_utf8(buffer.clone()).unwrap();
-            let len = headers
-                .lines()
-                .find_map(|line| {
-                    line.to_ascii_lowercase()
-                        .strip_prefix("content-length:")
-                        .map(|len| len.trim().parse::<usize>().unwrap())
-                })
-                .unwrap_or(0);
-            buffer.resize(header_end + len, 0);
-            stream.read_exact(&mut buffer[header_end..]).unwrap();
-            let body = if len == 0 {
-                serde_json::Value::Null
-            } else {
-                serde_json::from_slice(&buffer[header_end..]).unwrap()
-            };
-            requests.push((headers.lines().next().unwrap().into(), body));
+            requests.push(read_request(&mut stream));
             let body = reply.to_string();
             write!(
                 stream,
@@ -510,6 +485,38 @@ fn server(
         requests
     });
     (port, handle)
+}
+
+fn read_request(stream: &mut TcpStream) -> (String, serde_json::Value) {
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .unwrap();
+    let mut buffer = Vec::new();
+    let header_end = loop {
+        let mut byte = [0];
+        stream.read_exact(&mut byte).unwrap();
+        buffer.push(byte[0]);
+        if buffer.ends_with(b"\r\n\r\n") {
+            break buffer.len();
+        }
+    };
+    let headers = String::from_utf8(buffer.clone()).unwrap();
+    let len = headers
+        .lines()
+        .find_map(|line| {
+            line.to_ascii_lowercase()
+                .strip_prefix("content-length:")
+                .map(|len| len.trim().parse::<usize>().unwrap())
+        })
+        .unwrap_or(0);
+    buffer.resize(header_end + len, 0);
+    stream.read_exact(&mut buffer[header_end..]).unwrap();
+    let body = if len == 0 {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&buffer[header_end..]).unwrap()
+    };
+    (headers.lines().next().unwrap().into(), body)
 }
 
 fn captured(id: u64, uid: &str, body: Option<serde_json::Value>) -> serde_json::Value {
@@ -745,7 +752,10 @@ fn waiting_copy_is_generic_and_a_stopped_task_cannot_be_revived_by_a_late_poll()
 fn transient_scan_failures_back_off_then_recover_without_a_restart() {
     let store = ResponseStore::default();
     store.begin("device".into(), HashSet::new());
-    let failed = store.poll_using(|_, _| Err("ADB temporarily offline".into()), |_| panic!());
+    let failed = store.poll_using(
+        |_, _| Err(ScanError::Retryable("ADB temporarily offline".into())),
+        |_| panic!(),
+    );
     assert_eq!(failed.phase, ResponsePhase::Waiting);
     assert_eq!(failed.retry_after_ms, 2000);
     assert!(failed.message.contains("自动继续"));
@@ -756,12 +766,270 @@ fn transient_scan_failures_back_off_then_recover_without_a_restart() {
     assert!(recovered.response.is_some());
 }
 
+// The filter succeeds, then every record request loses its connection. Keep
+// accepting requests so a regression cannot hide behind a closed listener.
+fn record_transport_failure_server(
+    truncated_body: bool,
+) -> (
+    u16,
+    std::sync::mpsc::Sender<()>,
+    thread::JoinHandle<Vec<(String, serde_json::Value)>>,
+) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (shutdown, finished) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        let began = Instant::now();
+        let mut requests = Vec::new();
+        while matches!(
+            finished.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ) {
+            assert!(
+                began.elapsed() < Duration::from_secs(10),
+                "fixture timed out"
+            );
+            let (mut stream, _) = match listener.accept() {
+                Ok(connection) => connection,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(1));
+                    continue;
+                }
+                Err(error) => panic!("{error}"),
+            };
+            let request = read_request(&mut stream);
+            if request.0.contains("/filter ") {
+                let body = serde_json::json!((0..130).collect::<Vec<_>>()).to_string();
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .unwrap();
+            } else if truncated_body {
+                stream
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n{",
+                    )
+                    .unwrap();
+            }
+            requests.push(request);
+            // Drop the stream before sending a complete record response.
+        }
+        requests
+    });
+    (port, shutdown, worker)
+}
+
+#[test]
+fn record_transport_loss_stops_the_scan_and_recovers_after_backoff() {
+    for truncated_body in [false, true] {
+        let api = client::Client::new().unwrap();
+        let store = ResponseStore::default();
+        store.begin("device".into(), HashSet::from(["old".into()]));
+        let (port, shutdown, worker) = record_transport_failure_server(truncated_body);
+        let state = store.poll_authenticated_using(
+            |server, serial, baseline, _| {
+                scan_session(
+                    server,
+                    &api,
+                    port,
+                    serial,
+                    baseline,
+                    &mut |_| panic!(),
+                    &mut |_| {},
+                )
+            },
+            |_, _| panic!("a failed scan must not stop capture"),
+        );
+        shutdown.send(()).unwrap();
+        let requests = worker.join().unwrap();
+        assert_eq!(requests.len(), 2, "must stop after the first failed record");
+        assert_eq!(requests[1].1["id"], 129);
+        assert_eq!(state.phase, ResponsePhase::Waiting);
+        assert_eq!(state.retry_after_ms, 2000);
+        assert!(state.message.contains("自动继续等待"));
+        assert!(store.0.lock().unwrap().baseline.ignored_ids.is_empty());
+        assert!(store.0.lock().unwrap().baseline.contains("old"));
+        store.poll_using(|_, _| panic!("must respect backoff"), |_| panic!());
+
+        let (port, worker) = server(vec![
+            serde_json::json!([129]),
+            captured(
+                129,
+                "fresh",
+                Some(serde_json::json!({"text":"recovered","encoding":"utf8"})),
+            ),
+        ]);
+        store.0.lock().unwrap().next_poll = Some(Instant::now());
+        let state = store.poll_authenticated_using(
+            |server, serial, baseline, _| {
+                scan_session(
+                    server,
+                    &api,
+                    port,
+                    serial,
+                    baseline,
+                    &mut |_| panic!(),
+                    &mut |_| {},
+                )
+            },
+            |_, _| Ok(()),
+        );
+        worker.join().unwrap();
+        assert_eq!(state.phase, ResponsePhase::Found);
+        assert_eq!(state.response.unwrap().body, "recovered");
+        assert_eq!(state.retry_after_ms, 1000);
+    }
+}
+
+#[test]
+fn baseline_transport_loss_does_not_ignore_the_rest_of_the_list() {
+    let api = client::Client::new().unwrap();
+    let (port, shutdown, worker) = record_transport_failure_server(true);
+    let result = baseline(Server::Cn, &api, port);
+    shutdown.send(()).unwrap();
+    let requests = worker.join().unwrap();
+    assert!(result.is_err());
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[1].1["id"], 0);
+}
+
+#[test]
+fn repeated_transport_failures_use_bounded_backoff_without_stopping_capture() {
+    let store = ResponseStore::default();
+    store.begin("device".into(), HashSet::new());
+    for (error, delay) in [
+        (client::Error::ConnectionFailed, 2000),
+        (client::Error::ConnectionTimeout, 4000),
+        (client::Error::ResponseTimeout, 8000),
+        (client::Error::ReadFailed, 8000),
+    ] {
+        store.0.lock().unwrap().next_poll = Some(Instant::now());
+        let state = store.poll_using(|_, _| Err(error.into()), |_| panic!());
+        assert_eq!(state.phase, ResponsePhase::Waiting);
+        assert_eq!(state.retry_after_ms, delay);
+        assert!(state.response.is_none());
+    }
+}
+
+#[test]
+fn malformed_records_are_skipped_without_hiding_a_valid_response() {
+    let api = client::Client::new().unwrap();
+    let (port, worker) = server(vec![
+        serde_json::json!([1, 2, 3, 4]),
+        serde_json::json!({"invalid":"record"}),
+        captured(30, "wrong-id", None),
+        captured(2, "", None),
+        captured(
+            1,
+            "fresh",
+            Some(serde_json::json!({"text":"complete","encoding":"utf8"})),
+        ),
+    ]);
+    let outcome = scan_session(
+        Server::Cn,
+        &api,
+        port,
+        "device",
+        &Baseline::default(),
+        &mut |_| panic!(),
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(worker.join().unwrap().len(), 5);
+    assert_eq!(outcome.response.unwrap().body, "complete");
+    assert_eq!(outcome.baseline.warnings.len(), 3);
+}
+
+#[test]
+fn cache_read_failure_keeps_the_same_response_retryable_until_the_file_is_available() {
+    let api = client::Client::new().unwrap();
+    let record = captured(
+        1,
+        "fresh",
+        Some(serde_json::json!({
+            "text":"/data/user/0/com.reqable.android/cache/body", "encoding":"file"
+        })),
+    );
+    let (port, worker) = server(vec![
+        serde_json::json!([1]),
+        record.clone(),
+        serde_json::json!({"status":"active"}),
+    ]);
+    let waiting = scan_session(
+        Server::Cn,
+        &api,
+        port,
+        "device",
+        &Baseline::default(),
+        &mut |args| {
+            if args.last().unwrap().contains("id -u") {
+                Ok(b"0".to_vec())
+            } else {
+                Err("offline".into())
+            }
+        },
+        &mut |_| {},
+    )
+    .unwrap();
+    worker.join().unwrap();
+    assert!(waiting.response.is_none());
+    assert!(!waiting.baseline.contains("fresh"));
+    assert_eq!(waiting.baseline.warnings.len(), 1);
+
+    let (port, worker) = server(vec![serde_json::json!([1]), record]);
+    let recovered = scan_session(
+        Server::Cn,
+        &api,
+        port,
+        "device",
+        &waiting.baseline,
+        &mut |args| {
+            let command = args.last().unwrap();
+            Ok(if command.contains("id -u") {
+                b"0".to_vec()
+            } else if command.contains("readlink -f") {
+                b"/data/user/0/com.reqable.android/cache/body".to_vec()
+            } else if command.contains("stat -c") {
+                b"8".to_vec()
+            } else {
+                b"complete".to_vec()
+            })
+        },
+        &mut |_| {},
+    )
+    .unwrap();
+    worker.join().unwrap();
+    assert_eq!(recovered.response.unwrap().body, "complete");
+}
+
+#[test]
+fn scan_error_handling_does_not_depend_on_display_wording() {
+    for (error, expected) in [
+        (
+            ScanError::Fatal("提示文案已更新".into()),
+            ResponsePhase::Error,
+        ),
+        (
+            ScanError::Retryable(client::AUTHENTICATION_FAILED.into()),
+            ResponsePhase::Waiting,
+        ),
+    ] {
+        let store = ResponseStore::default();
+        store.begin("device".into(), HashSet::new());
+        let state = store.poll_using(|_, _| Err(error), |_| panic!());
+        assert_eq!(state.phase, expected);
+    }
+}
+
 #[test]
 fn authentication_failure_still_ends_waiting_without_claiming_capture_has_stopped() {
     let store = ResponseStore::default();
     store.begin("device".into(), HashSet::new());
     let result = store.poll_using(
-        |_, _| Err(client::AUTHENTICATION_FAILED.into()),
+        |_, _| Err(client::Error::AuthenticationFailed.into()),
         |_| panic!(),
     );
     assert_eq!(result.phase, ResponsePhase::Error);

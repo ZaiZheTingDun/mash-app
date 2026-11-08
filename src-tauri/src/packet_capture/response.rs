@@ -50,6 +50,47 @@ struct ScanOutcome {
     baseline: Baseline,
 }
 
+#[derive(Debug)]
+enum ScanError {
+    Retryable(String),
+    Fatal(String),
+    InvalidRecord(String),
+}
+
+impl ScanError {
+    fn is_fatal(&self) -> bool {
+        matches!(self, Self::Fatal(_))
+    }
+}
+
+impl std::fmt::Display for ScanError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Retryable(message) | Self::Fatal(message) | Self::InvalidRecord(message) => {
+                f.write_str(message)
+            }
+        }
+    }
+}
+
+// ADB forwarding and client creation failures remain retryable.
+impl From<String> for ScanError {
+    fn from(message: String) -> Self {
+        Self::Retryable(message)
+    }
+}
+
+impl From<client::Error> for ScanError {
+    fn from(error: client::Error) -> Self {
+        match error {
+            client::Error::AuthenticationFailed
+            | client::Error::ApiDisabled
+            | client::Error::ResponseTooLarge => Self::Fatal(error.to_string()),
+            _ => Self::Retryable(error.to_string()),
+        }
+    }
+}
+
 #[derive(Clone, Default, Serialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum ResponsePhase {
@@ -302,7 +343,7 @@ impl ResponseStore {
     #[cfg(test)]
     fn poll_using(
         &self,
-        scan: impl FnOnce(&str, &HashSet<String>) -> Result<Option<LoginResponse>, String>,
+        scan: impl FnOnce(&str, &HashSet<String>) -> Result<Option<LoginResponse>, ScanError>,
         stop: impl FnOnce(&str) -> Result<(), String>,
     ) -> ResponseState {
         self.poll_authenticated_using(
@@ -318,7 +359,7 @@ impl ResponseStore {
 
     fn poll_authenticated_using(
         &self,
-        scan: impl FnOnce(Server, &str, &Baseline, Option<&str>) -> Result<ScanOutcome, String>,
+        scan: impl FnOnce(Server, &str, &Baseline, Option<&str>) -> Result<ScanOutcome, ScanError>,
         stop: impl FnOnce(&str, Option<&str>) -> Result<(), String>,
     ) -> ResponseState {
         let (generation, server, serial, baseline, key) = {
@@ -370,7 +411,7 @@ impl ResponseStore {
                         }
                     }
                 }
-                Err(error) if fatal_scan_error(&error) => {
+                Err(error) if error.is_fatal() => {
                     inner.state.phase = ResponsePhase::Error;
                     inner.state.message = format!("{error}；请停止后重新开始抓包");
                 }
@@ -469,8 +510,8 @@ fn target_url(server: Server, raw: &str) -> Option<String> {
     Some(url.to_string())
 }
 
-fn ids(server: Server, client: &client::Client, port: u16) -> Result<Vec<u64>, String> {
-    let bytes = client.request(
+fn ids(server: Server, client: &client::Client, port: u16) -> Result<Vec<u64>, ScanError> {
+    let bytes = client.request_typed(
         port,
         "filter",
         Some(
@@ -478,15 +519,24 @@ fn ids(server: Server, client: &client::Client, port: u16) -> Result<Vec<u64>, S
         ),
         MAX_ID_BYTES,
     )?;
-    let ids: Vec<u64> = serde_json::from_slice(&bytes).map_err(|_| "Reqable 记录列表无效")?;
+    let ids: Vec<u64> = serde_json::from_slice(&bytes)
+        .map_err(|_| ScanError::Fatal("Reqable 记录列表无效".into()))?;
     Ok(ids)
 }
 
-fn record(client: &client::Client, port: u16, id: u64) -> Result<Record, String> {
-    let bytes = client.request(port, "get", Some(&serde_json::json!({"id":id})), MAX_RECORD)?;
-    let record: Record = serde_json::from_slice(&bytes).map_err(|_| "Reqable 记录格式无效")?;
+fn record(client: &client::Client, port: u16, id: u64) -> Result<Record, ScanError> {
+    let bytes = client
+        .request_typed(port, "get", Some(&serde_json::json!({"id":id})), MAX_RECORD)
+        .map_err(|error| match error {
+            client::Error::Http(_) | client::Error::ResponseTooLarge => {
+                ScanError::InvalidRecord(error.to_string())
+            }
+            _ => error.into(),
+        })?;
+    let record: Record = serde_json::from_slice(&bytes)
+        .map_err(|_| ScanError::InvalidRecord("Reqable 记录格式无效".into()))?;
     if record.id != id || record.uid.is_empty() {
-        return Err("Reqable 记录标识无效".into());
+        return Err(ScanError::InvalidRecord("Reqable 记录标识无效".into()));
     }
     Ok(record)
 }
@@ -518,7 +568,7 @@ pub(super) fn baseline_controlled(
     check()?;
     debug("开始查询已有登录记录列表");
     let began = Instant::now();
-    let ids = ids(server, client, port)?;
+    let ids = ids(server, client, port).map_err(|error| error.to_string())?;
     debug(&format!(
         "已有记录列表查询完成，共 {} 条，耗时 {} ms",
         ids.len(),
@@ -547,14 +597,14 @@ pub(super) fn baseline_controlled(
                     baseline.uids.insert(record.uid);
                 }
             }
-            Err(error) if error == client::AUTHENTICATION_FAILED => {
+            Err(error @ (ScanError::Fatal(_) | ScanError::Retryable(_))) => {
                 debug(&format!(
-                    "旧记录读取认证失败，ID={id}，耗时 {} ms",
+                    "旧记录读取中断，ID={id}，耗时 {} ms",
                     began.elapsed().as_millis()
                 ));
-                return Err(error);
+                return Err(error.to_string());
             }
-            Err(_) => {
+            Err(ScanError::InvalidRecord(_)) => {
                 debug(&format!(
                     "旧记录读取失败，本次忽略 ID={id}，耗时 {} ms",
                     began.elapsed().as_millis()
@@ -580,19 +630,6 @@ pub(super) fn baseline_controlled(
     Ok(baseline)
 }
 
-fn fatal_scan_error(error: &str) -> bool {
-    matches!(
-        error,
-        client::AUTHENTICATION_FAILED
-            | client::API_DISABLED
-            | "Reqable 抓包已停止"
-            | "Reqable 抓包状态无效"
-            | "Reqable 返回了未知抓包状态"
-            | "Reqable 记录列表无效"
-            | "Reqable 响应超过读取上限"
-    )
-}
-
 // Keep the original test helper focused on response selection.
 #[cfg(test)]
 fn scan(
@@ -602,7 +639,7 @@ fn scan(
     serial: &str,
     baseline: &Baseline,
     run: &mut AdbCommand<'_>,
-) -> Result<Option<LoginResponse>, String> {
+) -> Result<Option<LoginResponse>, ScanError> {
     scan_session(server, client, port, serial, baseline, run, &mut |_| {})
         .map(|outcome| outcome.response)
 }
@@ -615,7 +652,7 @@ fn scan_session(
     baseline: &Baseline,
     run: &mut AdbCommand<'_>,
     debug: &mut dyn FnMut(&str),
-) -> Result<ScanOutcome, String> {
+) -> Result<ScanOutcome, ScanError> {
     let mut baseline = baseline.clone();
     // Latest completed response wins; incomplete/transient records remain retryable.
     for id in ids(server, client, port)?.into_iter().rev() {
@@ -624,15 +661,11 @@ fn scan_session(
         }
         let record = match record(client, port, id) {
             Ok(record) => record,
-            Err(error)
-                if error == client::AUTHENTICATION_FAILED || error == client::API_DISABLED =>
-            {
-                return Err(error)
-            }
-            Err(error) => {
+            Err(error @ ScanError::InvalidRecord(_)) => {
                 baseline.warn(format!("记录 {id} 暂时无法读取：{error}；将继续等待"));
                 continue;
             }
+            Err(error) => return Err(error),
         };
         if baseline.contains(&record.uid) {
             continue;
@@ -674,8 +707,7 @@ fn scan_session(
                 ));
                 baseline.warn(format!("记录 {id} 暂不可用：{error}；将继续等待"));
                 // Cache files and ADB can recover; malformed/unsupported bodies cannot.
-                if !error.contains("缓存") && !error.contains("读取") && !error.contains("ADB")
-                {
+                if matches!(error, ScanError::InvalidRecord(_)) {
                     baseline.uids.insert(record.uid);
                 }
                 continue;
@@ -691,7 +723,7 @@ fn scan_session(
         let items = super::inventory::preview(&raw_body);
         let captured_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| "系统时间无效")?
+            .map_err(|_| ScanError::Retryable("系统时间无效".into()))?
             .as_millis() as u64;
         return Ok(ScanOutcome {
             response: Some(LoginResponse {
@@ -708,8 +740,10 @@ fn scan_session(
             baseline,
         });
     }
-    if !super::capture::decode_status(&client.request(port, "status", None, 4096)?)? {
-        return Err("Reqable 抓包已停止".into());
+    if !super::capture::decode_status(&client.request_typed(port, "status", None, 4096)?)
+        .map_err(ScanError::Fatal)?
+    {
+        return Err(ScanError::Fatal("Reqable 抓包已停止".into()));
     }
     Ok(ScanOutcome {
         response: None,
@@ -719,18 +753,24 @@ fn scan_session(
 
 fn body_bytes(
     body: Body,
-    read: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
-) -> Result<Vec<u8>, String> {
+    read: &mut dyn FnMut(&str) -> Result<Vec<u8>, ScanError>,
+) -> Result<Vec<u8>, ScanError> {
     let bytes = match body.encoding.as_str() {
         "utf8" => body.text.into_bytes(),
         "base64" => STANDARD
             .decode(body.text)
-            .map_err(|_| "响应的 Base64 编码无效")?,
-        "file" => read(&cache_path(&body.text)?)?,
-        _ => return Err("Reqable 响应使用了不支持的编码".into()),
+            .map_err(|_| ScanError::InvalidRecord("响应的 Base64 编码无效".into()))?,
+        "file" => read(&cache_path(&body.text).map_err(ScanError::InvalidRecord)?)?,
+        _ => {
+            return Err(ScanError::InvalidRecord(
+                "Reqable 响应使用了不支持的编码".into(),
+            ))
+        }
     };
     if bytes.len() > MAX_BODY {
-        return Err("响应超过 16 MiB，未截断展示，请在 Reqable 中查看".into());
+        return Err(ScanError::InvalidRecord(
+            "响应超过 16 MiB，未截断展示，请在 Reqable 中查看".into(),
+        ));
     }
     Ok(bytes)
 }
@@ -762,44 +802,50 @@ fn cache_path(raw: &str) -> Result<String, String> {
     Ok(path)
 }
 
-fn read_cache(serial: &str, path: &str, run: &mut AdbCommand<'_>) -> Result<Vec<u8>, String> {
+fn read_cache(serial: &str, path: &str, run: &mut AdbCommand<'_>) -> Result<Vec<u8>, ScanError> {
     let mut shell = |command: &str| run(&["-s", serial, "shell", command]);
     let root = find_root(&mut shell)?;
     let path = shell_quote(path);
     let resolved = shell(&root_shell(root, &format!("readlink -f {path}")))
-        .map_err(|_| "无法解析响应缓存文件")?;
-    let resolved = String::from_utf8(resolved).map_err(|_| "响应缓存路径无效")?;
-    let resolved = cache_path(resolved.trim())?;
+        .map_err(|_| ScanError::Retryable("无法解析响应缓存文件".into()))?;
+    let resolved = String::from_utf8(resolved)
+        .map_err(|_| ScanError::InvalidRecord("响应缓存路径无效".into()))?;
+    let resolved = cache_path(resolved.trim()).map_err(ScanError::InvalidRecord)?;
     let resolved = shell_quote(&resolved);
     let size = shell(&root_shell(
         root,
         &format!("test -f {resolved} && stat -c %s {resolved}"),
     ))
-    .map_err(|_| "响应缓存文件已失效")?;
+    .map_err(|_| ScanError::Retryable("响应缓存文件已失效".into()))?;
     let size: usize = String::from_utf8_lossy(&size)
         .trim()
         .parse()
-        .map_err(|_| "无法读取响应缓存大小")?;
+        .map_err(|_| ScanError::Retryable("无法读取响应缓存大小".into()))?;
     if size > MAX_BODY {
-        return Err("响应超过 16 MiB，请在 Reqable 中查看".into());
+        return Err(ScanError::InvalidRecord(
+            "响应超过 16 MiB，请在 Reqable 中查看".into(),
+        ));
     }
     let command = root_shell(root, &format!("head -c {} {resolved}", MAX_BODY + 1));
-    let bytes = run(&["-s", serial, "exec-out", &command]).map_err(|_| "无法读取响应缓存文件")?;
+    let bytes = run(&["-s", serial, "exec-out", &command])
+        .map_err(|_| ScanError::Retryable("无法读取响应缓存文件".into()))?;
     if bytes.len() != size {
-        return Err("响应缓存读取不完整，请重新登录后重试".into());
+        return Err(ScanError::Retryable(
+            "响应缓存读取不完整，请重新登录后重试".into(),
+        ));
     }
     Ok(bytes)
 }
 
-fn raw_body(mut bytes: Vec<u8>) -> Result<(String, String), String> {
+fn raw_body(mut bytes: Vec<u8>) -> Result<(String, String), ScanError> {
     if bytes.starts_with(&[0x1f, 0x8b]) {
         let mut expanded = Vec::new();
         flate2::read::GzDecoder::new(bytes.as_slice())
             .take((MAX_BODY + 1) as u64)
             .read_to_end(&mut expanded)
-            .map_err(|_| "响应 gzip 解压失败")?;
+            .map_err(|_| ScanError::InvalidRecord("响应 gzip 解压失败".into()))?;
         if expanded.len() > MAX_BODY {
-            return Err("解压后的响应超过 16 MiB".into());
+            return Err(ScanError::InvalidRecord("解压后的响应超过 16 MiB".into()));
         }
         bytes = expanded;
     }

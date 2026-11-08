@@ -25,6 +25,18 @@ fn delayed_route_request(
     route: &str,
     timeout: Option<Duration>,
 ) -> Result<Vec<u8>, String> {
+    delayed_route_request_typed(client, status, body, delay, route, timeout)
+        .map_err(|error| error.to_string())
+}
+
+fn delayed_route_request_typed(
+    client: Client,
+    status: &str,
+    body: &str,
+    delay: Duration,
+    route: &str,
+    timeout: Option<Duration>,
+) -> Result<Vec<u8>, Error> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let response = format!(
@@ -65,8 +77,8 @@ fn delayed_route_request(
         let _ = stream.write_all(response.as_bytes());
     });
     let result = match timeout {
-        Some(timeout) => client.request_with_timeout(port, route, None, 4096, timeout),
-        None => client.request(port, route, None, 4096),
+        Some(timeout) => client.request_with_timeout_typed(port, route, None, 4096, timeout),
+        None => client.request_typed(port, route, None, 4096),
     };
     server.join().unwrap();
     result
@@ -135,7 +147,7 @@ fn a_connected_reqable_can_take_longer_than_two_seconds_to_respond() {
 #[test]
 fn response_timeouts_are_distinct_from_connection_failures() {
     for route in ["status", "off"] {
-        let error = delayed_route_request(
+        let error = delayed_route_request_typed(
             Client::with_api_key(Some("synthetic-private-key")).unwrap(),
             "200 OK",
             "{}",
@@ -144,8 +156,7 @@ fn response_timeouts_are_distinct_from_connection_failures() {
             Some(Duration::from_millis(100)),
         )
         .unwrap_err();
-        assert!(error.contains("响应超时"));
-        assert!(!error.contains("无法连接"));
-        assert!(is_transient_error(&error));
+        assert_eq!(error, Error::ResponseTimeout);
+        assert!(is_transient_error(&error.to_string()));
     }
 }
