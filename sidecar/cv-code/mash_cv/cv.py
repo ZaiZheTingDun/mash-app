@@ -1908,6 +1908,7 @@ def _find_all_template_matches(
     template_key: str,
     region: dict,
     threshold: float,
+    width_scales: tuple[float, ...] = (1.0,),
 ) -> list[dict]:
     """Return vertically distinct matches for one static UI label."""
     tmpl = _get_template(template_key)
@@ -1921,33 +1922,40 @@ def _find_all_template_matches(
     if crop.size == 0:
         return []
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
-    th, tw = tmpl.shape[:2]
-    if tw > gray.shape[1] or th > gray.shape[0]:
-        return []
-
-    result = cv2.matchTemplate(gray, tmpl, cv2.TM_CCOEFF_NORMED)
     matches: list[dict] = []
-    while True:
-        _, max_val, _, max_loc = cv2.minMaxLoc(result)
-        score = float(max_val)
-        if score < threshold:
-            break
-        x, y = max_loc
-        matches.append(
-            {
-                "x": (rx + x) / w,
-                "y": (ry + y) / h,
-                "w": tw / w,
-                "h": th / h,
-                "score": score,
-            }
+    for scale in width_scales:
+        th, base_w = tmpl.shape[:2]
+        tw = max(1, round(base_w * scale))
+        if tw > gray.shape[1] or th > gray.shape[0]:
+            continue
+        scaled = tmpl if tw == base_w else cv2.resize(
+            tmpl, (tw, th),
+            interpolation=cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC,
         )
-        x0 = max(0, x - tw // 2)
-        y0 = max(0, y - th)
-        x1 = min(result.shape[1], x + tw // 2)
-        y1 = min(result.shape[0], y + th)
-        result[y0:y1, x0:x1] = -1.0
-    return sorted(matches, key=lambda match: (match["y"], match["x"]))
+        result = cv2.matchTemplate(gray, scaled, cv2.TM_CCOEFF_NORMED)
+        while True:
+            _, max_val, _, max_loc = cv2.minMaxLoc(result)
+            score = float(max_val)
+            if score < threshold:
+                break
+            x, y = max_loc
+            matches.append({
+                "x": (rx + x) / w, "y": (ry + y) / h,
+                "w": tw / w, "h": th / h, "score": score,
+            })
+            x0 = max(0, x - tw // 2)
+            y0 = max(0, y - th)
+            x1 = min(result.shape[1], x + tw // 2)
+            y1 = min(result.shape[0], y + th)
+            result[y0:y1, x0:x1] = -1.0
+    if len(width_scales) == 1:
+        return sorted(matches, key=lambda match: (match["y"], match["x"]))
+    # Different title widths can match the same row. Keep its strongest match.
+    distinct: list[dict] = []
+    for match in sorted(matches, key=lambda match: match["score"], reverse=True):
+        if not any(abs(match["y"] - other["y"]) < match["h"] for other in distinct):
+            distinct.append(match)
+    return sorted(distinct, key=lambda match: (match["y"], match["x"]))
 
 
 def _rank_up_quest_row_color_stats(img: np.ndarray, row: dict) -> tuple[float, float, float]:
@@ -1973,11 +1981,15 @@ def _rank_up_quest_row_color_stats(img: np.ndarray, row: dict) -> tuple[float, f
 
 
 def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
+    row_config = config.get("screens", {}).get("RankUpQuest", {}).get("rowDetection", {})
+    width_scales = tuple(row_config.get("anchorWidthScales", (1.0,)))
+    pair_by_left_edge = row_config.get("anchorPairAlignment", "center") == "left"
     rank_anchors = _find_all_template_matches(
         img,
         RANK_UP_QUEST_ROW_TEMPLATE,
         RANK_UP_QUEST_LIST_REGION,
         RANK_UP_QUEST_ANCHOR_THRESHOLD,
+        width_scales=width_scales,
     )
     cost_anchors = _find_all_template_matches(
         img,
@@ -1995,7 +2007,7 @@ def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
                 continue
             rank_cx = rank["x"] + rank["w"] / 2.0
             dy = cost["y"] - rank["y"]
-            dx = abs(cost_cx - rank_cx)
+            dx = abs(cost["x"] - rank["x"]) if pair_by_left_edge else abs(cost_cx - rank_cx)
             if not (RANK_UP_QUEST_PAIR_DY_MIN <= dy <= RANK_UP_QUEST_PAIR_DY_MAX):
                 continue
             if dx > RANK_UP_QUEST_PAIR_DX_MAX:

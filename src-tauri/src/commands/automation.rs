@@ -274,10 +274,7 @@ pub(crate) fn start_rank_up_quest_automation(
     capture_state: tauri::State<'_, RankUpQuestCaptureState>,
 ) -> Result<(), String> {
     let server = *app.state::<Mutex<Server>>().lock().unwrap();
-    if server != Server::Cn {
-        return Err("强化任务自动化首版仅支持国服".into());
-    }
-    apply_rank_up_quest_workflow(&mut config, workflow, &capture_state)?;
+    apply_rank_up_quest_workflow(&mut config, workflow, &capture_state, server)?;
     start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
 }
 

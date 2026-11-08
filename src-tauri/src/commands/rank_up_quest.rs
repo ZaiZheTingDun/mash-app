@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RankUpQuestCaptureSession {
+    pub(crate) server: Server,
     pub(crate) id: String,
     pub(crate) image_path: PathBuf,
     pub(crate) rows: Vec<RankUpQuestRow>,
@@ -40,9 +41,6 @@ pub(crate) fn capture_rank_up_quest_page(
 ) -> Result<RankUpQuestCaptureResult, String> {
     coordinator.require_idle()?;
     let server = *server_state.lock().unwrap();
-    if server != Server::Cn {
-        return Err("强化任务自动化首版仅支持国服".into());
-    }
 
     let selected_serial = adb_settings.lock().unwrap().selected_adb_serial.clone();
     let mut adb_dev = adb::Adb::new(&app, selected_serial);
@@ -81,6 +79,7 @@ pub(crate) fn capture_rank_up_quest_page(
 
     let mut state = capture_state.0.lock().unwrap();
     if let Some(previous) = state.replace(RankUpQuestCaptureSession {
+        server,
         id: capture_id.clone(),
         image_path: image_path.clone(),
         rows: rows.clone(),
@@ -98,6 +97,7 @@ pub(crate) fn capture_rank_up_quest_page(
 pub(crate) fn resolve_rank_up_quest_workflow(
     request: RankUpQuestStartRequest,
     capture_state: &RankUpQuestCaptureState,
+    server: Server,
 ) -> Result<crate::runner::RankUpQuestWorkflowConfig, String> {
     match request.mode {
         RankUpQuestMode::All => Ok(crate::runner::RankUpQuestWorkflowConfig::all()),
@@ -111,7 +111,7 @@ pub(crate) fn resolve_rank_up_quest_workflow(
             let state = capture_state.0.lock().unwrap();
             let session = state
                 .as_ref()
-                .filter(|session| session.id == capture_id)
+                .filter(|session| session.id == capture_id && session.server == server)
                 .ok_or_else(|| "强化任务截图已失效，请重新截图".to_string())?;
             let row = session
                 .rows
@@ -135,10 +135,15 @@ pub(crate) fn apply_rank_up_quest_workflow(
     config: &mut RunConfig,
     request: RankUpQuestStartRequest,
     capture_state: &RankUpQuestCaptureState,
+    server: Server,
 ) -> Result<(), String> {
     config.repeat_mission = false;
     config.max_mission_runs = None;
-    config.rank_up_quest = Some(resolve_rank_up_quest_workflow(request, capture_state)?);
+    config.rank_up_quest = Some(resolve_rank_up_quest_workflow(
+        request,
+        capture_state,
+        server,
+    )?);
     Ok(())
 }
 
@@ -208,6 +213,7 @@ mod tests {
                 candidate_id: None,
             },
             &state,
+            Server::Cn,
         )
         .unwrap();
 
@@ -216,9 +222,40 @@ mod tests {
     }
 
     #[test]
+    fn japanese_workflow_accepts_its_capture_and_rejects_other_server_captures() {
+        let state = RankUpQuestCaptureState(Mutex::new(Some(RankUpQuestCaptureSession {
+            server: Server::Jp,
+            id: "jp-capture".into(),
+            image_path: PathBuf::from("/tmp/jp-rank-up.png"),
+            rows: vec![row("jp-capture:0", true)],
+        })));
+        let request = || RankUpQuestStartRequest {
+            mode: RankUpQuestMode::Single,
+            capture_id: Some("jp-capture".into()),
+            candidate_id: Some("jp-capture:0".into()),
+        };
+        assert!(resolve_rank_up_quest_workflow(request(), &state, Server::Jp).is_ok());
+        assert_eq!(
+            resolve_rank_up_quest_workflow(request(), &state, Server::Cn).unwrap_err(),
+            "强化任务截图已失效，请重新截图"
+        );
+        assert!(resolve_rank_up_quest_workflow(
+            RankUpQuestStartRequest {
+                mode: RankUpQuestMode::All,
+                capture_id: None,
+                candidate_id: None,
+            },
+            &RankUpQuestCaptureState::default(),
+            Server::Jp,
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn single_mode_resolves_only_an_actionable_candidate_from_current_capture() {
         let image_path = PathBuf::from("/tmp/rank-up-capture.png");
         let state = RankUpQuestCaptureState(Mutex::new(Some(RankUpQuestCaptureSession {
+            server: Server::Cn,
             id: "capture-1".into(),
             image_path: image_path.clone(),
             rows: vec![row("capture-1:0", true), row("capture-1:1", false)],
@@ -231,6 +268,7 @@ mod tests {
                 candidate_id: Some("capture-1:0".into()),
             },
             &state,
+            Server::Cn,
         )
         .unwrap();
 
@@ -246,6 +284,7 @@ mod tests {
     #[test]
     fn single_mode_rejects_dark_candidates_and_stale_captures() {
         let state = RankUpQuestCaptureState(Mutex::new(Some(RankUpQuestCaptureSession {
+            server: Server::Cn,
             id: "capture-1".into(),
             image_path: PathBuf::from("/tmp/rank-up-capture.png"),
             rows: vec![row("capture-1:1", false)],
@@ -258,6 +297,7 @@ mod tests {
                 candidate_id: Some("capture-1:1".into()),
             },
             &state,
+            Server::Cn,
         )
         .unwrap_err();
         assert_eq!(dark_error, "所选强化任务当前不可点击");
@@ -269,6 +309,7 @@ mod tests {
                 candidate_id: Some("capture-1:1".into()),
             },
             &state,
+            Server::Cn,
         )
         .unwrap_err();
         assert_eq!(stale_error, "强化任务截图已失效，请重新截图");

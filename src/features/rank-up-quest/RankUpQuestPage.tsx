@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import { ImageIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
@@ -40,7 +40,12 @@ function rowStyle(row: RankUpQuestRow) {
   };
 }
 
-export function RankUpQuestPage({
+export function RankUpQuestPage(props: RankUpQuestPageProps) {
+  const [mode, setMode] = useState<RankUpQuestMode>("single");
+  return <RankUpQuestServerPage key={props.server ?? "loading"} {...props} mode={mode} setMode={setMode} />;
+}
+
+function RankUpQuestServerPage({
   server,
   projects,
   activeProjectId,
@@ -48,15 +53,19 @@ export function RankUpQuestPage({
   onAutomationStart,
   onAutomationStartFailed,
   onLogEntry,
+  mode,
+  setMode,
   ...projectBarProps
-}: RankUpQuestPageProps) {
-  const [mode, setMode] = useState<RankUpQuestMode>("single");
+}: RankUpQuestPageProps & { mode: RankUpQuestMode; setMode: (mode: RankUpQuestMode) => void }) {
   const [capture, setCapture] = useState<RankUpQuestCaptureResult | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentScreen, setCurrentScreen] = useState("");
+  const captureRequest = useRef(0);
+
+  useEffect(() => () => { captureRequest.current += 1; }, []);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -76,20 +85,26 @@ export function RankUpQuestPage({
   }, []);
 
   const capturePage = useCallback(() => {
+    const request = ++captureRequest.current;
     setCapturing(true);
     setError(null);
     setSelectedCandidateId(null);
     invoke<RankUpQuestCaptureResult>("capture_rank_up_quest_page")
-      .then(setCapture)
+      .then((result) => {
+        if (request === captureRequest.current) setCapture(result);
+      })
       .catch((value) => {
+        if (request !== captureRequest.current) return;
         setCapture(null);
         setError(String(value));
       })
-      .finally(() => setCapturing(false));
+      .finally(() => {
+        if (request === captureRequest.current) setCapturing(false);
+      });
   }, []);
 
   const handleStart = useCallback(() => {
-    if (!selectedProject || server !== "CN") return;
+    if (!selectedProject || server == null) return;
     if (mode === "single" && (!capture || !selectedCandidateId)) return;
     if (
       selectedProject.apRecoveryItems?.includes("rainbow") &&
@@ -134,11 +149,11 @@ export function RankUpQuestPage({
   const canStart =
     !running &&
     !capturing &&
-    server === "CN" &&
+    server != null &&
     selectedProject != null &&
     (mode === "all" || (capture != null && selectedCandidateId != null));
 
-  const statusError = error || (server === "JP" ? "强化任务自动化仅支持国服。" : null);
+  const statusError = error;
   const statusMessage = statusError
     || (server == null ? "正在读取服务器…"
       : capturing ? "正在截取游戏画面…"
@@ -190,7 +205,7 @@ export function RankUpQuestPage({
                 color="gray"
                 className="rank-up-quest-capture-button"
                 onClick={capturePage}
-                disabled={running || capturing || server !== "CN"}
+                disabled={running || capturing || server == null}
               >
                 <ReloadIcon />
                 {capturing ? "正在截图…" : capture ? "重新截图" : "截取游戏画面"}

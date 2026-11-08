@@ -19,14 +19,16 @@ def scrollbar_config():
     previous = cv.config
     previous_templates = cv.templates.copy()
     previous_static = cv.static_template_keys.copy()
+    previous_masks = cv.template_masks.copy()
     config = json.loads((ROOT / "src-tauri/resources/servers/shared/cv.json").read_text())
     mash_cv._set_config(config)
     for stem in ("ui_scroll_bar_start", "ui_scroll_bar_end"):
         key = f"shared/{stem}"
-        cv.templates[key] = cv2.imread(
-            str(ROOT / f"src-tauri/resources/servers/shared/templates/{stem}.png"),
-            cv2.IMREAD_GRAYSCALE,
+        template, mask = cv._read_template_png(
+            str(Path(__file__).parent / f"test_data/templates/shared/{stem}.png"), key,
         )
+        cv.templates[key] = template
+        cv.template_masks[key] = mask
         cv.static_template_keys.add(key)
     yield
     mash_cv._set_config(previous)
@@ -34,6 +36,8 @@ def scrollbar_config():
     cv.templates.update(previous_templates)
     cv.static_template_keys.clear()
     cv.static_template_keys.update(previous_static)
+    cv.template_masks.clear()
+    cv.template_masks.update(previous_masks)
 
 
 def scrollbar_frame(fixture, size):
@@ -87,3 +91,33 @@ def test_partial_or_missing_thumb_is_observable_separately():
     image[:] = 0
     for name in ("support_scroll_thumb_start", "support_scroll_thumb_end", "support_scroll_end"):
         assert not cv._find_element_by_name(image, "SupportSelect", name)["found"]
+
+
+@pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080), (1280, 720)])
+@pytest.mark.parametrize("fixture", [
+    "bright-cn.png", "dark-cn.png", "shifted-after-run-cn.png",
+    "list-top-jp.png", "list-scrolled-jp.png",
+])
+def test_shared_tips_ignore_rank_up_backgrounds_and_reject_a_missing_thumb(fixture, size):
+    image = cv2.imread(str(SCREENSHOTS / "rank-up-quest" / fixture))
+    image = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+    # Exercise the production shared probes over the rank-up list's track.
+    elements = cv.config["screens"]["SupportSelect"]["variants"]["main"]["elements"]
+    for name in ("support_scroll_thumb_start", "support_scroll_thumb_end"):
+        elements[name]["region"] = {"x": .94, "y": .12, "w": .06, "h": .72}
+    upper = cv._find_element_by_name(image, "SupportSelect", "support_scroll_thumb_start")
+    lower = cv._find_element_by_name(image, "SupportSelect", "support_scroll_thumb_end")
+    assert upper["found"], upper
+    assert lower["found"], lower
+    assert abs(upper["x"] - lower["x"]) < .015
+    assert upper["y"] < lower["y"]
+
+    # Clear only the thumb's column using a captured empty part of the track.
+    width, height = size
+    left, right = round(.968 * width), round(.999 * width)
+    top, bottom = round(.125 * height), round(.82 * height)
+    empty_y = round(.65 * height)
+    image[top:bottom, left:right] = image[empty_y:empty_y + 1, left:right]
+    for name in ("support_scroll_thumb_start", "support_scroll_thumb_end"):
+        result = cv._find_element_by_name(image, "SupportSelect", name)
+        assert not result["found"], result

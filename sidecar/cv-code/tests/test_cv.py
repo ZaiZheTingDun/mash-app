@@ -172,6 +172,38 @@ def test_find_rank_up_quest_rows_keeps_dark_rows_but_disables_them(size):
     assert all(row["meanLuma"] < 92 for row in result["rows"])
 
 
+@pytest.mark.parametrize("width_scales", [(1.0,), (0.8, 1.0, 1.2)])
+@pytest.mark.parametrize("alignment,expected_x", [(None, 0.55), ("center", 0.55), ("left", 0.62)])
+def test_rank_up_anchor_pair_alignment_is_independent_of_width_scales(
+    monkeypatch, width_scales, alignment, expected_x,
+):
+    from mash_cv import cv as cv_module
+
+    row_config = {"anchorWidthScales": width_scales}
+    if alignment is not None:
+        row_config["anchorPairAlignment"] = alignment
+    mash_cv._set_config({"screens": {"RankUpQuest": {"rowDetection": row_config}}})
+    image = _make_bgr_image(2560, 1440, bgr=(160, 160, 160))
+    # One title shares the cost label's left edge; the other shares its center.
+    rank_anchors = [
+        {"x": 0.62, "y": 0.30, "w": 0.18, "h": 0.04, "score": 0.9},
+        {"x": 0.55, "y": 0.30, "w": 0.18, "h": 0.04, "score": 0.9},
+    ]
+    cost_anchors = [
+        {"x": 0.62, "y": 0.368, "w": 0.04, "h": 0.03, "score": 0.9},
+    ]
+
+    def fake_matches(_image, key, _region, _threshold, **_options):
+        return rank_anchors if key == cv_module.RANK_UP_QUEST_ROW_TEMPLATE else cost_anchors
+
+    monkeypatch.setattr(cv_module, "_find_all_template_matches", fake_matches)
+    rows = cv_module._find_rank_up_quest_rows(image)["rows"]
+
+    assert len(rows) == 1
+    assert rows[0]["actionable"] is True
+    assert rows[0]["rankUpAnchor"]["x"] == pytest.approx(expected_x)
+
+
 def test_find_rank_up_quest_rows_does_not_pair_anchors_from_other_rows(monkeypatch):
     from mash_cv import cv as cv_module
 
@@ -183,7 +215,7 @@ def test_find_rank_up_quest_rows_does_not_pair_anchors_from_other_rows(monkeypat
         {"x": 0.62, "y": 0.40, "w": 0.04, "h": 0.03, "score": 0.9},
     ]
 
-    def fake_matches(_image, key, _region, _threshold):
+    def fake_matches(_image, key, _region, _threshold, **_options):
         if key == cv_module.RANK_UP_QUEST_ROW_TEMPLATE:
             return rank_anchors
         return cost_anchors
@@ -206,7 +238,7 @@ def test_find_rank_up_quest_rows_drops_top_and_bottom_clipped_rows(monkeypatch):
         {"x": 0.62, "y": 0.90, "w": 0.04, "h": 0.03, "score": 0.9},
     ]
 
-    def fake_matches(_image, key, _region, _threshold):
+    def fake_matches(_image, key, _region, _threshold, **_options):
         return [] if key == cv_module.RANK_UP_QUEST_ROW_TEMPLATE else cost_anchors
 
     monkeypatch.setattr(cv_module, "_find_all_template_matches", fake_matches)
@@ -6600,6 +6632,19 @@ def test_craft_essence_scroll_end_probe_rejects_top_of_list(width):
     )
 
     assert result["found"] is False
+
+
+@pytest.mark.parametrize("width", (1280, 1920, 2560))
+def test_craft_essence_scroll_end_probe_recognizes_captured_bottom_of_list(width):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_inventory_bottom_sparse.png")
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img, "CraftEssenceEnhancement", "element_enhancement_ce_scroll_end",
+    )
+    assert result["found"], result
 
 
 @pytest.mark.parametrize("width", (1920, 2560))
