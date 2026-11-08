@@ -1005,7 +1005,7 @@ describe("App active project restore", () => {
 
     await user.click(screen.getByRole("button", { name: "设置" }));
 
-    expect(await screen.findByText("宝具识别方式")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "外观" })).toBeInTheDocument();
     expect(screen.getByRole("main", { name: "设置" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("第一套")).not.toBeVisible();

@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Box,
   Button,
-  Dialog,
   Flex,
+  Heading,
   Select,
   Text,
-  TextField,
   Tooltip,
 } from "@radix-ui/themes";
 import { DiamondSwitch } from "../../components/common/DiamondSwitch";
 import { SettingsRow } from "./SettingsRow";
 import { TouchControlSetting } from "./TouchControlSetting";
-import preAttackNpGaugeDialogImage from "../../../src-tauri/resources/images/battle/pre_attack_np_gauge_dialog.png";
 import { invoke } from "../../tauri";
 import {
   DEFAULT_BATTLE_START_PANEL,
@@ -21,18 +19,10 @@ import {
   type SkillEditorLayout,
   type MysticCodeGender,
 } from "../../types/appUiSettings";
-import type { NoblePhantasmDetectionMode, RecognitionSettings } from "../../types/recognition";
+import type { RecognitionSettings } from "../../types/recognition";
 import { featureToggles } from "../../featureToggles";
 import { isAppColorTheme, type AppColorTheme } from "../../types/theme";
-import {
-  normalizeRecognitionSettings,
-  UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
-  UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX,
-  UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN,
-  UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED,
-} from "./recognitionSettingsModel";
-
-const TIMEOUT_COMMAND = "set_unknown_screen_timeout_count";
+import { normalizeRecognitionSettings } from "./recognitionSettingsModel";
 
 export function SettingsBasicPage({
   active,
@@ -59,25 +49,11 @@ export function SettingsBasicPage({
   const [battleStartPanel, setBattleStartPanel] = useState<BattleStartPanel>(
     DEFAULT_BATTLE_START_PANEL
   );
-  const [mode, setMode] = useState<NoblePhantasmDetectionMode>("card");
-  const [preAttackModeDialogOpen, setPreAttackModeDialogOpen] = useState(false);
   const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
   const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
   const [autoCaptureBondLevelUp, setAutoCaptureBondLevelUp] = useState(false);
   const [autoFriendRequest, setAutoFriendRequest] = useState(false);
-  const [verifySkillActivation, setVerifySkillActivation] = useState(false);
   const [enableExtraClassFilter, setEnableExtraClassFilter] = useState(true);
-  const [supportFullListOcrFallback, setSupportFullListOcrFallback] = useState(false);
-  const [apRecoveryConfirmWaitMs, setApRecoveryConfirmWaitMs] = useState<number | null>(null);
-  const [apRecoveryConfirmWaitDraft, setApRecoveryConfirmWaitDraft] = useState("");
-  const apRecoveryWaitSaveSequence = useRef(0);
-  const apRecoveryWaitSaveQueue = useRef<Promise<void>>(Promise.resolve());
-  const [timeoutCount, setTimeoutCount] = useState(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT);
-  const [timeoutDraft, setTimeoutDraft] = useState(
-    String(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT)
-  );
-  const [timeoutEnabled, setTimeoutEnabled] = useState(true);
-  const timeoutSaveSequence = useRef(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -100,146 +76,12 @@ export function SettingsBasicPage({
   };
 
   const applySettings = useCallback((settings: RecognitionSettings) => {
-    setMode(settings.noblePhantasmDetectionMode);
     setStopOnBondLevelUp(settings.stopOnBondLevelUp);
     setStopOnBondMaxLevel(settings.stopOnBondMaxLevel);
     setAutoCaptureBondLevelUp(settings.autoCaptureBondLevelUp);
     setAutoFriendRequest(settings.autoFriendRequest);
-    setVerifySkillActivation(settings.verifySkillActivation);
     setEnableExtraClassFilter(settings.enableExtraClassFilter);
-    setSupportFullListOcrFallback(settings.supportFullListOcrFallback);
-    setApRecoveryConfirmWaitMs(settings.apRecoveryConfirmWaitMs);
-    setApRecoveryConfirmWaitDraft(String(settings.apRecoveryConfirmWaitMs));
-    setTimeoutCount(settings.unknownScreenTimeoutCount);
-    setTimeoutEnabled(
-      settings.unknownScreenTimeoutCount !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED
-    );
-    if (settings.unknownScreenTimeoutCount !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED) {
-      setTimeoutDraft(String(settings.unknownScreenTimeoutCount));
-    }
   }, []);
-
-  const updateApRecoveryConfirmWait = (draft: string, valid: boolean) => {
-    setApRecoveryConfirmWaitDraft(draft);
-    const sequence = ++apRecoveryWaitSaveSequence.current;
-    setError(null);
-    setSavedMessage(null);
-    if (draft.trim() === "" || !valid) return;
-
-    // Keep writes in input order without blocking typing or replacing a newer draft.
-    apRecoveryWaitSaveQueue.current = apRecoveryWaitSaveQueue.current.then(async () => {
-      try {
-        const settings = await invoke<RecognitionSettings>("set_ap_recovery_confirm_wait_ms", {
-          value: Number(draft),
-        });
-        if (apRecoveryWaitSaveSequence.current !== sequence) return;
-        setApRecoveryConfirmWaitMs(settings.apRecoveryConfirmWaitMs);
-        setSavedMessage("已自动保存");
-      } catch (err) {
-        if (apRecoveryWaitSaveSequence.current === sequence) setError(String(err));
-      }
-    });
-  };
-
-  const saveTimeoutCount = useCallback(async (value: number) => {
-    const sequence = timeoutSaveSequence.current + 1;
-    timeoutSaveSequence.current = sequence;
-    setError(null);
-    setSavedMessage(null);
-    try {
-      const settings = normalizeRecognitionSettings(
-        await invoke<RecognitionSettings>(TIMEOUT_COMMAND, { value })
-      );
-      if (timeoutSaveSequence.current !== sequence) return;
-
-      const savedValue = settings.unknownScreenTimeoutCount;
-      setTimeoutCount(savedValue);
-      setTimeoutEnabled(savedValue !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED);
-      if (savedValue !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED) {
-        setTimeoutDraft(String(savedValue));
-      }
-      setSavedMessage("已自动保存");
-    } catch (err) {
-      if (timeoutSaveSequence.current !== sequence) return;
-      setError(String(err));
-    }
-  }, []);
-
-  const updateTimeoutDraft = useCallback(
-    (rawValue: string) => {
-      if (!timeoutEnabled) return;
-
-      const parsed = Number(rawValue);
-      if (
-        rawValue !== "" &&
-        Number.isFinite(parsed) &&
-        parsed > UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
-      ) {
-        setTimeoutDraft(String(UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX));
-        void saveTimeoutCount(UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX);
-        return;
-      }
-
-      setTimeoutDraft(rawValue);
-      setSavedMessage(null);
-      setError(null);
-      if (
-        Number.isInteger(parsed) &&
-        parsed >= UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN &&
-        parsed <= UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
-      ) {
-        void saveTimeoutCount(parsed);
-      }
-    },
-    [saveTimeoutCount, timeoutEnabled]
-  );
-
-  const normalizeTimeoutDraft = useCallback(() => {
-    if (!timeoutEnabled) return;
-
-    const parsed = Number(timeoutDraft);
-    if (
-      Number.isInteger(parsed) &&
-      parsed >= UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN &&
-      parsed <= UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
-    ) {
-      return;
-    }
-
-    const fallback =
-      timeoutCount === UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED
-        ? UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
-        : timeoutCount;
-    const normalized = Number.isFinite(parsed)
-      ? Math.min(
-          UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX,
-          Math.max(UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN, Math.round(parsed))
-        )
-      : fallback;
-    setTimeoutDraft(String(normalized));
-    void saveTimeoutCount(normalized);
-  }, [saveTimeoutCount, timeoutCount, timeoutDraft, timeoutEnabled]);
-
-  const toggleTimeoutLimit = useCallback(
-    (enabled: boolean) => {
-      setTimeoutEnabled(enabled);
-      if (!enabled) {
-        void saveTimeoutCount(UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED);
-        return;
-      }
-
-      const parsed = Number(timeoutDraft);
-      const value =
-        Number.isInteger(parsed) &&
-        parsed >= UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN &&
-        parsed <= UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
-          ? parsed
-          : UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT;
-      setTimeoutDraft(String(value));
-      void saveTimeoutCount(value);
-    },
-    [saveTimeoutCount, timeoutDraft]
-  );
 
   const loadSettings = useCallback(async () => {
     setError(null);
@@ -313,26 +155,6 @@ export function SettingsBasicPage({
     }
   }, [active, loadSettings]);
 
-  const saveMode = useCallback(async (value: NoblePhantasmDetectionMode) => {
-    setSaving(true);
-    setError(null);
-    setSavedMessage(null);
-    try {
-      const settings = normalizeRecognitionSettings(
-        await invoke<RecognitionSettings>("set_noble_phantasm_detection_mode", { value })
-      );
-      applySettings(settings);
-      if (settings.noblePhantasmDetectionMode === "gaugeBeforeAttack") {
-        setPreAttackModeDialogOpen(true);
-      }
-      setSavedMessage("已保存");
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setSaving(false);
-    }
-  }, [applySettings]);
-
   const saveBondStopSetting = useCallback(
     async (command: string, value: boolean) => {
       setSaving(true);
@@ -367,23 +189,6 @@ export function SettingsBasicPage({
     }
   }, []);
 
-  const saveVerifySkillActivation = useCallback(async (value: boolean) => {
-    setSaving(true);
-    setError(null);
-    setSavedMessage(null);
-    try {
-      const settings = normalizeRecognitionSettings(
-        await invoke<RecognitionSettings>("set_verify_skill_activation", { value })
-      );
-      applySettings(settings);
-      setSavedMessage("已保存");
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setSaving(false);
-    }
-  }, [applySettings]);
-
   const saveEnableExtraClassFilter = useCallback(async (value: boolean) => {
     setSaving(true);
     setError(null);
@@ -391,23 +196,6 @@ export function SettingsBasicPage({
     try {
       const settings = normalizeRecognitionSettings(
         await invoke<RecognitionSettings>("set_enable_extra_class_filter", { value })
-      );
-      applySettings(settings);
-      setSavedMessage("已保存");
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setSaving(false);
-    }
-  }, [applySettings]);
-
-  const saveSupportFullListOcrFallback = useCallback(async (value: boolean) => {
-    setSaving(true);
-    setError(null);
-    setSavedMessage(null);
-    try {
-      const settings = normalizeRecognitionSettings(
-        await invoke<RecognitionSettings>("set_support_full_list_ocr_fallback", { value })
       );
       applySettings(settings);
       setSavedMessage("已保存");
@@ -436,123 +224,94 @@ export function SettingsBasicPage({
   return (
     <Box className="settings-section-panel settings-basic">
       <Flex direction="column" className="recognition-setting-block">
-        <SettingsRow label="主题配色" description="选择界面的强调色，适用于浅色和深色模式"
-          help={colorThemeError && <Text size="1" color="red" role="alert">{colorThemeError}</Text>}>
-          <Select.Root value={colorTheme ?? ""}
-            onValueChange={(value) => void saveColorTheme(value)}
-            disabled={savingColorTheme || !colorTheme || !onColorThemeChange}>
-            <Select.Trigger aria-label="主题配色" className="recognition-mode-select"
-              placeholder={colorThemeError ? "读取失败" : "正在读取…"} />
-            <Select.Content position="popper" className="settings-select-menu">
-              <Select.Item value="blue">蓝色</Select.Item>
-              <Select.Item value="violet">紫色</Select.Item>
-              <Select.Item value="gold">香槟金</Select.Item>
-            </Select.Content>
-          </Select.Root>
-          {colorThemeError && onColorThemeReload && (
-            <Button size="1" variant="ghost" onClick={() => void onColorThemeReload()}>重试</Button>
-          )}
-        </SettingsRow>
-        <SettingsRow label="技能设置布局" description="选择逐步设置技能，或固定显示前排从者与御主礼装的技能">
-          <Select.Root value={skillEditorLayout} onValueChange={value => void saveSkillEditorLayout(value as SkillEditorLayout)} disabled={saving}>
-            <Select.Trigger aria-label="技能设置布局" className="recognition-mode-select" />
-            <Select.Content position="popper" className="settings-select-menu">
-              <Select.Item value="guided">逐步设置</Select.Item>
-              <Select.Item value="simple">简易设置</Select.Item>
-            </Select.Content>
-          </Select.Root>
-        </SettingsRow>
-        <SettingsRow label="御主礼装显示性别" description="选择队伍配置中御主礼装图标使用的服装款式">
-          <Select.Root value={mysticCodeGender ?? "female"}
-            onValueChange={(value) => void saveMysticCodeGender(value as MysticCodeGender)} disabled={saving || savingGender}>
-            <Select.Trigger aria-label="御主礼装显示性别" className="recognition-mode-select" />
-            <Select.Content position="popper" className="settings-select-menu">
-              <Select.Item value="female">女</Select.Item>
-              <Select.Item value="male">男</Select.Item>
-            </Select.Content>
-          </Select.Root>
-        </SettingsRow>
-        <TouchControlSetting active={active} />
-        <SettingsRow label="开始后展开" description="点击战斗页面的开始后，自动展开所选底栏面板">
-          <Select.Root value={battleStartPanel}
-            onValueChange={(value) => void saveBattleStartPanel(value as BattleStartPanel)} disabled={saving}>
-            <Select.Trigger aria-label="开始后展开" className="recognition-mode-select" />
-            <Select.Content position="popper" className="settings-select-menu">
-              <Select.Item value="operationLog">操作日志</Select.Item>
-              <Select.Item value="runStatus">运行状态</Select.Item>
-              <Select.Item value="none">不弹出</Select.Item>
-            </Select.Content>
-          </Select.Root>
-        </SettingsRow>
-        <SettingsRow label="宝具识别方式" description="出现宝具识别问题可尝试切换，仍在实验中可能导致选卡速度变慢"
-          help={mode === "gaugeBeforeAttack" && <Text size="1" color="orange">攻击前识别可能被从者台词遮挡，请关闭台词</Text>}>
-          <Select.Root value={mode} onValueChange={(value) => void saveMode(value as NoblePhantasmDetectionMode)} disabled={saving}>
-            <Select.Trigger aria-label="宝具识别方式" className="recognition-mode-select" />
-            <Select.Content position="popper" className="settings-select-menu">
-              <Select.Item value="card">指令卡识别</Select.Item>
-              <Select.Item value="gaugeBeforeAttack">宝具条识别（选卡前）</Select.Item>
-              <Select.Item value="gauge">宝具条识别（选卡时）</Select.Item>
-            </Select.Content>
-          </Select.Root>
-        </SettingsRow>
-        <SettingsRow label="牵绊升级时自动截图" description="出现牵绊等级提升页面时自动保存当前截图">
-          <Button size="1" variant="ghost" className="settings-folder-action"
-            onClick={() => void openBondLevelUpScreenshotFolder()} disabled={saving}>打开截图文件夹 <span aria-hidden="true">↗</span></Button>
-          <DiamondSwitch checked={autoCaptureBondLevelUp} disabled={saving} aria-label="牵绊升级时自动截图"
-            onCheckedChange={(value) => void saveBondStopSetting("set_auto_capture_bond_level_up", value)} />
-        </SettingsRow>
-        <SettingsRow label="牵绊升级自动停止" description="出现牵绊等级提升页面时自动停止">
-          {stopOnBondMaxLevel ? (
-            <Tooltip content="牵绊满级自动停止已开启；关闭满级开关后可修改此项">
-              <Box tabIndex={0}>
-                <DiamondSwitch checked={stopOnBondLevelUp} disabled aria-label="牵绊升级自动停止"
-                  onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_level_up", value)} />
-              </Box>
-            </Tooltip>
-          ) : <DiamondSwitch checked={stopOnBondLevelUp} disabled={saving} aria-label="牵绊升级自动停止"
-            onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_level_up", value)} />}
-        </SettingsRow>
-        <SettingsRow label="牵绊满级自动停止" description="出现牵绊等级提升页面且等级达到 10 或以上时自动停止；开启后会关闭牵绊升级自动停止">
-          <DiamondSwitch checked={stopOnBondMaxLevel} disabled={saving} aria-label="牵绊满级自动停止"
-            onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_max_level", value)} />
-        </SettingsRow>
-        <SettingsRow label="Extra 职阶筛选" description="国服助战目标为 Extra 职阶时，长按并选择具体职阶；队伍可以单独覆盖此设置">
-          <DiamondSwitch checked={enableExtraClassFilter} onCheckedChange={(value) => void saveEnableExtraClassFilter(value)}
-            disabled={saving} aria-label="全局 Extra 职阶筛选" />
-        </SettingsRow>
-        <SettingsRow label="使用全列表 OCR" description="默认使用锚点进行识别，开启后会在识别失败时回退到全列表 OCR 识别，可能会降低识别速度">
-          <DiamondSwitch checked={supportFullListOcrFallback} onCheckedChange={(value) => void saveSupportFullListOcrFallback(value)}
-            disabled={saving} aria-label="使用全列表 OCR" />
-        </SettingsRow>
-        <SettingsRow label="技能使用确认" description="开启后会确认技能使用成功，失败会进行重试，一般无需开启">
-          <DiamondSwitch checked={verifySkillActivation} onCheckedChange={(value) => void saveVerifySkillActivation(value)}
-            disabled={saving} aria-label="技能使用确认" />
-        </SettingsRow>
-        <SettingsRow label="回复道具确认等待时长" description="选中圣晶石或苹果后，等待此时长再点击决定；默认 1000 毫秒">
-          <TextField.Root type="number" min={500} max={60000} step={1}
-            value={apRecoveryConfirmWaitDraft}
-            onChange={(event) => updateApRecoveryConfirmWait(
-              event.currentTarget.value, event.currentTarget.validity.valid
+        <section className="settings-basic-group" aria-label="外观">
+          <Heading as="h3" size="3" className="settings-basic-group-title">外观</Heading>
+          <SettingsRow label="主题" description="选择界面主题颜色"
+            help={colorThemeError && <Text size="1" color="red" role="alert">{colorThemeError}</Text>}>
+            <Select.Root value={colorTheme ?? ""}
+              onValueChange={(value) => void saveColorTheme(value)}
+              disabled={savingColorTheme || !colorTheme || !onColorThemeChange}>
+              <Select.Trigger aria-label="主题" className="recognition-mode-select"
+                placeholder={colorThemeError ? "读取失败" : "正在读取…"} />
+              <Select.Content position="popper" className="settings-select-menu">
+                <Select.Item value="blue">蓝色</Select.Item>
+                <Select.Item value="violet">紫色</Select.Item>
+                <Select.Item value="gold">香槟金</Select.Item>
+              </Select.Content>
+            </Select.Root>
+            {colorThemeError && onColorThemeReload && (
+              <Button size="1" variant="ghost" onClick={() => void onColorThemeReload()}>重试</Button>
             )}
-            aria-label="回复道具确认等待时长" className="recognition-threshold-input"
-            disabled={saving || apRecoveryConfirmWaitMs == null} />
-          <Text size="2" color="gray">毫秒</Text>
-        </SettingsRow>
-        <SettingsRow label="识别超时限制" description="连续无法识别达到此次数后停止">
-          <TextField.Root type="number" min={UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN} max={UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX}
-            step={1} value={timeoutDraft} onChange={(event) => updateTimeoutDraft(event.currentTarget.value)}
-            onBlur={normalizeTimeoutDraft} aria-label="识别超时次数" className="recognition-threshold-input"
-            disabled={saving || !timeoutEnabled} />
-          <Text size="2" color="gray">次</Text>
-          <DiamondSwitch checked={timeoutEnabled} onCheckedChange={toggleTimeoutLimit} disabled={saving} aria-label="识别超时限制" />
-        </SettingsRow>
-        {featureToggles.autoFriendRequest && (
-          <SettingsRow label="自动申请好友" description="结算页的申请好友按钮处于激活状态时自动申请好友">
-            <DiamondSwitch checked={autoFriendRequest} onCheckedChange={(value) => void saveAutoFriendRequest(value)}
-              disabled={saving} aria-label="自动申请好友" />
           </SettingsRow>
-        )}
-
+          <SettingsRow label="技能设置" description="可切换经典模式或简易模式（Chaldea 模式）">
+            <Select.Root value={skillEditorLayout} onValueChange={value => void saveSkillEditorLayout(value as SkillEditorLayout)} disabled={saving}>
+              <Select.Trigger aria-label="技能设置" className="recognition-mode-select" />
+              <Select.Content position="popper" className="settings-select-menu">
+                <Select.Item value="guided">经典模式</Select.Item>
+                <Select.Item value="simple">简易模式（Chaldea 模式）</Select.Item>
+              </Select.Content>
+            </Select.Root>
+          </SettingsRow>
+          <SettingsRow label="御主性别" description="影响御主显示以及御主礼装识别">
+            <Select.Root value={mysticCodeGender ?? "female"}
+              onValueChange={(value) => void saveMysticCodeGender(value as MysticCodeGender)} disabled={saving || savingGender}>
+              <Select.Trigger aria-label="御主性别" className="recognition-mode-select" />
+              <Select.Content position="popper" className="settings-select-menu">
+                <Select.Item value="female">女</Select.Item>
+                <Select.Item value="male">男</Select.Item>
+              </Select.Content>
+            </Select.Root>
+          </SettingsRow>
+        </section>
+        <section className="settings-basic-group" aria-label="运行">
+          <Heading as="h3" size="3" className="settings-basic-group-title">运行</Heading>
+          <TouchControlSetting active={active} />
+          <SettingsRow label="自动展开" description="控制开始战斗后自动展开面板">
+            <Select.Root value={battleStartPanel}
+              onValueChange={(value) => void saveBattleStartPanel(value as BattleStartPanel)} disabled={saving}>
+              <Select.Trigger aria-label="自动展开" className="recognition-mode-select" />
+              <Select.Content position="popper" className="settings-select-menu">
+                <Select.Item value="operationLog">操作日志</Select.Item>
+                <Select.Item value="runStatus">运行状态</Select.Item>
+                <Select.Item value="none">不弹出</Select.Item>
+              </Select.Content>
+            </Select.Root>
+          </SettingsRow>
+          <SettingsRow label="额外职阶筛选" description={<><strong>此为国服特有功能</strong>，助战为额外职阶时，可长按并选择具体职阶</>}>
+            <DiamondSwitch checked={enableExtraClassFilter} onCheckedChange={(value) => void saveEnableExtraClassFilter(value)}
+              disabled={saving} aria-label="额外职阶筛选" />
+          </SettingsRow>
+          {featureToggles.autoFriendRequest && (
+            <SettingsRow label="自动申请好友" description="结算页的申请好友按钮处于激活状态时自动申请好友">
+              <DiamondSwitch checked={autoFriendRequest} onCheckedChange={(value) => void saveAutoFriendRequest(value)}
+                disabled={saving} aria-label="自动申请好友" />
+            </SettingsRow>
+          )}
+        </section>
+        <section className="settings-basic-group" aria-label="牵绊">
+          <Heading as="h3" size="3" className="settings-basic-group-title">牵绊</Heading>
+          <SettingsRow label="自动截图" description="牵绊升级后自动截图并保存">
+            <Button size="1" variant="ghost" className="settings-folder-action"
+              onClick={() => void openBondLevelUpScreenshotFolder()} disabled={saving}>打开截图文件夹 <span aria-hidden="true">↗</span></Button>
+            <DiamondSwitch checked={autoCaptureBondLevelUp} disabled={saving} aria-label="自动截图"
+              onCheckedChange={(value) => void saveBondStopSetting("set_auto_capture_bond_level_up", value)} />
+          </SettingsRow>
+          <SettingsRow label="升级自动停止" description="任意牵绊升级后自动停止">
+            {stopOnBondMaxLevel ? (
+              <Tooltip content="牵绊满级自动停止已开启；关闭满级开关后可修改此项">
+                <Box tabIndex={0}>
+                  <DiamondSwitch checked={stopOnBondLevelUp} disabled aria-label="升级自动停止"
+                    onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_level_up", value)} />
+                </Box>
+              </Tooltip>
+            ) : <DiamondSwitch checked={stopOnBondLevelUp} disabled={saving} aria-label="升级自动停止"
+              onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_level_up", value)} />}
+          </SettingsRow>
+          <SettingsRow label="满级自动停止" description="任意牵绊满级后自动停止">
+            <DiamondSwitch checked={stopOnBondMaxLevel} disabled={saving} aria-label="满级自动停止"
+              onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_max_level", value)} />
+          </SettingsRow>
+        </section>
         <Flex align="center" gap="2">
           {saving && (
             <Text size="1" color="gray">
@@ -571,24 +330,6 @@ export function SettingsBasicPage({
           )}
         </Flex>
 
-        <Dialog.Root open={preAttackModeDialogOpen} onOpenChange={setPreAttackModeDialogOpen}>
-          <Dialog.Content maxWidth="860px" className="pre-attack-np-dialog">
-            <Dialog.Title size="4">请关闭战斗中宝具语音字幕</Dialog.Title>
-            <Dialog.Description size="2" color="gray">
-              攻击前读取宝具条时，从者语音字幕可能遮挡识别区域。请按照下图关闭相关设置。
-            </Dialog.Description>
-            <img
-              src={preAttackNpGaugeDialogImage}
-              alt="关闭战斗中宝具语音字幕的设置示例"
-              className="pre-attack-np-dialog-image"
-            />
-            <Flex justify="end" mt="4">
-              <Dialog.Close>
-                <Button type="button">知道了</Button>
-              </Dialog.Close>
-            </Flex>
-          </Dialog.Content>
-        </Dialog.Root>
       </Flex>
     </Box>
   );

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { Box, Button, Dialog, Flex, IconButton, Select, Switch, Text } from "@radix-ui/themes";
-import { Cross1Icon, GearIcon } from "@radix-ui/react-icons";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Box, Button, Dialog, Flex, Heading, IconButton, Select, Text } from "@radix-ui/themes";
+import { Cross1Icon } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
 import {
   DEFAULT_RECOGNITION_SETTINGS,
@@ -9,10 +9,12 @@ import {
 } from "../settings/recognitionSettingsModel";
 import { RecognitionThresholdSettings } from "../settings/SettingsRecognitionPage";
 import { ProjectRunSettings } from "./ProjectRunSettings";
+import { DiamondSwitch } from "../../components/common/DiamondSwitch";
+import { SettingsRow } from "../settings/SettingsRow";
 import type { Project } from "../../types/project";
 import type { ProjectRecognitionSettings, RecognitionSettings } from "../../types/recognition";
 
-type ProjectSettingsSection = "basic" | "run" | "recognition";
+type ProjectSettingsSection = "basic" | "advanced" | "recognition";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -44,6 +46,8 @@ export function ProjectSettingsDialog({
   onUpdateProject,
 }: ProjectSettingsDialogProps) {
   const [section, setSection] = useState<ProjectSettingsSection>("basic");
+  const thresholdWriteProject = useRef(project);
+  useEffect(() => { thresholdWriteProject.current = project; }, [project]);
   const [globalSettings, setGlobalSettings] = useState<RecognitionSettings>(
     DEFAULT_RECOGNITION_SETTINGS
   );
@@ -63,9 +67,10 @@ export function ProjectSettingsDialog({
       value: number,
       options?: { restoreDefault?: boolean }
     ) => {
-      if (!project) return DEFAULT_RECOGNITION_SETTINGS;
+      const currentProject = thresholdWriteProject.current;
+      if (!currentProject) return DEFAULT_RECOGNITION_SETTINGS;
       const globalSettings = await invoke<RecognitionSettings>("get_recognition_settings");
-      const currentOverrides = project.recognitionSettings ?? {};
+      const currentOverrides = currentProject.recognitionSettings ?? {};
       const recognitionSettings = { ...currentOverrides };
       if (options?.restoreDefault) {
         delete recognitionSettings[key];
@@ -75,16 +80,15 @@ export function ProjectSettingsDialog({
       const nextRecognitionSettings = hasRecognitionOverrides(recognitionSettings)
         ? recognitionSettings
         : null;
-      await onUpdateProject({
-        ...project,
-        recognitionSettings: nextRecognitionSettings,
-      });
+      const nextProject = { ...currentProject, recognitionSettings: nextRecognitionSettings };
+      await onUpdateProject(nextProject);
+      thresholdWriteProject.current = nextProject;
       return projectRecognitionSettings(
-        { ...project, recognitionSettings: nextRecognitionSettings },
+        { ...currentProject, recognitionSettings: nextRecognitionSettings },
         globalSettings
       );
     },
-    [onUpdateProject, project]
+    [onUpdateProject]
   );
 
   useEffect(() => {
@@ -200,7 +204,6 @@ export function ProjectSettingsDialog({
                     onClick={() => setSection("basic")}
                     className="settings-nav-button"
                   >
-                    <GearIcon width={14} height={14} />
                     <Text size="2" weight="medium">
                       基础设置
                     </Text>
@@ -209,13 +212,12 @@ export function ProjectSettingsDialog({
                     type="button"
                     variant="ghost"
                     color="gray"
-                    data-active={section === "run" ? "true" : undefined}
-                    aria-current={section === "run" ? "page" : undefined}
-                    onClick={() => setSection("run")}
+                    data-active={section === "advanced" ? "true" : undefined}
+                    aria-current={section === "advanced" ? "page" : undefined}
+                    onClick={() => setSection("advanced")}
                     className="settings-nav-button"
                   >
-                    <GearIcon width={14} height={14} />
-                    <Text size="2" weight="medium">运行设置</Text>
+                    <Text size="2" weight="medium">高级设置</Text>
                   </Button>
                   <Button
                     type="button"
@@ -226,7 +228,6 @@ export function ProjectSettingsDialog({
                     onClick={() => setSection("recognition")}
                     className="settings-nav-button"
                   >
-                    <GearIcon width={14} height={14} />
                     <Text size="2" weight="medium">
                       阈值设置
                     </Text>
@@ -247,7 +248,7 @@ export function ProjectSettingsDialog({
             <Flex align="center" className="settings-content-header">
               <Flex direction="column" justify="center" className="settings-content-header-inner">
                 <Text size="5" weight="bold">
-                  {section === "basic" ? "基础设置" : section === "run" ? "运行设置" : "阈值设置"}
+                  {section === "basic" ? "基础设置" : section === "advanced" ? "高级设置" : "阈值设置"}
                 </Text>
               </Flex>
               <Dialog.Close>
@@ -260,101 +261,59 @@ export function ProjectSettingsDialog({
             <Box className="settings-content-scroll">
               <Box className="settings-content-body">
                 {section === "basic" ? (
-                  <Box className="settings-section-panel">
-                    <Flex direction="column" gap="4">
-                      <Flex align="center" justify="between" gap="4" wrap="wrap">
-                        <Flex direction="column" gap="1">
-                          <Text size="2" weight="bold">
-                            技能使用确认
-                          </Text>
-                          <Text size="1" color="gray">
-                            开启后会确认技能使用成功，失败会进行重试，一般无需开启
-                          </Text>
-                          <Text size="1" color="gray">
-                            全局当前：{inheritedVerifySkillActivationLabel}
-                          </Text>
-                        </Flex>
-                        <Select.Root
-                          value={verifySkillActivationValue}
-                          onValueChange={(value) => void saveVerifySkillActivationOverride(value)}
-                        >
-                          <Select.Trigger aria-label="队伍技能使用确认" />
-                          <Select.Content>
-                            <Select.Item value="inherit">
-                              继承全局（{inheritedVerifySkillActivationLabel}）
-                            </Select.Item>
+                  <Box className="settings-section-panel settings-basic">
+                    <Flex direction="column" className="recognition-setting-block">
+                      <section className="settings-basic-group" aria-label="运行">
+                        <Heading as="h3" size="3" className="settings-basic-group-title">运行</Heading>
+                        <SettingsRow label="额外职阶筛选"
+                          description={<><strong>此为国服特有功能</strong>，助战为额外职阶时，可长按并选择具体职阶</>}
+                          help={<Text size="1" color="gray">全局当前：{globalSettings.enableExtraClassFilter ? "开启" : "关闭"}</Text>}>
+                          <DiamondSwitch checked={extraClassFilterEnabled}
+                            onCheckedChange={(enabled) => void saveExtraClassFilter(enabled)}
+                            aria-label="额外职阶筛选" />
+                        </SettingsRow>
+                        <SettingsRow label="优先选择暴击率更高的指令卡"
+                          description="普通模式和高级模式中，同一成员有相同色卡时，优先选择暴击率更高的一张。">
+                          <DiamondSwitch checked={project?.preferHigherCriticalChance ?? false}
+                            onCheckedChange={(enabled) => void savePreferHigherCriticalChance(enabled)}
+                            aria-label="优先选择暴击率更高的指令卡" />
+                        </SettingsRow>
+                        <ProjectRunSettings project={project} onUpdateProject={onUpdateProject} />
+                      </section>
+                    </Flex>
+                  </Box>
+                ) : section === "advanced" ? (
+                  <Box className="settings-section-panel settings-basic">
+                    <Flex direction="column" className="recognition-setting-block">
+                      <SettingsRow label="技能使用确认"
+                        description="开启后会确认技能使用成功，失败会进行重试"
+                        help={<Text size="1" color="gray">全局当前：{inheritedVerifySkillActivationLabel}</Text>}>
+                        <Select.Root value={verifySkillActivationValue}
+                          onValueChange={(value) => void saveVerifySkillActivationOverride(value)}>
+                          <Select.Trigger aria-label="队伍技能使用确认" className="recognition-mode-select" />
+                          <Select.Content position="popper" className="settings-select-menu">
+                            <Select.Item value="inherit">继承全局（{inheritedVerifySkillActivationLabel}）</Select.Item>
                             <Select.Item value="enabled">开启</Select.Item>
                             <Select.Item value="disabled">关闭</Select.Item>
                           </Select.Content>
                         </Select.Root>
-                      </Flex>
-                      <Flex align="center" justify="between" gap="4" wrap="wrap">
-                        <Flex direction="column" gap="1">
-                          <Text size="2" weight="bold">
-                            Extra 职阶筛选
-                          </Text>
-                          <Text size="1" color="gray">
-                            国服助战目标为 Extra 职阶时，长按并选择具体职阶；关闭后只点击 Extra
-                            页签。
-                          </Text>
-                          <Text size="1" color="gray">
-                            全局当前：{globalSettings.enableExtraClassFilter ? "开启" : "关闭"}
-                          </Text>
-                        </Flex>
-                        <Switch
-                          checked={extraClassFilterEnabled}
-                          onCheckedChange={(enabled) => void saveExtraClassFilter(enabled)}
-                          aria-label="Extra 职阶筛选"
-                        />
-                      </Flex>
-                      <Flex align="center" justify="between" gap="4" wrap="wrap">
-                        <Flex direction="column" gap="1">
-                          <Text size="2" weight="bold">
-                            优先选择暴击率更高的指令卡
-                          </Text>
-                          <Text size="1" color="gray">
-                            普通模式和高级模式中，同一成员有相同色卡时，优先选择暴击率更高的一张。
-                          </Text>
-                        </Flex>
-                        <Switch
-                          checked={project?.preferHigherCriticalChance ?? false}
-                          onCheckedChange={(enabled) =>
-                            void savePreferHigherCriticalChance(enabled)
-                          }
-                          aria-label="优先选择暴击率更高的指令卡"
-                        />
-                      </Flex>
-                      <Flex align="center" justify="between" gap="4" wrap="wrap">
-                        <Flex direction="column" gap="1">
-                          <Text size="2" weight="bold">
-                            关闭自动技能目标识别
-                          </Text>
-                          <Text size="1" color="gray">
-                            开启后选择技能时始终显示目标选择，不再根据技能数据自动跳过无目标技能。
-                          </Text>
-                        </Flex>
-                        <Select.Root
-                          value={autoSkillTargetRecognitionValue}
-                          onValueChange={(value) => void saveAutoSkillTargetRecognition(value)}
-                        >
-                          <Select.Trigger aria-label="关闭自动技能目标识别" />
-                          <Select.Content>
+                      </SettingsRow>
+                      <SettingsRow label="关闭自动技能目标识别"
+                        description="开启后选择技能时始终显示目标选择，不再根据技能数据自动跳过无目标技能。">
+                        <Select.Root value={autoSkillTargetRecognitionValue}
+                          onValueChange={(value) => void saveAutoSkillTargetRecognition(value)}>
+                          <Select.Trigger aria-label="关闭自动技能目标识别" className="recognition-mode-select" />
+                          <Select.Content position="popper" className="settings-select-menu">
                             <Select.Item value="enabled">关闭</Select.Item>
                             <Select.Item value="disabled">开启</Select.Item>
                           </Select.Content>
                         </Select.Root>
-                      </Flex>
+                      </SettingsRow>
                     </Flex>
-                    {settingsError && (
-                      <Text as="div" size="1" color="red" mt="2">
-                        {settingsError}
-                      </Text>
-                    )}
                   </Box>
-                ) : section === "run" ? (
-                  <ProjectRunSettings project={project} onUpdateProject={onUpdateProject} />
                 ) : (
                   <RecognitionThresholdSettings
+                    key={project?.id}
                     active={open && project != null}
                     helpText="此处只影响当前队伍；未保存队伍阈值时会继承全局设置。"
                     loadSettings={loadSettings}
@@ -362,6 +321,7 @@ export function ProjectSettingsDialog({
                     saveThreshold={saveThreshold}
                   />
                 )}
+                {settingsError && <Text as="div" size="1" color="red" mt="2">{settingsError}</Text>}
               </Box>
             </Box>
           </Flex>

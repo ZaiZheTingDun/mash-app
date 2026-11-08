@@ -42,7 +42,7 @@ export function TouchControlSetting({ active }: { active: boolean }) {
   };
 
   return (
-    <SettingsRow label="触控方式" description="触控异常时可切回旧方式，下次任务开始生效"
+    <SettingsRow label="触控方式" description="Mash 与模拟器交互的触控方式"
       help={<>
         {saved && <Text size="1" color="green" role="status">已保存，下次任务开始生效</Text>}
         {error && <Flex gap="2" align="center">

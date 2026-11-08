@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
+import { FooterNote } from "../../components/common/FooterNote";
 import type { CaptureHistoryEntry } from "../../types/packetCapture";
 import { CaptureAuthorization } from "./CaptureAuthorization";
 import { CaptureClientPicker } from "./CaptureClientPicker";
@@ -119,11 +120,11 @@ export function PacketCapturePage({ onBack, onNavigationLockChange }: { onBack: 
       <Callout.Text>{capture.workspace.capture.warnings.map(warning => <span key={warning} style={{ display: "block" }}>{warning}</span>)}</Callout.Text>
     </Callout.Root>}
     <Flex className="page-footer capture-footer" gap="5">
-      <div className="task-status capture-status" role={capture.error ? "alert" : "status"} data-error={!!capture.error}>
-        {(capture.error || capture.message) && <><i className="capture-diamond" aria-hidden="true" /><span><CaptureStatusMessage message={capture.error || capture.message} manualEntry={authorization && <Link asChild>
+      <FooterNote className="capture-status" role={capture.error ? "alert" : "status"}>
+        {(capture.error || capture.message) && <CaptureStatusMessage message={capture.error || capture.message} manualEntry={authorization && <Link asChild>
           <button type="button" onClick={() => setAuthorizationDialogId(authorization.requestId)}>手动输入</button>
-        </Link>} /></span></>}
-      </div>
+        </Link>} />}
+      </FooterNote>
       <Button variant="ghost" color="gray" className="capture-setup" aria-label="环境配置" title="设备需已安装 Reqable 并具备 root 权限；设备重启后需重新配置" disabled={capture.busy || capture.canStop} onClick={() => void capture.setup()}><span><small>SETUP</small><span>环境配置</span></span></Button>
       <TaskActionButton label={capture.canStop ? "停止" : "开始"} running={capture.canStop} disabled={capture.operation === "stop" || (capture.busy && !capture.canStop)} onClick={() => void (capture.canStop ? capture.stop() : capture.start())} />
     </Flex>

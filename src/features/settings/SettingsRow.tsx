@@ -3,7 +3,7 @@ import { Text } from "@radix-ui/themes";
 
 export function SettingsRow({ label, description, help, children }: {
   label: string;
-  description: string;
+  description: ReactNode;
   help?: ReactNode;
   children: ReactNode;
 }) {
