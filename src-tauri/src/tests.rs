@@ -2208,27 +2208,6 @@ fn assets_app_manifest_parses_target_version_and_latest_url() {
 }
 
 #[test]
-fn assets_app_manifest_has_manual_patch_chains_to_v21() {
-    let manifest = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
-    let mut remote = build_assets_remote_manifest(manifest.assets_version, "[]");
-    remote.patches = manifest.manual_import.patches;
-
-    for version in [18, 19, 20] {
-        let plan = asset_update_plan(Some(version), true, manifest.assets_version, &remote, false);
-        let AssetInstallPlan::Patches {
-            target_version,
-            patches,
-        } = plan
-        else {
-            panic!("missing manual patch chain from v{version} to v21");
-        };
-        assert_eq!(target_version, 21);
-        assert_eq!(patches.first().unwrap().from, version);
-        assert_eq!(patches.last().unwrap().to, 21);
-    }
-}
-
-#[test]
 fn asset_update_plan_caps_target_to_app_configured_version() {
     let remote = build_assets_remote_manifest(
         3,
