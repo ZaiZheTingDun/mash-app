@@ -1,5 +1,5 @@
 {
-  "assetsVersion": 20,
+  "assetsVersion": 21,
   "latestUrl": "https://mash.xiaotongx.com/mash/assets/latest.json",
   "manualImport": {
     "bases": [
@@ -26,6 +26,13 @@
         "file": "patches/v19-to-v20.zip",
         "sha256": "09f73fceaebb87bd1f43216814b9d3b907cae4e2eec38b96ca5e3a11be84fb5b",
         "size": 1324407
+      },
+      {
+        "from": 20,
+        "to": 21,
+        "file": "patches/v20-to-v21.zip",
+        "sha256": "f13699447f1150c08b2e780edf3804332610fce7f00e301cf8ce51bff50decb4",
+        "size": 5206559
       }
     ]
   }
