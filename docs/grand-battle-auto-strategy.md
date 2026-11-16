@@ -103,3 +103,7 @@ Lancer mode 同样使用共享的 `GrandCardRule` matcher。固定规则顺序�
 ## 非 Grand 行为
 
 未配置 `grandServants` 时，runner 保留基于 `mainOutput`、输出类型和 NP 颜色的旧版 advanced 自动评分逻辑。
+
+## Archer（弓阶冠位）
+
+创建队伍时选择「戴冠战模式 → 弓阶冠位」，主冠位必选，副冠位可选。复用现有骑、杀、Extra 的默认宝具优先规则与主冠位自动换人逻辑，仍可使用自定义出卡规则；本次仅补充职阶接入，不新增弓阶专属机制识别或打法。

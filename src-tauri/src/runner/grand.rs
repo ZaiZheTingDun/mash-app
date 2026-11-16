@@ -5,6 +5,7 @@
 
 use super::*;
 
+mod archer;
 mod assassin;
 mod berserker;
 mod extra;
@@ -12,6 +13,7 @@ mod lancer;
 mod rider;
 mod saber;
 
+use archer::ArcherStrategy;
 use assassin::AssassinStrategy;
 use berserker::BerserkerStrategy;
 use extra::ExtraStrategy;
@@ -20,6 +22,7 @@ use rider::RiderStrategy;
 use saber::SaberStrategy;
 
 static SABER_STRATEGY: SaberStrategy = SaberStrategy;
+static ARCHER_STRATEGY: ArcherStrategy = ArcherStrategy;
 static LANCER_STRATEGY: LancerStrategy = LancerStrategy;
 static RIDER_STRATEGY: RiderStrategy = RiderStrategy;
 static ASSASSIN_STRATEGY: AssassinStrategy = AssassinStrategy;
@@ -133,9 +136,10 @@ pub(crate) trait GrandClassStrategy: Sync {
     }
 }
 
-pub(crate) fn grand_class_strategies() -> [&'static dyn GrandClassStrategy; 9] {
+pub(crate) fn grand_class_strategies() -> [&'static dyn GrandClassStrategy; 10] {
     [
         &SABER_STRATEGY,
+        &ARCHER_STRATEGY,
         &LANCER_STRATEGY,
         &RIDER_STRATEGY,
         &ASSASSIN_STRATEGY,
@@ -788,12 +792,37 @@ mod registry_tests {
             .is_ok());
         assert!(assassin.validate_servants(&[]).is_err());
         assert!(assassin.validate_servants(&[servant(0, "deputy")]).is_err());
+        let archer = grand_strategy(GrandClass::Archer);
+        assert!(archer.validate_servants(&[servant(0, "main")]).is_ok());
+        assert!(archer
+            .validate_servants(&[servant(0, "main"), servant(1, "deputy")])
+            .is_ok());
+        assert!(archer.validate_servants(&[]).is_err());
+        assert!(archer.validate_servants(&[servant(0, "deputy")]).is_err());
         assert!(grand_strategy(GrandClass::Extra1Earth)
             .validate_servants(&[servant(0, "aoe")])
             .is_ok());
         assert!(grand_strategy(GrandClass::Extra1Earth)
             .validate_servants(&[servant(0, "single")])
             .is_err());
+    }
+
+    #[test]
+    fn archer_definition_drives_ui_roles_and_support_class() {
+        let definition = grand_class_definitions()
+            .into_iter()
+            .find(|definition| definition.id == GrandClass::Archer)
+            .unwrap();
+        assert_eq!(definition.label, "弓阶冠位");
+        assert_eq!(definition.servant_class, "Archer");
+        assert!(definition.selection_group.is_none());
+        assert!(!definition.card_priority_enabled);
+        assert_eq!(definition.auto_order_change_roles, vec!["main"]);
+        assert_eq!(definition.roles.len(), 2);
+        assert_eq!(definition.roles[0].role, "main");
+        assert!(definition.roles[0].required);
+        assert_eq!(definition.roles[1].role, "deputy");
+        assert!(!definition.roles[1].required);
     }
 
     #[test]

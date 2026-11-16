@@ -4961,7 +4961,11 @@ fn extra_picks(
 
 #[test]
 fn extra_grand_dual_np_prefers_same_color_and_main_deputy_order() {
-    for grand_class in [GrandClass::Extra1Fire, GrandClass::Assassin] {
+    for grand_class in [
+        GrandClass::Extra1Fire,
+        GrandClass::Assassin,
+        GrandClass::Archer,
+    ] {
         let picks = extra_picks(
             grand_class,
             vec![
@@ -4982,7 +4986,11 @@ fn extra_grand_dual_np_prefers_same_color_and_main_deputy_order() {
 
 #[test]
 fn extra_grand_main_np_prefers_same_color_brave_chain_before_fallback() {
-    for grand_class in [GrandClass::Extra2Wind, GrandClass::Assassin] {
+    for grand_class in [
+        GrandClass::Extra2Wind,
+        GrandClass::Assassin,
+        GrandClass::Archer,
+    ] {
         let picks = extra_picks(
             grand_class,
             vec![
@@ -5004,7 +5012,11 @@ fn extra_grand_main_np_prefers_same_color_brave_chain_before_fallback() {
 
 #[test]
 fn extra_earth_without_optional_single_skips_single_related_rules() {
-    for grand_class in [GrandClass::Extra1Earth, GrandClass::Assassin] {
+    for grand_class in [
+        GrandClass::Extra1Earth,
+        GrandClass::Assassin,
+        GrandClass::Archer,
+    ] {
         let picks = extra_picks(
             grand_class,
             vec![
@@ -5023,7 +5035,11 @@ fn extra_earth_without_optional_single_skips_single_related_rules() {
 
 #[test]
 fn extra_filler_prefers_main_then_deputy_then_other_and_b_a_q() {
-    for grand_class in [GrandClass::Extra2Water, GrandClass::Assassin] {
+    for grand_class in [
+        GrandClass::Extra2Water,
+        GrandClass::Assassin,
+        GrandClass::Archer,
+    ] {
         let picks = extra_picks(
             grand_class,
             vec![
@@ -5920,6 +5936,18 @@ fn run_config_round_trips_assassin_grand_class() {
     assert_eq!(cfg.grand_class, GrandClass::Assassin);
     let serialized = serde_json::to_value(&cfg).unwrap();
     assert_eq!(serialized["grandClass"], serde_json::json!("assassin"));
+}
+
+#[test]
+fn run_config_round_trips_archer_grand_class() {
+    let mut payload = minimal_run_config_json();
+    payload["grandClass"] = serde_json::json!("archer");
+
+    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+
+    assert_eq!(cfg.grand_class, GrandClass::Archer);
+    let serialized = serde_json::to_value(&cfg).unwrap();
+    assert_eq!(serialized["grandClass"], serde_json::json!("archer"));
 }
 
 #[test]
