@@ -7036,8 +7036,78 @@ def _load_frame(cmd: dict) -> tuple[Optional[np.ndarray], Optional[str]]:
     return frame, None
 
 
+def _try_mumu_stream(cmd: dict):
+    """Start the MuMu frame source when ``capture_config.json`` asks for it.
+
+    Scrcpy and ``adb`` read pixels through SurfaceFlinger, which returns black
+    frames while the game window carries FLAG_SECURE. MuMu's frame source has
+    two host-side paths (see ``mumu_capture``): the renderer IPC, and Windows
+    ``PrintWindow`` on MuMu's render window. ``source: auto`` starts with the
+    IPC and switches to window capture as soon as the IPC frame turns out
+    blank, which is what happens with a secure layer in the foreground.
+
+    Returns a completed ``start_stream`` response, or ``None`` to let the
+    caller fall through to the stock scrcpy path.
+    """
+    global stream
+
+    try:
+        from mash_cv.mumu_capture import MuMuStream, load_config
+    except Exception as exc:  # noqa: BLE001
+        print(f"[mash-cv] mumu_capture import failed: {exc}", file=sys.stderr)
+        return None
+
+    cfg = load_config()
+    if str(cfg.get("source", "scrcpy")).lower() == "scrcpy":
+        return None
+
+    if stream is not None:
+        try:
+            stream.stop()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[mash-cv] previous stream stop error: {exc}", file=sys.stderr)
+        stream = None
+
+    try:
+        native_size = cfg.get("nativeSize") or None
+        new_stream = MuMuStream(
+            mumu_root=cfg.get("mumuRoot"),
+            vm_index=int(cfg.get("vmIndex", 1)),
+            package=cfg.get("package"),
+            target_fps=float(cfg.get("targetFps", 12)),
+            max_size=int(cmd.get("maxSize", 0) or 0),
+            flip_vertical=bool(cfg.get("flipVertical", True)),
+            source=cfg.get("source", "auto"),
+            window_title=cfg.get("windowTitle") or "",
+            native_size=tuple(native_size) if native_size else None,
+            blank_switch_frames=int(cfg.get("blankSwitchFrames", 18) or 18),
+            window_wait_ms=int(cfg.get("windowWaitMs", 12000) or 12000),
+            adb_path=cmd.get("adbPath") or "",
+            serial=cmd.get("serial") or "",
+        )
+        width, height = new_stream.start()
+        warmup = float(cmd.get("warmupSeconds", 15.0))
+        if new_stream.wait_for_frame(timeout=warmup) is None:
+            new_stream.stop()
+            raise RuntimeError(f"no frame within {warmup:.0f}s")
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"[mash-cv] mumu capture unavailable ({exc}); falling back to scrcpy",
+            file=sys.stderr,
+        )
+        return None
+
+    stream = new_stream
+    mode = getattr(new_stream, "_mode", None) or "mumu"
+    return {"ok": True, "width": width, "height": height, "displayId": 0, "source": f"mumu-{mode}"}
+
+
 def _start_stream(cmd: dict) -> dict:
     global stream
+
+    mumu_result = _try_mumu_stream(cmd)
+    if mumu_result is not None:
+        return mumu_result
 
     jar_path = cmd.get("jarPath")
     if not jar_path:
