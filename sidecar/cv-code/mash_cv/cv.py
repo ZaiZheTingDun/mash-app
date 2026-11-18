@@ -2159,6 +2159,40 @@ def _find_element_by_name(
 # ---------------------------------------------------------------------------
 
 
+# Injected by apply_screen_patch.py — campaign page skins change every event,
+# which silently breaks the static title template (`text_rank_up_quest_page`).
+# When every template misses, OCR the page-title strip and promote the frame by
+# the localised page name. This block is defined before `_detect_screen` and
+# only runs when the template path already returned Unknown.
+
+SCREEN_OCR_TITLE_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 0.115}
+SCREEN_OCR_KEYWORDS = (
+    ("InterludeQuest", ("幕间物语", "幕間物語", "幕间")),
+    ("RankUpQuest", ("强化任务", "強化クエスト", "Rank Up", "Rank up")),
+)
+_SCREEN_OCR_STATE = {"at": 0.0, "text": ""}
+
+
+def _ocr_promote_screen(img: np.ndarray, screen_names=None):
+    """Return a screen name when the title strip names a known list page."""
+    now = time.time()
+    if now - _SCREEN_OCR_STATE["at"] < 0.8:
+        text = _SCREEN_OCR_STATE["text"]
+    else:
+        result = _ocr_region(img, SCREEN_OCR_TITLE_REGION)
+        text = str(result.get("fullText") or "")
+        _SCREEN_OCR_STATE["at"] = now
+        _SCREEN_OCR_STATE["text"] = text
+    if not text:
+        return None
+    for screen_name, keywords in SCREEN_OCR_KEYWORDS:
+        if screen_names is not None and screen_name not in screen_names:
+            continue
+        if any(keyword in text for keyword in keywords):
+            return screen_name
+    return None
+
+
 def _detect_screen(
     img: np.ndarray,
     screen_names: Optional[list[str]] = None,
@@ -2272,6 +2306,13 @@ def _detect_screen(
             best_score = screen_score
             best_name = screen_name
             best_priority = priority
+    if best_name == "Unknown":
+        try:
+            promoted = _ocr_promote_screen(img, screen_names)
+        except Exception:
+            promoted = None
+        if promoted:
+            return {"screen": promoted, "score": best_score}
     return {"screen": best_name, "score": best_score}
 
 
