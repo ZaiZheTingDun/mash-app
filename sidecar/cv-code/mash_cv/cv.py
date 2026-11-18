@@ -1982,6 +1982,11 @@ def _rank_up_quest_row_color_stats(img: np.ndarray, row: dict) -> tuple[float, f
 
 def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
     row_config = config.get("screens", {}).get("RankUpQuest", {}).get("rowDetection", {})
+    # Campaign skins repaint the row header art, so the title template can stop
+    # matching while every row is still perfectly clickable. Brightness of the
+    # header band is the signal that actually separates "available" from
+    # "already cleared", so a missing title anchor must not veto the row.
+    allow_cost_anchor_only = bool(row_config.get("allowCostAnchorOnly", True))
     width_scales = tuple(row_config.get("anchorWidthScales", (1.0,)))
     pair_by_left_edge = row_config.get("anchorPairAlignment", "center") == "left"
     rank_anchors = _find_all_template_matches(
@@ -2030,7 +2035,7 @@ def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
             continue
         mean_luma, mean_saturation, mean_value = _rank_up_quest_row_color_stats(img, row)
         actionable = (
-            rank is not None
+            (rank is not None or allow_cost_anchor_only)
             and mean_luma >= RANK_UP_QUEST_ACTIONABLE_LUMA
             and mean_value >= RANK_UP_QUEST_ACTIONABLE_VALUE
         )
