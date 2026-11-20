@@ -425,6 +425,21 @@ fn advanced_rule_requires_np_recognition(rule: &AdvancedRule) -> bool {
         })
 }
 
+pub(crate) fn grand_card_strategy_for_attack<'a>(
+    scene: &'a AdvancedBattleScene,
+    prepared_turn_count: usize,
+    project_strategy: &'a GrandCardStrategy,
+) -> &'a GrandCardStrategy {
+    // Startup arms Turn 1; after the last preparation, keep its attack strategy.
+    let turn_index = prepared_turn_count.saturating_sub(1);
+    scene
+        .turns
+        .get(turn_index)
+        .or_else(|| scene.turns.last())
+        .and_then(|turn| turn.grand_card_strategy.as_ref())
+        .unwrap_or(project_strategy)
+}
+
 pub(crate) fn advanced_scene_requires_np_recognition(
     scene: &AdvancedBattleScene,
     grand_servants_configured: bool,

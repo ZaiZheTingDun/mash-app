@@ -17,7 +17,7 @@ interface CommandWorkspaceProps {
   wave: number; waveCount: number; turn: number; turns: { id: string }[];
   fixedPreparation?: boolean;
   step: CommandStep; advanced?: boolean; busy?: boolean;
-  onStep: (step: CommandStep) => void; onWave: (wave: number) => void; onTurn: (turn: number) => void;
+  onStep: (step: CommandStep) => void; onWave?: (wave: number) => void; onTurn: (turn: number) => void;
   onAddWave?: () => void; onDeleteWave?: () => void; onAddTurn: () => void; onDeleteTurn: () => void;
   configuredWave?: boolean; configuredTurn?: boolean; error?: string | null; children: ReactNode;
 }
@@ -29,6 +29,8 @@ export function CommandWorkspace({ fixedPreparation = false, wave, waveCount, tu
     item.id === "basic" || item.id === "control" ? advanced && turn === 0 : true)
     .map((item, index) => ({ ...item, number: String(index + 1).padStart(2, "0") }));
   const phase = visibleSteps.find(item => item.id === step)!;
+  const turnLabel = `TURN ${String(turn + 1).padStart(2, "0")}`;
+  const phaseLocation = advanced ? turnLabel : `WAVE ${String(wave + 1).padStart(2, "0")} / ${turnLabel}`;
   useEffect(() => { if (scroll.current) scroll.current.scrollTop = 0; }, [wave, turn, step]);
   const remove = (kind: "wave" | "turn") => {
     if (kind === "wave" ? configuredWave : configuredTurn) setDeleting(kind);
@@ -36,13 +38,15 @@ export function CommandWorkspace({ fixedPreparation = false, wave, waveCount, tu
   };
   return <div className={`command-workspace${advanced ? " is-grand" : ""}${fixedPreparation ? " has-simple-preparation" : ""}`}>
     <aside className="command-sidebar" aria-label="指令导航">
-      <div className="command-rail-label"><SectionRailIcon /><span>WAVE</span>{onDeleteWave && <IconButton variant="ghost" color="gray" aria-label="删除当前 Battle" disabled={busy || waveCount <= 1} onClick={() => remove("wave")}><TrashIcon /></IconButton>}</div>
-      <div className="command-scene-controls" role="group" aria-label={`第 ${wave + 1}/${waveCount} 面`}><strong>{String(wave + 1).padStart(2, "0")}</strong><span>/ {String(waveCount).padStart(2, "0")}</span>
-        <IconButton variant="ghost" color="gray" aria-label="上一场战斗" disabled={busy || wave === 0} onClick={() => onWave(wave - 1)}><ChevronLeftIcon /></IconButton>
-        <IconButton variant="ghost" color="gray" aria-label="下一场战斗" disabled={busy || wave + 1 === waveCount} onClick={() => onWave(wave + 1)}><ChevronRightIcon /></IconButton>
-        {onAddWave && <IconButton variant="ghost" aria-label="添加 Battle" disabled={busy} onClick={onAddWave}><PlusIcon /></IconButton>}
-      </div>
-      <div className="command-rail-label"><SectionRailIcon /><span>TURN</span><TurnHelpTooltip /><IconButton variant="ghost" color="gray" aria-label="删除当前 Turn" disabled={busy || turns.length <= 1} onClick={() => remove("turn")}><TrashIcon /></IconButton></div>
+      {!advanced && <>
+        <div className="command-rail-label"><SectionRailIcon /><span>WAVE</span>{onDeleteWave && <IconButton variant="ghost" color="gray" aria-label="删除当前 Battle" disabled={busy || waveCount <= 1} onClick={() => remove("wave")}><TrashIcon /></IconButton>}</div>
+        <div className="command-scene-controls" role="group" aria-label={`第 ${wave + 1}/${waveCount} 面`}><strong>{String(wave + 1).padStart(2, "0")}</strong><span>/ {String(waveCount).padStart(2, "0")}</span>
+          <IconButton variant="ghost" color="gray" aria-label="上一场战斗" disabled={busy || wave === 0} onClick={() => onWave?.(wave - 1)}><ChevronLeftIcon /></IconButton>
+          <IconButton variant="ghost" color="gray" aria-label="下一场战斗" disabled={busy || wave + 1 === waveCount} onClick={() => onWave?.(wave + 1)}><ChevronRightIcon /></IconButton>
+          {onAddWave && <IconButton variant="ghost" aria-label="添加 Battle" disabled={busy} onClick={onAddWave}><PlusIcon /></IconButton>}
+        </div>
+      </>}
+      <div className="command-rail-label"><SectionRailIcon /><span>TURN</span><TurnHelpTooltip advanced={advanced} /><IconButton variant="ghost" color="gray" aria-label="删除当前 Turn" disabled={busy || turns.length <= 1} onClick={() => remove("turn")}><TrashIcon /></IconButton></div>
       <div className="command-scene-controls command-turn-controls" role="group" aria-label={`第 ${turn + 1}/${turns.length} 回合`}>
         <strong>{String(turn + 1).padStart(2, "0")}</strong><span>/ {String(turns.length).padStart(2, "0")}</span>
         <IconButton variant="ghost" color="gray" aria-label="上一回合" disabled={busy || turn === 0} onClick={() => onTurn(turn - 1)}><ChevronLeftIcon /></IconButton>
@@ -52,7 +56,7 @@ export function CommandWorkspace({ fixedPreparation = false, wave, waveCount, tu
       <div className="command-rail-label"><SectionRailIcon /><span>STEPS</span></div>
       <nav className="command-step-list">{visibleSteps.map(item => <button type="button" key={item.id} aria-pressed={step === item.id} disabled={busy} onClick={() => onStep(item.id)}><span className="command-step-node"><span>{item.number}</span></span><span className="command-step-copy"><b>{item.label}</b><small>{item.english}</small></span></button>)}</nav>
     </aside>
-    <section className="command-content"><div className="command-phase-header" data-step={step}><small>WAVE {String(wave + 1).padStart(2, "0")} / TURN {String(turn + 1).padStart(2, "0")}</small><div><strong>{phase.number}</strong><span className="command-phase-title"><h2>{phase.label}</h2><small>{phase.english}</small></span><p>{phase.description}</p></div></div>
+    <section className="command-content"><div className="command-phase-header" data-step={step}><small>{phaseLocation}</small><div><strong>{phase.number}</strong><span className="command-phase-title"><h2>{phase.label}</h2><small>{phase.english}</small></span><p>{phase.description}</p></div></div>
       {error && <div role="alert" className="command-error">{error}</div>}
       <div className="command-scroll-region" ref={scroll}><fieldset className="command-edit-surface" disabled={busy}>{children}</fieldset></div>
     </section>

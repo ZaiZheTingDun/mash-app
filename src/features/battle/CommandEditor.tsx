@@ -35,7 +35,6 @@ interface CommandEditorProps {
   grandCardPriorityEnabled?: boolean;
   turnAttackModesEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
-  onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
 }
 
 export function CommandEditor({
@@ -55,7 +54,6 @@ export function CommandEditor({
   grandCardPriorityEnabled = false,
   turnAttackModesEnabled = false,
   onGrandServantsChange,
-  onGrandCardStrategyChange,
 }: CommandEditorProps) {
   const [step, setStep] = useState<CommandStep>("prep");
   const editor = useCommandDocument<BattleScene>(advancedMode ? null : projectId, false);
@@ -81,7 +79,6 @@ export function CommandEditor({
         grandCardStrategy={grandCardStrategy}
         grandCardPriorityEnabled={grandCardPriorityEnabled}
         onGrandServantsChange={onGrandServantsChange}
-        onGrandCardStrategyChange={onGrandCardStrategyChange}
       />
     );
   }

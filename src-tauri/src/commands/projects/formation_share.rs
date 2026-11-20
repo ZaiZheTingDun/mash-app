@@ -73,6 +73,7 @@ fn decode_entry(text: &str) -> Result<ConfigExportEntry, String> {
             scene.turns.push(AdvancedBattleTurn {
                 id: uuid::Uuid::new_v4().to_string(),
                 actions: std::mem::take(&mut scene.startup_actions),
+                grand_card_strategy: None,
             });
         }
     }

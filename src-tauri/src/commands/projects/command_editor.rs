@@ -53,6 +53,7 @@ fn normalize_documents(scenes: Vec<Value>, advanced: bool) -> Result<Vec<Value>,
                     scene.turns.push(AdvancedBattleTurn {
                         id: uuid::Uuid::new_v4().to_string(),
                         actions: std::mem::take(&mut scene.startup_actions),
+                        grand_card_strategy: None,
                     });
                 }
                 scene.startup_actions.clear();
@@ -162,7 +163,11 @@ fn mutate_document(
         }
         CommandEditorMutation::AddTurn => {
             let turns = scenes[wave]["turns"].as_array_mut().ok_or("回合配置无效")?;
-            turns.push(default_turn(advanced));
+            let mut added = default_turn(advanced);
+            if advanced {
+                added["grandCardStrategy"] = json!(GrandCardStrategy::default());
+            }
+            turns.push(added);
             next_turn = turns.len() - 1;
         }
         CommandEditorMutation::DeleteTurn => {
@@ -254,6 +259,50 @@ mod tests {
         );
         assert!(advanced[0]["startupActions"].as_array().unwrap().is_empty());
     }
+    #[test]
+    fn grand_attack_strategies_survive_turn_edits_and_formation_shares() {
+        let scenes =
+            normalize_documents(vec![json!({"id":"grand","turns":[{"id":"first"}]})], true)
+                .unwrap();
+        let added = mutate_document(scenes, true, CommandEditorMutation::AddTurn, 0, 0).unwrap();
+        let mut second_turn = added.scenes[0]["turns"][1].clone();
+        assert_eq!(second_turn["grandCardStrategy"]["customRules"], json!([]));
+        second_turn["grandCardStrategy"]["customRules"] = json!([{
+            "id":"rule", "name":"宝具优先", "slots":[{"kind":"np","color":"any"}]
+        }]);
+        let edited = mutate_document(
+            added.scenes,
+            true,
+            CommandEditorMutation::UpdateTurn { turn: second_turn },
+            0,
+            1,
+        )
+        .unwrap();
+        let slots: Vec<_> = (0..6)
+            .map(|index| {
+                let kind = if index == 2 { "support" } else { "servant" };
+                json!({"id":format!("member-{index}"),"type":kind})
+            })
+            .collect();
+        let shared = crate::formation_share::encode(&json!({
+            "project":{"name":"冠位","slots":slots},
+            "advancedBattleScenes":edited.scenes,
+        }))
+        .unwrap();
+        let decoded = crate::formation_share::decode(&shared).unwrap();
+        let scenes = normalize_documents(
+            decoded["advancedBattleScenes"].as_array().unwrap().clone(),
+            true,
+        )
+        .unwrap();
+        let turns = &scenes[0]["turns"];
+        assert!(turns[0].get("grandCardStrategy").is_none());
+        assert_eq!(
+            turns[1]["grandCardStrategy"]["customRules"][0]["slots"][0]["kind"],
+            "np"
+        );
+    }
+
     #[test]
     fn selected_skill_forms_survive_document_round_trips_and_legacy_actions_stay_compatible() {
         for advanced in [false, true] {

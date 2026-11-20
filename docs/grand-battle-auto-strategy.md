@@ -14,7 +14,8 @@
 - 已就绪的 Noble Phantasm 与已识别的指令卡会一并评分。
 - 手写的 advanced `rules` 始终优先；本策略仅用于自动 advanced 流程。
 - `grandClass` 选择自动规则集；缺失的旧版值默认 `saber`。
-- 项目级 `grandCardStrategy.chainPriority` 列表可以重排 Saber 自动规则顺序；Berserker 使用固定顺序。
+- 每个配置回合可以保存自己的 `grandCardStrategy`。已有回合在单独保存前沿用项目级策略，新加的回合从职阶默认策略开始。超过已配置回合数时，继续使用最后一个回合的出卡策略。
+- `grandCardStrategy.chainPriority` 列表可以重排 Saber 自动规则顺序。Berserker 使用固定顺序。
 - 当 `grandCardStrategy.customRules` 非空时，先尝试用户规则，再尝试按职阶内置规则；内置 Saber/Berserker 规则始终保留为 fallback。
 
 若 `npCard` 为 `auto`，runner 使用从者资源中的 `noblePhantasmCard` 值。若已配置的 Grand servant 当前不在前排，该 role 在本回合会被忽略。

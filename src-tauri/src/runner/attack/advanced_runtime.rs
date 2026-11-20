@@ -50,6 +50,15 @@ impl Runner {
 
         if scene.rules.is_empty() || uses_advanced_strategy_flow(&scene) {
             let scene_index = self.battle.current_scene_index;
+            let prepared_turn_count = self
+                .battle
+                .advanced_turn_indices
+                .get(&scene_index)
+                .copied()
+                .unwrap_or_default();
+            let project_strategy = self.config.grand_card_strategy.clone();
+            let card_strategy =
+                grand_card_strategy_for_attack(&scene, prepared_turn_count, &project_strategy);
             let executed_control_count = *self
                 .battle
                 .advanced_control_indices
@@ -222,7 +231,7 @@ impl Runner {
                             &startup_party_ids,
                             &startup_party_supports,
                             &grand_servants,
-                            &self.config.grand_card_strategy,
+                            card_strategy,
                             self.config.grand_class,
                             self.config.prefer_higher_critical_chance,
                         );
@@ -237,7 +246,7 @@ impl Runner {
                         &startup_party_ids,
                         &startup_party_supports,
                         &grand_servants,
-                        &self.config.grand_card_strategy,
+                        card_strategy,
                         self.config.grand_class,
                         self.config.prefer_higher_critical_chance,
                     );
@@ -305,7 +314,7 @@ impl Runner {
                             &control_party_ids,
                             &control_party_supports,
                             &grand_servants,
-                            &self.config.grand_card_strategy,
+                            card_strategy,
                             self.config.grand_class,
                             self.config.prefer_higher_critical_chance,
                         );
@@ -321,7 +330,7 @@ impl Runner {
                         &party_ids,
                         &party_supports,
                         &grand_servants,
-                        &self.config.grand_card_strategy,
+                        card_strategy,
                         self.config.grand_class,
                         self.config.prefer_higher_critical_chance,
                     );
@@ -414,7 +423,7 @@ impl Runner {
                         &startup_party_ids,
                         &startup_party_supports,
                         &grand_servants,
-                        &self.config.grand_card_strategy,
+                        card_strategy,
                         self.config.grand_class,
                         self.config.prefer_higher_critical_chance,
                     );
@@ -429,7 +438,7 @@ impl Runner {
                     &startup_party_ids,
                     &startup_party_supports,
                     &grand_servants,
-                    &self.config.grand_card_strategy,
+                    card_strategy,
                     self.config.grand_class,
                     self.config.prefer_higher_critical_chance,
                 );
@@ -528,7 +537,7 @@ impl Runner {
                         &control_party_ids,
                         &control_party_supports,
                         &grand_servants,
-                        &self.config.grand_card_strategy,
+                        card_strategy,
                         self.config.grand_class,
                         self.config.prefer_higher_critical_chance,
                     );
@@ -543,7 +552,7 @@ impl Runner {
                     &control_party_ids,
                     &control_party_supports,
                     &grand_servants,
-                    &self.config.grand_card_strategy,
+                    card_strategy,
                     self.config.grand_class,
                     self.config.prefer_higher_critical_chance,
                 );
@@ -567,7 +576,7 @@ impl Runner {
                 &active_party_ids,
                 &active_party_supports,
                 &grand_servants,
-                &self.config.grand_card_strategy,
+                card_strategy,
                 self.config.grand_class,
                 self.config.prefer_higher_critical_chance,
             );

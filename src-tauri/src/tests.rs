@@ -3776,6 +3776,7 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
         turns: vec![
             AdvancedBattleTurn {
                 id: "turn_1".into(),
+                grand_card_strategy: None,
                 actions: vec![Action::Equipment {
                     id: "eq_start".into(),
                     skill: Some("skill_2".into()),
@@ -3788,6 +3789,7 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
             },
             AdvancedBattleTurn {
                 id: "turn_2".into(),
+                grand_card_strategy: None,
                 actions: Vec::new(),
             },
         ],

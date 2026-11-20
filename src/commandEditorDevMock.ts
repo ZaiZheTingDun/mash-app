@@ -1,7 +1,7 @@
 // Browser-only emulation of the editor IPC. Production state is owned by Rust.
 import type { AdvancedBattleScene, BattleScene, BattleTurn } from "./types/command";
 import type { CommandDocument, CommandMutation } from "./features/battle/useCommandDocument";
-import { createDefaultScene, normalizeScene } from "./features/advanced/advancedCommandModel";
+import { createDefaultAdvancedTurn, createDefaultScene, normalizeScene } from "./features/advanced/advancedCommandModel";
 
 type DocumentScene = BattleScene | AdvancedBattleScene;
 type Bridge = (command: string, args: Record<string, unknown>) => Promise<unknown>;
@@ -36,10 +36,21 @@ export function commandEditorDevBridge(bridge: Bridge): Bridge {
     const mutation=args.mutation as CommandMutation;
     if(mutation.type==="addWave"){if(advanced)throw Error("冠位模式只支持一面");scenes.push(normalScene());wave=scenes.length-1;turn=0;}
     else if(mutation.type==="deleteWave"){if(scenes.length<=1)throw Error("至少保留一面");scenes.splice(wave,1);wave=Math.min(wave,scenes.length-1);turn=0;}
-    else if(mutation.type==="addTurn"){const scene=scenes[wave];if(advanced)(scene as AdvancedBattleScene).turns!.push(createDefaultScene().turns![0]);else(scene as BattleScene).turns.push(normalScene().turns[0]);turn=scene.turns!.length-1;}
+    else if (mutation.type === "addTurn") {
+      const scene = scenes[wave];
+      if (advanced) {
+        (scene as AdvancedBattleScene).turns!.push({
+          ...createDefaultAdvancedTurn(),
+          grandCardStrategy: { customRules: [] },
+        });
+      } else {
+        (scene as BattleScene).turns.push(normalScene().turns[0]);
+      }
+      turn = scene.turns!.length - 1;
+    }
     else if(mutation.type==="deleteTurn"){const turns=scenes[wave].turns!;if(turns.length<=1)throw Error("至少保留一个回合");turns.splice(turn,1);turn=Math.min(turn,turns.length-1);}
     else if(mutation.type==="updateScene")scenes[wave]=mutation.scene;
-    else if(mutation.type==="updateTurn")(scenes[wave] as BattleScene).turns[turn]=mutation.turn;
+    else if(mutation.type==="updateTurn")scenes[wave].turns![turn]=mutation.turn;
     else throw Error("未知指令修改类型");
     await bridge(save,{projectId:args.projectId,scenes});documents.set(key,scenes);
     return {scenes,wave,turn} satisfies CommandDocument<DocumentScene>;
