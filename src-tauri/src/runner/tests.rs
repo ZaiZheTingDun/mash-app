@@ -3252,6 +3252,36 @@ fn normal_current_party_ids_apply_previous_scene_np_retreat_before_attack() {
 }
 
 #[test]
+fn normal_current_party_ids_replace_matsunaga_after_his_np() {
+    let scene = normal_scene(
+        "scene_1",
+        vec![
+            normal_turn(
+                vec![],
+                vec![AttackCard {
+                    id: "matsunaga_np".into(),
+                    card: Some("servant_2_np".into()),
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
+                }],
+            ),
+            normal_turn(vec![], vec![]),
+        ],
+    );
+    let initial = [Some(284), Some(486), Some(315), Some(211), None, None];
+
+    assert_eq!(
+        normal_current_party_ids_from(initial, std::slice::from_ref(&scene), 0, 0, Some((0, 0))),
+        [Some(284), Some(486), Some(315)]
+    );
+    assert_eq!(
+        normal_current_party_ids_from(initial, &[scene], 0, 1, Some((0, 1))),
+        [Some(284), Some(211), Some(315)]
+    );
+}
+
+#[test]
 fn normal_current_party_ids_do_not_apply_current_scene_np_before_attack() {
     let scene = normal_scene(
         "scene_1",

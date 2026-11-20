@@ -70,6 +70,16 @@ const ARASH: Servant = {
   rarity: 1,
 };
 
+const MATSUNAGA: Servant = {
+  id: 486,
+  variantKey: "486",
+  name_cn: "松永久秀",
+  name_jp: "松永久秀",
+  name_en: "Matsunaga Hisahide",
+  class: "Berserker",
+  rarity: 4,
+};
+
 const CHEN_GONG: Servant = {
   id: 258,
   variantKey: "258",
@@ -411,6 +421,21 @@ describe("deriveScenePartyServants", () => {
 
     expect(lineups[0]).toEqual([ARASH, MERLIN, WAVER]);
     expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER]);
+  });
+
+  it("brings in Matsunaga's substitute after a Noble Phantasm but keeps him after a normal card", () => {
+    const lineup = [MATSUNAGA, MERLIN, WAVER, ALTRIA];
+    const lineups = deriveScenePartyServants(lineup, [
+      makeScene({ attackPriority: [{ id: "normal", card: "servant_1_buster" }] }),
+      makeScene({ id: "scene_2", attackPriority: [{ id: "np", card: "servant_1_np" }] }),
+      makeScene({ id: "scene_3" }),
+    ]);
+
+    expect(lineups).toEqual([
+      [MATSUNAGA, MERLIN, WAVER],
+      [MATSUNAGA, MERLIN, WAVER],
+      [ALTRIA, MERLIN, WAVER],
+    ]);
   });
 
   it("compacts the back line after a servant leaves and a substitute enters", () => {
