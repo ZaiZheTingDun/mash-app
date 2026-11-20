@@ -39,10 +39,20 @@ impl Runner {
                 .advanced_scenes
                 .get(self.battle.current_scene_index)
                 .map(|scene| {
+                    let prepared_turn_count = self
+                        .battle
+                        .advanced_turn_indices
+                        .get(&self.battle.current_scene_index)
+                        .copied()
+                        .unwrap_or_default();
                     advanced_scene_requires_np_recognition(
                         scene,
                         !self.config.grand_servants.is_empty(),
-                        &self.config.grand_card_strategy,
+                        grand_card_strategy_for_attack(
+                            scene,
+                            prepared_turn_count,
+                            &self.config.grand_card_strategy,
+                        ),
                     )
                 })
                 .unwrap_or(!self.config.grand_servants.is_empty());

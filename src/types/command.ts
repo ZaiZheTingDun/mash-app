@@ -1,4 +1,4 @@
-import type { GrandCardRuleConfig } from "./project";
+import type { GrandCardRuleConfig, GrandCardStrategy } from "./project";
 
 export type SkillSelectionType =
   | "SelectAddInfo"
@@ -185,6 +185,7 @@ export interface AdvancedMainOutput {
 export interface AdvancedBattleTurn {
   id: string;
   actions: PreparationAction[];
+  grandCardStrategy?: GrandCardStrategy;
 }
 
 export interface AdvancedBattleScene {

@@ -4190,6 +4190,7 @@ fn auto_order_change_startup_flow_replays_control_after_swap() {
         control_actions: vec![first_control, second_control],
         turns: vec![crate::AdvancedBattleTurn {
             id: "turn_1".into(),
+            grand_card_strategy: None,
             actions: vec![startup],
         }],
         startup_actions: Vec::new(),
@@ -4251,14 +4252,17 @@ fn advanced_startup_flow_interleaves_multi_turn_actions_and_later_controls() {
         turns: vec![
             crate::AdvancedBattleTurn {
                 id: "turn_1".into(),
+                grand_card_strategy: None,
                 actions: vec![turn_action("turn_1")],
             },
             crate::AdvancedBattleTurn {
                 id: "turn_2".into(),
+                grand_card_strategy: None,
                 actions: vec![turn_action("turn_2")],
             },
             crate::AdvancedBattleTurn {
                 id: "turn_3".into(),
+                grand_card_strategy: None,
                 actions: vec![turn_action("turn_3")],
             },
         ],
@@ -4305,10 +4309,12 @@ fn advanced_turn_actions_supports_legacy_and_multi_turn_scenes() {
     scene.turns = vec![
         crate::AdvancedBattleTurn {
             id: "turn_1".into(),
+            grand_card_strategy: None,
             actions: Vec::new(),
         },
         crate::AdvancedBattleTurn {
             id: "turn_2".into(),
+            grand_card_strategy: None,
             actions: vec![Action::EnemyTarget {
                 id: "second".into(),
                 target: Some("enemy_2".into()),
@@ -5457,8 +5463,8 @@ fn custom_grand_rule_accepts_any_servant_slots() {
 }
 
 #[test]
-fn custom_grand_rule_takes_priority_before_builtin_rules() {
-    let scene = empty_advanced_scene();
+fn grand_attack_uses_each_turns_rules_before_builtin_rules_and_repeats_the_last() {
+    let mut scene = empty_advanced_scene();
     let cards = vec![
         command_card(0, Some(10), Some("q"), None),
         command_card(1, Some(10), Some("a"), None),
@@ -5471,7 +5477,7 @@ fn custom_grand_rule_takes_priority_before_builtin_rules() {
         grand_config(10, "buster", "damage"),
         grand_config_at(1, 20, "arts", "damage"),
     ];
-    let strategy = custom_strategy(GrandCardRuleConfig {
+    let project_strategy = custom_strategy(GrandCardRuleConfig {
         id: "custom_1".into(),
         name: "先打副手红卡".into(),
         slots: vec![
@@ -5480,18 +5486,46 @@ fn custom_grand_rule_takes_priority_before_builtin_rules() {
             custom_rule_slot(Some(10), "np", "any"),
         ],
     });
-
-    let picks = choose_advanced_auto_picks(
-        &scene,
-        &cards,
-        &nps,
-        &[Some(10), Some(20), Some(30)],
-        &[false, false, false],
-        &grands,
-        &strategy,
-    );
-
-    assert_eq!(pick_labels(&picks), vec!["C2", "C0", "NP0"]);
+    let second_turn = custom_strategy(GrandCardRuleConfig {
+        id: "custom_2".into(),
+        name: "先打主手宝具".into(),
+        slots: vec![
+            custom_rule_slot(Some(10), "np", "any"),
+            custom_rule_slot(Some(10), "command", "quick"),
+            custom_rule_slot(Some(20), "command", "buster"),
+        ],
+    });
+    scene.turns = vec![
+        crate::AdvancedBattleTurn {
+            id: "first".into(),
+            actions: vec![],
+            grand_card_strategy: None,
+        },
+        crate::AdvancedBattleTurn {
+            id: "second".into(),
+            actions: vec![],
+            grand_card_strategy: Some(second_turn),
+        },
+    ];
+    for (prepared_turn_count, expected) in [
+        (0, ["C2", "C0", "NP0"]),
+        (1, ["C2", "C0", "NP0"]),
+        (2, ["NP0", "C0", "C2"]),
+        (3, ["NP0", "C0", "C2"]),
+    ] {
+        let strategy =
+            grand_card_strategy_for_attack(&scene, prepared_turn_count, &project_strategy);
+        let picks = choose_advanced_auto_picks(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &[false, false, false],
+            &grands,
+            strategy,
+        );
+        assert_eq!(pick_labels(&picks), expected);
+    }
 }
 
 #[test]

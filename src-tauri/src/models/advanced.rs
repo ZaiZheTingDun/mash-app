@@ -1,6 +1,6 @@
 //! Advanced battle conditions, actions, rules, and scene wire models.
 
-use super::{Action, AttackCard, OrderChangeSelection, SkillSelection};
+use super::{Action, AttackCard, GrandCardStrategy, OrderChangeSelection, SkillSelection};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -252,6 +252,9 @@ pub struct AdvancedBattleTurn {
     pub id: String,
     #[serde(default)]
     pub actions: Vec<Action>,
+    /// Missing on legacy turns, which inherit the project strategy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grand_card_strategy: Option<GrandCardStrategy>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

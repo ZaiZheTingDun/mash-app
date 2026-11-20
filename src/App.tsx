@@ -796,7 +796,18 @@ function App({
               if (scenes.length === 0) return;
               return invoke("save_advanced_battle_scenes", {
                 projectId: activeProject.id,
-                scenes: scenes.map((scene) => relocateAdvancedBattleSceneMembers(scene, previousPartyMembers, nextPartyMembers)),
+                scenes: scenes.map((scene) => {
+                  const relocated = relocateAdvancedBattleSceneMembers(scene, previousPartyMembers, nextPartyMembers);
+                  return {
+                    ...relocated,
+                    turns: relocated.turns?.map(turn => ({
+                      ...turn,
+                      grandCardStrategy: relocateGrandCardStrategySlots(
+                        turn.grandCardStrategy, next, activeProject.supportServantId
+                      ),
+                    })),
+                  };
+                }),
               });
             }),
           invoke<BattleScene[]>("load_battle_scenes", { projectId: activeProject.id })
@@ -1258,10 +1269,6 @@ function App({
                     onGrandServantsChange={(grandServants) => {
                       if (!activeProject) return;
                       return handleUpdateProject({ ...activeProject, grandServants });
-                    }}
-                    onGrandCardStrategyChange={(grandCardStrategy) => {
-                      if (!activeProject) return;
-                      return handleUpdateProject({ ...activeProject, grandCardStrategy });
                     }}
                   />
                   <Flex justify="between" align="center" className="page-footer">

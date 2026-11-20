@@ -1600,44 +1600,48 @@ describe("CommandEditor pagination", () => {
     expect(screen.queryByRole("button", { name: /指令卡策略/ })).not.toBeInTheDocument();
   });
 
-  it("adds and edits custom grand card rules", async () => {
+  it("saves grand card rules to the selected turn and restores them when reopening", async () => {
     const user = userEvent.setup();
-    const onGrandCardStrategyChange = vi.fn();
-    mockInvoke(async (cmd: string) => {
-      if (cmd === "load_advanced_battle_scenes") {
-        return [];
-      }
-      if (cmd === "get_servant_face_path") {
+    const legacyStrategy: GrandCardStrategy = {
+      customRules: [{
+        id: "legacy",
+        name: "旧规则",
+        slots: Array.from({ length: 3 }, () => ({ servantId: null, kind: "any", color: "any" })),
+      }],
+    };
+    let saved: AdvancedBattleScene[] = [{
+      id: "grand",
+      rules: [],
+      turns: [{ id: "first", actions: [] }],
+    }];
+    mockInvoke(async (command, args) => {
+      if (command === "load_advanced_battle_scenes") return saved;
+      if (command === "save_advanced_battle_scenes") {
+        saved = (args as { scenes: AdvancedBattleScene[] }).scenes;
         return null;
       }
       return [];
     });
-
-    function StrategyHarness() {
-      const [strategy, setStrategy] = useState<GrandCardStrategy | undefined>();
-      return (
-        <CommandEditor
-          projectId="project_1"
-          advancedMode
-          grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
-          grandCardPriorityEnabled
-          grandCardStrategy={strategy}
-          onGrandCardStrategyChange={(next) => {
-            onGrandCardStrategyChange(next);
-            setStrategy(next);
-          }}
-          partyLineup={[
-            makeServant(1, "甲", "buster"),
-            makeServant(2, "乙"),
-            makeServant(3, "丙"),
-          ]}
-        />
-      );
-    }
-
-    renderWithTheme(<StrategyHarness />);
+    const editor = () => (
+      <CommandEditor
+        projectId="grand-turn-rules"
+        advancedMode
+        grandCardPriorityEnabled
+        grandCardStrategy={legacyStrategy}
+        partyLineup={[makeServant(1, "甲", "buster"), makeServant(2, "乙"), makeServant(3, "丙")]}
+      />
+    );
+    const { unmount } = renderWithTheme(editor());
 
     await user.click(await screen.findByRole("button", { name: /攻击阶段/ }));
+    expect(screen.getByText("TURN 01")).toBeInTheDocument();
+    expect(screen.queryByText(/WAVE/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "下一场战斗" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除旧规则" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "添加 Turn" }));
+    expect(await screen.findByText("TURN 02")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除旧规则" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "添加规则" }));
 
     expect(screen.queryByRole("region", { name: "设置策略" })).not.toBeInTheDocument();
@@ -1651,11 +1655,10 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "宝具" }));
     expect(screen.queryByRole("region", { name: "设置策略" })).not.toBeInTheDocument();
 
-    const lastCall = onGrandCardStrategyChange.mock.calls[
-      onGrandCardStrategyChange.mock.calls.length - 1
-    ]?.[0] as GrandCardStrategy;
-    expect(lastCall.customRules).toHaveLength(1);
-    expect(lastCall.customRules?.[0]).toMatchObject({
+    const secondTurn = saved[0].turns?.[1];
+    expect(saved[0].turns?.[0].grandCardStrategy).toBeUndefined();
+    expect(secondTurn?.grandCardStrategy?.customRules).toHaveLength(1);
+    expect(secondTurn?.grandCardStrategy?.customRules?.[0]).toMatchObject({
       slots: [
         expect.objectContaining({
           servantId: 1,
@@ -1669,11 +1672,16 @@ describe("CommandEditor pagination", () => {
     });
 
     expect(screen.getAllByRole("button", { name: /任意从者/ })).toHaveLength(2);
+    unmount();
+    renderWithTheme(editor());
+    await user.click(await screen.findByRole("button", { name: /攻击阶段/ }));
+    expect(screen.getByRole("button", { name: /第 1 张，任意从者/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "下一回合" }));
+    expect(screen.getByRole("button", { name: /第 1 张，甲，宝具/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "删除自定义规则" }));
-    const deleteCall = onGrandCardStrategyChange.mock.calls[
-      onGrandCardStrategyChange.mock.calls.length - 1
-    ]?.[0];
-    expect(deleteCall).toMatchObject({ customRules: [] });
+    expect(saved[0].turns?.[1].grandCardStrategy).toMatchObject({ customRules: [] });
+    await user.click(screen.getByRole("button", { name: "上一回合" }));
+    expect(screen.getByRole("button", { name: /第 1 张，任意从者/ })).toBeInTheDocument();
   });
 
   it("uses post-Order Change lineup in advanced startup actions", async () => {

@@ -55,6 +55,7 @@ import { useServantSkillTargeting } from "../battle/useServantSkillTargeting";
 import { useServantSkillSelections } from "../battle/useServantSkillSelections";
 import type {
   AdvancedBattleScene,
+  AdvancedBattleTurn,
   AdvancedCommandCardCondition,
   PreparationAction,
 } from "../../types/command";
@@ -86,7 +87,6 @@ interface AdvancedCommandEditorProps {
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
-  onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
 }
 
 function AdvancedInlineFace({
@@ -306,10 +306,10 @@ function AdvancedStrategyEditor({
   grandCardStrategy,
   grandCardPriorityEnabled,
   onGrandServantsChange,
-  onGrandCardStrategyChange,
   activeTurnIndex,
   step,
   onChange,
+  onTurnChange,
 }: {
   skillEditorLayout: SkillEditorLayout;
   scene: AdvancedBattleScene;
@@ -328,10 +328,10 @@ function AdvancedStrategyEditor({
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
-  onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
   activeTurnIndex: number;
   step: CommandStep;
   onChange: (scene: AdvancedBattleScene) => void;
+  onTurnChange: (turn: AdvancedBattleTurn) => void;
 }) {
   const preparationDraftRef = useRef<HTMLDivElement>(null);
   const controlDraftRef = useRef<HTMLDivElement>(null);
@@ -443,13 +443,7 @@ function AdvancedStrategyEditor({
   };
 
   const updateStartupActions = (actions: PreparationAction[]) => {
-    onChange({
-      ...scene,
-      turns: turns.map((turn) =>
-        turn.id === activeTurn.id ? { ...turn, actions } : turn
-      ),
-      startupActions: [],
-    });
+    onTurnChange({ ...activeTurn, actions });
   };
 
   const updateControlActions = (actions: PreparationAction[]) => {
@@ -979,11 +973,11 @@ function AdvancedStrategyEditor({
 
       {step === "attack" && grandCardPriorityEnabled && (
         <GrandCardStrategyPanel
-          strategy={grandCardStrategy}
+          strategy={activeTurn.grandCardStrategy ?? grandCardStrategy}
           embedded
           partyMembers={partyMembers}
           faces={faces}
-          onChange={onGrandCardStrategyChange}
+          onChange={strategy => onTurnChange({ ...activeTurn, grandCardStrategy: strategy })}
         />
       )}
 
@@ -1077,7 +1071,6 @@ export function AdvancedCommandEditor({
   grandCardStrategy,
   grandCardPriorityEnabled = false,
   onGrandServantsChange,
-  onGrandCardStrategyChange,
 }: AdvancedCommandEditorProps) {
   const [step, setStep] = useState<CommandStep>("basic");
   const editor = useCommandDocument<AdvancedBattleScene>(projectId, true);
@@ -1111,12 +1104,13 @@ export function AdvancedCommandEditor({
   if (!document) return <Text color={editor.error ? "red" : "gray"}>{editor.error ?? (projectId ? "加载指令…" : "请先选择队伍")}</Text>;
   const scene = document.scenes[0];
   const activeTurnIndex = document.turn;
+  const activeTurn = scene.turns?.[activeTurnIndex];
   const activeStep = activeTurnIndex > 0 && (step === "basic" || step === "control") ? "prep" : step;
   return <CommandWorkspace fixedPreparation={skillEditorLayout === "simple" && activeStep === "prep"} advanced wave={0} waveCount={1} turn={activeTurnIndex} turns={scene.turns ?? []}
     step={activeStep} onStep={setStep} busy={editor.busy || projectBusy} error={projectError ?? editor.error}
-    onWave={() => {}} onTurn={turn => editor.navigate(0, turn)}
+    onTurn={turn => editor.navigate(0, turn)}
     onAddTurn={() => void editor.mutate({type:"addTurn"})} onDeleteTurn={() => void editor.mutate({type:"deleteTurn"})}
-    configuredTurn={Boolean(scene.turns?.[activeTurnIndex]?.actions.length)}
+    configuredTurn={Boolean(activeTurn?.actions.length || activeTurn?.grandCardStrategy?.customRules?.length)}
   >
       <AdvancedStrategyEditor key={`${scene.id}:${activeTurnIndex}:${activeStep}`}
           skillEditorLayout={skillEditorLayout}
@@ -1125,9 +1119,10 @@ export function AdvancedCommandEditor({
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
           grandServants={grandServants} grandClassDefinition={grandClassDefinition}
           grandCardStrategy={grandCardStrategy} grandCardPriorityEnabled={grandCardPriorityEnabled}
-          onGrandServantsChange={value => void persistProject(() => onGrandServantsChange?.(value))} onGrandCardStrategyChange={value => void persistProject(() => onGrandCardStrategyChange?.(value))}
+          onGrandServantsChange={value => void persistProject(() => onGrandServantsChange?.(value))}
           activeTurnIndex={activeTurnIndex} step={activeStep}
           onChange={scene => void editor.mutate({type:"updateScene",scene})}
+          onTurnChange={turn => void editor.mutate({ type: "updateTurn", turn })}
         />
   </CommandWorkspace>;
 }
