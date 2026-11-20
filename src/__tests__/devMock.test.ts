@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { invokeDevMock } from "../devMock";
-import type { Project, ProjectCatalog } from "../types/project";
+import type { GrandClassDefinition, Project, ProjectCatalog } from "../types/project";
 import type { CaptureHistoryState, PacketCaptureWorkspace } from "../types/packetCapture";
 
 it("requires the desktop runtime for packet capture device operations", async () => {
@@ -85,5 +85,24 @@ describe("invokeDevMock project catalog", () => {
     catalog = await invokeDevMock<ProjectCatalog>("get_project_catalog");
     expect(catalog.ungroupedProjectIds).not.toContain(created.id);
     expect(catalog.ungroupedProjectIds).not.toContain(duplicated.id);
+  });
+
+  it("offers Archer and keeps the selected class when creating and listing a project", async () => {
+    const definitions = await invokeDevMock<GrandClassDefinition[]>("get_grand_class_definitions");
+    expect(definitions).toContainEqual(expect.objectContaining({
+      id: "archer",
+      label: "弓阶冠位",
+      servantClass: "Archer",
+    }));
+
+    const archerProject = { name: "弓阶队伍", advancedMode: true, grandClass: "archer" };
+    const created = await invokeDevMock<Project>("create_project", archerProject);
+    try {
+      expect(created).toMatchObject(archerProject);
+      const projects = await invokeDevMock<Project[]>("list_projects");
+      expect(projects.find(({ id }) => id === created.id)).toMatchObject(archerProject);
+    } finally {
+      await invokeDevMock("delete_project", { id: created.id });
+    }
   });
 });

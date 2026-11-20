@@ -191,12 +191,13 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function createProject(name: string, advancedMode = false): Project {
+function createProject(name: string, advancedMode = false, grandClass = "saber"): Project {
   const id = `dev-project-${nextProjectNumber++}`;
   return {
     id,
     name,
     advancedMode,
+    grandClass,
     supportServantId: null,
     supportServantVariantKey: null,
     supportGrandMode: advancedMode,
@@ -397,6 +398,18 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "get_grand_class_definitions":
       return [
         { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }], cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "戴冠战需要选择 1 到 2 名冠位从者" },
+        {
+          id: "archer",
+          label: "弓阶冠位",
+          servantClass: "Archer",
+          roles: [
+            { role: "main", label: "主", required: true },
+            { role: "deputy", label: "副", required: false },
+          ],
+          cardPriorityEnabled: false,
+          autoOrderChangeRoles: ["main"],
+          validationMessage: "弓阶戴冠战需要选择主冠位，副冠位可选",
+        },
         { id: "lancer", label: "枪阶冠位", servantClass: "Lancer", roles: [{ role: "single", label: "单体", required: true }, { role: "aoe", label: "光炮", required: true }], cardPriorityEnabled: false, autoOrderChangeRoles: ["single", "aoe"], validationMessage: "枪阶戴冠战需要分别选择单体和光炮从者" },
         { id: "rider", label: "骑阶冠位", servantClass: "Rider", roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }], cardPriorityEnabled: false, autoOrderChangeRoles: ["main"], validationMessage: "骑阶戴冠战需要选择 1 到 2 名冠位从者" },
         { id: "berserker", label: "狂阶冠位", servantClass: "Berserker", roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }], cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "戴冠战需要选择 1 到 2 名冠位从者" },
@@ -476,7 +489,8 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       }
       const project = createProject(
         String(args.name ?? `模拟队伍 ${nextProjectNumber}`),
-        args.advancedMode === true
+        args.advancedMode === true,
+        typeof args.grandClass === "string" ? args.grandClass : undefined,
       );
       projects = [...projects, project];
       insertProjectIntoCatalog(project.id, groupId);
