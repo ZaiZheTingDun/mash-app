@@ -3645,10 +3645,19 @@ def test_support_np_levels_from_jp_screenshot_with_misread_lv(size):
         ("Ｌｖ．９２／９２", 92),
         ("L. 90/90", 90),
         ("等级120/120", 120),
+        ("Lv.120/120", 120),
+        ("尊级120/120", 120),
+        ("级120/120", 120),
+        ("尊级１１９／１２０", 119),
+        ("尊级120/120级", 120),
         ("120/120", 120),
         ("120", 120),
         (" 92 ", 92),
         ("121", None),
+        ("121/121", None),
+        ("2120/120", None),
+        ("120/1200", None),
+        ("0/120", None),
         ("友情点25", None),
         ("Lv.121/121", None),
     ],
@@ -3672,6 +3681,31 @@ def test_support_detail_extracts_servant_level_above_portrait():
         image,
         {"x": 0.177, "y": 0.66875, "w": 0.466, "h": 0.0833333333},
     ) == 92
+
+
+@pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080)])
+def test_support_servant_level_from_cn_grand_screenshot_with_misread_prefix(size):
+    import mash_cv.cv as cv
+
+    cv._set_server("CN")
+    _load_cn_support_templates()
+    image = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png"))
+    assert image is not None
+    image = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+
+    result = cv._find_supports(
+        image,
+        cv.SUPPORT_LIST_REGION,
+        "宫本伊织",
+        [],
+        cv.SUPPORT_NAME_THRESHOLD,
+        cv.SUPPORT_NP_THRESHOLD,
+        cv.SUPPORT_ROW_PAIR_DY,
+        include_support_details=True,
+    )
+
+    assert len(result["supports"]) == 1
+    assert result["supports"][0]["servantLevel"] == 120
 
 
 def test_support_skill_details_distinguish_owned_and_append_panels(monkeypatch):

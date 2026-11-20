@@ -5494,7 +5494,8 @@ def _support_parse_servant_level_text(text: str) -> Optional[int]:
         flags=re.IGNORECASE,
     )
     if not match:
-        match = re.search(r"\b(\d{1,3})\s*/\s*\d{1,3}\b", normalized)
+        # Chinese labels and digits are both word characters, so use digit boundaries.
+        match = re.search(r"(?<!\d)(\d{1,3})\s*/\s*\d{1,3}(?!\d)", normalized)
     if not match:
         match = re.fullmatch(r"\s*(\d{1,3})\s*", normalized)
     if not match:
