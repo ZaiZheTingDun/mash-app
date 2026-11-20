@@ -142,5 +142,18 @@
     },
     "timing": "immediate",
     "source": "noble_phantasms.effects: 第2次使用时，自身即死效果"
+  },
+  {
+    "servantId": 486,
+    "nameCn": "松永久秀",
+    "trigger": {
+      "type": "attackCard",
+      "card": "np"
+    },
+    "effect": {
+      "type": "removeSelf"
+    },
+    "timing": "immediate",
+    "source": "noblePhantasms.functions: forceInstantDeath (self)"
   }
 ]
