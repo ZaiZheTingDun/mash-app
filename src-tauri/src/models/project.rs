@@ -106,6 +106,7 @@ impl Default for SupportGrandBondCeMode {
 #[serde(rename_all = "camelCase")]
 pub enum GrandClass {
     Saber,
+    Archer,
     Lancer,
     Rider,
     Assassin,
@@ -117,8 +118,9 @@ pub enum GrandClass {
 }
 
 impl GrandClass {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Saber,
+        Self::Archer,
         Self::Lancer,
         Self::Rider,
         Self::Assassin,

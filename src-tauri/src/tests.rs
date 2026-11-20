@@ -1245,6 +1245,20 @@ fn project_grand_class_round_trips_as_camel_case() {
 }
 
 #[test]
+fn archer_project_round_trips() {
+    let json = serde_json::json!({
+        "id": "abc",
+        "name": "Grand",
+        "grandClass": "archer",
+    });
+    let project: Project = serde_json::from_value(json).unwrap();
+    assert_eq!(project.grand_class, GrandClass::Archer);
+
+    let serialized = serde_json::to_value(&project).unwrap();
+    assert_eq!(serialized["grandClass"], serde_json::json!("archer"));
+}
+
+#[test]
 fn lancer_project_roles_round_trip_and_normalize_single_before_aoe() {
     let mut project = new_project("Lancer".to_string(), true, GrandClass::Lancer);
     project.slots[0].servant_id = Some(10);
