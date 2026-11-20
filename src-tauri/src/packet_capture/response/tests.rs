@@ -798,6 +798,8 @@ fn record_transport_failure_server(
                 }
                 Err(error) => panic!("{error}"),
             };
+            // Windows inherits the listener's nonblocking mode on accepted streams.
+            stream.set_nonblocking(false).unwrap();
             let request = read_request(&mut stream);
             if request.0.contains("/filter ") {
                 let body = serde_json::json!((0..130).collect::<Vec<_>>()).to_string();
