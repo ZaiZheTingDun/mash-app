@@ -603,7 +603,9 @@ pub(crate) async fn run_startup_migration(
         drop(settings);
         *server_state.lock().unwrap() = load_server_setting(&app)?;
     }
-    crate::battle_statistics::initialize(&app)?;
+    if let Err(err) = crate::battle_statistics::initialize(&app) {
+        eprintln!("[battle-statistics] {err}");
+    }
     Ok(status)
 }
 
