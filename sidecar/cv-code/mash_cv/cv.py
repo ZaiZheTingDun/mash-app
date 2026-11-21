@@ -1982,6 +1982,11 @@ def _rank_up_quest_row_color_stats(img: np.ndarray, row: dict) -> tuple[float, f
 
 def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
     row_config = config.get("screens", {}).get("RankUpQuest", {}).get("rowDetection", {})
+    # Campaign skins repaint the row header art, so the title template can stop
+    # matching while every row is still perfectly clickable. Brightness of the
+    # header band is the signal that actually separates "available" from
+    # "already cleared", so a missing title anchor must not veto the row.
+    allow_cost_anchor_only = bool(row_config.get("allowCostAnchorOnly", True))
     width_scales = tuple(row_config.get("anchorWidthScales", (1.0,)))
     pair_by_left_edge = row_config.get("anchorPairAlignment", "center") == "left"
     rank_anchors = _find_all_template_matches(
@@ -2030,7 +2035,7 @@ def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
             continue
         mean_luma, mean_saturation, mean_value = _rank_up_quest_row_color_stats(img, row)
         actionable = (
-            rank is not None
+            (rank is not None or allow_cost_anchor_only)
             and mean_luma >= RANK_UP_QUEST_ACTIONABLE_LUMA
             and mean_value >= RANK_UP_QUEST_ACTIONABLE_VALUE
         )
@@ -2159,6 +2164,40 @@ def _find_element_by_name(
 # ---------------------------------------------------------------------------
 
 
+# Injected by apply_screen_patch.py — campaign page skins change every event,
+# which silently breaks the static title template (`text_rank_up_quest_page`).
+# When every template misses, OCR the page-title strip and promote the frame by
+# the localised page name. This block is defined before `_detect_screen` and
+# only runs when the template path already returned Unknown.
+
+SCREEN_OCR_TITLE_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 0.115}
+SCREEN_OCR_KEYWORDS = (
+    ("InterludeQuest", ("幕间物语", "幕間物語", "幕间")),
+    ("RankUpQuest", ("强化任务", "強化クエスト", "Rank Up", "Rank up")),
+)
+_SCREEN_OCR_STATE = {"at": 0.0, "text": ""}
+
+
+def _ocr_promote_screen(img: np.ndarray, screen_names=None):
+    """Return a screen name when the title strip names a known list page."""
+    now = time.time()
+    if now - _SCREEN_OCR_STATE["at"] < 0.8:
+        text = _SCREEN_OCR_STATE["text"]
+    else:
+        result = _ocr_region(img, SCREEN_OCR_TITLE_REGION)
+        text = str(result.get("fullText") or "")
+        _SCREEN_OCR_STATE["at"] = now
+        _SCREEN_OCR_STATE["text"] = text
+    if not text:
+        return None
+    for screen_name, keywords in SCREEN_OCR_KEYWORDS:
+        if screen_names is not None and screen_name not in screen_names:
+            continue
+        if any(keyword in text for keyword in keywords):
+            return screen_name
+    return None
+
+
 def _detect_screen(
     img: np.ndarray,
     screen_names: Optional[list[str]] = None,
@@ -2272,6 +2311,13 @@ def _detect_screen(
             best_score = screen_score
             best_name = screen_name
             best_priority = priority
+    if best_name == "Unknown":
+        try:
+            promoted = _ocr_promote_screen(img, screen_names)
+        except Exception:
+            promoted = None
+        if promoted:
+            return {"screen": promoted, "score": best_score}
     return {"screen": best_name, "score": best_score}
 
 
@@ -7037,8 +7083,78 @@ def _load_frame(cmd: dict) -> tuple[Optional[np.ndarray], Optional[str]]:
     return frame, None
 
 
+def _try_mumu_stream(cmd: dict):
+    """Start the MuMu frame source when ``capture_config.json`` asks for it.
+
+    Scrcpy and ``adb`` read pixels through SurfaceFlinger, which returns black
+    frames while the game window carries FLAG_SECURE. MuMu's frame source has
+    two host-side paths (see ``mumu_capture``): the renderer IPC, and Windows
+    ``PrintWindow`` on MuMu's render window. ``source: auto`` starts with the
+    IPC and switches to window capture as soon as the IPC frame turns out
+    blank, which is what happens with a secure layer in the foreground.
+
+    Returns a completed ``start_stream`` response, or ``None`` to let the
+    caller fall through to the stock scrcpy path.
+    """
+    global stream
+
+    try:
+        from mash_cv.mumu_capture import MuMuStream, load_config
+    except Exception as exc:  # noqa: BLE001
+        print(f"[mash-cv] mumu_capture import failed: {exc}", file=sys.stderr)
+        return None
+
+    cfg = load_config()
+    if str(cfg.get("source", "scrcpy")).lower() == "scrcpy":
+        return None
+
+    if stream is not None:
+        try:
+            stream.stop()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[mash-cv] previous stream stop error: {exc}", file=sys.stderr)
+        stream = None
+
+    try:
+        native_size = cfg.get("nativeSize") or None
+        new_stream = MuMuStream(
+            mumu_root=cfg.get("mumuRoot"),
+            vm_index=int(cfg.get("vmIndex", 1)),
+            package=cfg.get("package"),
+            target_fps=float(cfg.get("targetFps", 12)),
+            max_size=int(cmd.get("maxSize", 0) or 0),
+            flip_vertical=bool(cfg.get("flipVertical", True)),
+            source=cfg.get("source", "auto"),
+            window_title=cfg.get("windowTitle") or "",
+            native_size=tuple(native_size) if native_size else None,
+            blank_switch_frames=int(cfg.get("blankSwitchFrames", 18) or 18),
+            window_wait_ms=int(cfg.get("windowWaitMs", 12000) or 12000),
+            adb_path=cmd.get("adbPath") or "",
+            serial=cmd.get("serial") or "",
+        )
+        width, height = new_stream.start()
+        warmup = float(cmd.get("warmupSeconds", 15.0))
+        if new_stream.wait_for_frame(timeout=warmup) is None:
+            new_stream.stop()
+            raise RuntimeError(f"no frame within {warmup:.0f}s")
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"[mash-cv] mumu capture unavailable ({exc}); falling back to scrcpy",
+            file=sys.stderr,
+        )
+        return None
+
+    stream = new_stream
+    mode = getattr(new_stream, "_mode", None) or "mumu"
+    return {"ok": True, "width": width, "height": height, "displayId": 0, "source": f"mumu-{mode}"}
+
+
 def _start_stream(cmd: dict) -> dict:
     global stream
+
+    mumu_result = _try_mumu_stream(cmd)
+    if mumu_result is not None:
+        return mumu_result
 
     jar_path = cmd.get("jarPath")
     if not jar_path:

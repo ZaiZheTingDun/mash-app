@@ -1,0 +1,12 @@
+{
+  "_comment": "Frame source for mash-cv. source=auto tries MuMu's renderer IPC first, then falls back to Windows window capture (PrintWindow on MuMu's nemudisplay render window) when the IPC frame is blank - which is what FLAG_SECURE forces in-game. source=ipc or source=window force a single path; source=scrcpy restores stock behaviour. Delete this file to revert. mumuRoot may stay empty: when it is empty (or points at a stale install) the module auto-detects the MuMu install by locating external_renderer_ipc.dll.",
+  "source": "auto",
+  "mumuRoot": "",
+  "vmIndex": 1,
+  "windowTitle": "",
+  "package": "com.bilibili.fatego",
+  "targetFps": 12,
+  "flipVertical": true,
+  "blankSwitchFrames": 18,
+  "windowWaitMs": 12000
+}
