@@ -2,10 +2,14 @@
 
 use crate::paths::battle_statistics_path;
 use crate::runner::{BattleRunApRecoveryUsage, RunnerState};
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
+
+mod recovery;
+use recovery::ActiveRun;
 
 const HISTORY_UPDATED_EVENT: &str = "battle-run-history-updated";
 
@@ -24,6 +28,7 @@ pub(crate) struct BattleRunRecorder {
     app: tauri::AppHandle,
     path: PathBuf,
     run_id: String,
+    _active_run: Arc<ActiveRun>,
 }
 
 impl BattleRunRecorder {
@@ -31,7 +36,10 @@ impl BattleRunRecorder {
         let path = battle_statistics_path(app);
         initialize_path(&path)?;
         let now_ms = unix_timestamp_ms();
-        let run_id = uuid::Uuid::new_v4().to_string();
+        let run_id = uuid::Uuid::new_v4();
+        let active_run = ActiveRun::acquire(&path, run_id)
+            .map_err(|err| format!("lock battle run record failed: {err}"))?;
+        let run_id = run_id.to_string();
         let connection = open_connection(&path)?;
         connection
             .execute(
@@ -45,6 +53,7 @@ impl BattleRunRecorder {
             app: app.clone(),
             path,
             run_id,
+            _active_run: Arc::new(active_run),
         };
         recorder.emit_updated();
         Ok(recorder)
@@ -70,17 +79,17 @@ impl BattleRunRecorder {
     }
 
     pub(crate) fn checkpoint(&self, completed_runs: u32, usage: &BattleRunApRecoveryUsage) {
-        if let Err(err) = checkpoint_path(
+        match checkpoint_path(
             &self.path,
             &self.run_id,
             unix_timestamp_ms(),
             completed_runs,
             usage,
         ) {
-            eprintln!("[battle-statistics] {err}");
-            return;
+            Ok(true) => self.emit_updated(),
+            Ok(false) => {}
+            Err(err) => eprintln!("[battle-statistics] {err}"),
         }
-        self.emit_updated();
     }
 
     pub(crate) fn finish(&self, state: &RunnerState) {
@@ -164,16 +173,8 @@ fn initialize_path(path: &Path) -> Result<(), String> {
 pub(crate) fn initialize(app: &tauri::AppHandle) -> Result<(), String> {
     let path = battle_statistics_path(app);
     initialize_path(&path)?;
-    let connection = open_connection(&path)?;
-    connection
-        .execute(
-            "UPDATE battle_runs
-             SET ended_at_ms = updated_at_ms, status = 'interrupted'
-             WHERE ended_at_ms IS NULL",
-            [],
-        )
-        .map_err(|err| format!("recover unfinished battle records failed: {err}"))?;
-    Ok(())
+    recovery::recover(&path, &mut open_connection(&path)?)
+        .map_err(|err| format!("recover battle statistics failed: {err}"))
 }
 
 fn insert_delta_event(
@@ -204,15 +205,15 @@ fn checkpoint_path(
     occurred_at_ms: i64,
     completed_runs: u32,
     usage: &BattleRunApRecoveryUsage,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let mut connection = open_connection(path)?;
     let transaction = connection
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|err| format!("begin battle statistics update failed: {err}"))?;
-    let previous = transaction
+    let Some(previous) = transaction
         .query_row(
             "SELECT completed_runs, rainbow, gold, silver, bronze, copper
-             FROM battle_runs WHERE run_id = ?1",
+             FROM battle_runs WHERE run_id = ?1 AND ended_at_ms IS NULL",
             [run_id],
             |row| {
                 Ok((
@@ -229,7 +230,9 @@ fn checkpoint_path(
         )
         .optional()
         .map_err(|err| format!("read battle statistics checkpoint failed: {err}"))?
-        .ok_or_else(|| "battle run record is missing".to_string())?;
+    else {
+        return Ok(false);
+    };
 
     insert_delta_event(
         &transaction,
@@ -280,7 +283,8 @@ fn checkpoint_path(
         .map_err(|err| format!("update battle statistics checkpoint failed: {err}"))?;
     transaction
         .commit()
-        .map_err(|err| format!("commit battle statistics update failed: {err}"))
+        .map_err(|err| format!("commit battle statistics update failed: {err}"))?;
+    Ok(true)
 }
 
 fn daily_statistics_path(
@@ -451,5 +455,65 @@ mod tests {
                 .duration_ms,
             3_000
         );
+    }
+
+    #[test]
+    fn recovery_keeps_live_runs_open_and_freezes_abandoned_duration() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("statistics.sqlite3");
+        let run_id = uuid::Uuid::new_v4();
+        let active_run = ActiveRun::acquire(&path, run_id).unwrap();
+        let run_id = run_id.to_string();
+        insert_run(&path, &run_id, 1_000);
+        checkpoint_path(&path, &run_id, 2_000, 1, &usage(0, 0)).unwrap();
+
+        let mut connection = open_connection(&path).unwrap();
+        recovery::recover(&path, &mut connection).unwrap();
+        assert!(checkpoint_path(&path, &run_id, 3_000, 2, &usage(1, 0)).unwrap());
+        let running = daily_statistics_path(&path, 0, 10_000, 5_000).unwrap();
+        assert_eq!(running.completed_runs, 2);
+        assert_eq!(running.duration_ms, 4_000);
+
+        drop(active_run);
+        recovery::recover(&path, &mut connection).unwrap();
+        assert!(!checkpoint_path(&path, &run_id, 6_000, 3, &usage(2, 0)).unwrap());
+        let recovered = daily_statistics_path(&path, 0, 10_000, 8_000).unwrap();
+        assert_eq!(recovered.completed_runs, 2);
+        assert_eq!(recovered.duration_ms, 2_000);
+        assert_eq!(recovered.ap_recovery_usage.gold, 1);
+    }
+
+    #[test]
+    fn repairs_repeated_legacy_counts_across_midnight() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("statistics.sqlite3");
+        insert_run(&path, "legacy-run", 1_000);
+        checkpoint_path(&path, "legacy-run", 2_000, 2, &usage(1, 0)).unwrap();
+        let mut connection = open_connection(&path).unwrap();
+        recovery::recover(&path, &mut connection).unwrap();
+
+        // Older versions reused the same baseline after the run was closed.
+        for (time, rounds, gold) in [(3_000, 1, 1), (5_000, 1, 1), (7_000, 3, 2), (8_000, 3, 2)] {
+            for (kind, amount) in [("completed_run", rounds), ("gold", gold)] {
+                connection
+                    .execute(
+                        "INSERT INTO battle_run_events (run_id, occurred_at_ms, kind, amount)
+                         VALUES ('legacy-run', ?1, ?2, ?3)",
+                        params![time, kind, amount],
+                    )
+                    .unwrap();
+            }
+        }
+
+        recovery::recover(&path, &mut connection).unwrap();
+        recovery::recover(&path, &mut connection).unwrap();
+        let before_midnight = daily_statistics_path(&path, 0, 4_000, 9_000).unwrap();
+        assert_eq!(before_midnight.completed_runs, 3);
+        assert_eq!(before_midnight.ap_recovery_usage.gold, 2);
+        assert_eq!(before_midnight.duration_ms, 3_000);
+        let after_midnight = daily_statistics_path(&path, 4_000, 10_000, 9_000).unwrap();
+        assert_eq!(after_midnight.completed_runs, 2);
+        assert_eq!(after_midnight.ap_recovery_usage.gold, 1);
+        assert_eq!(after_midnight.duration_ms, 4_000);
     }
 }
