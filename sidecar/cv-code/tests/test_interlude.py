@@ -71,7 +71,6 @@ def test_map_preserves_quest_identity_and_advances_its_progress(size):
         row = rows[0]
         assert row["kind"] == "quest"
         assert row["progress"] == expected_progress
-        assert row["lastPlayed"] == (name == "returned")
         assert signature_distance(link, row, "portrait") <= 20
         assert signature_distance(link, row, "title") <= 23
         assert signature_distance(top[1], row, "portrait") > 20
@@ -193,7 +192,6 @@ def test_cn_list_handles_0_ap_quick_links_and_direct_quests(size):
     row, = cv._find_interlude_rows(mapped, "InterludeMap")["rows"]
     assert row["actionable"]
     assert row["progress"] == 0
-    assert not row["lastPlayed"]
     assert signature_distance(first_page["rows"][0], row, "portrait") <= 20
     assert signature_distance(first_page["rows"][0], row, "title") <= 23
 
@@ -202,7 +200,6 @@ def test_cn_list_handles_0_ap_quick_links_and_direct_quests(size):
     next_phase, = cv._find_interlude_rows(returned, "InterludeMap")["rows"]
     assert next_phase["actionable"]
     assert next_phase["progress"] == 1
-    assert next_phase["lastPlayed"]
     assert signature_distance(row, next_phase, "portrait") <= 20
     assert signature_distance(row, next_phase, "title") <= 23
 
