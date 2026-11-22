@@ -23,6 +23,7 @@ pub(super) struct Baseline {
     pub(super) uids: HashSet<String>,
     pub(super) ignored_ids: HashSet<u64>,
     pub(super) warnings: Vec<String>,
+    live_tab_id: Option<String>,
 }
 
 impl Baseline {
@@ -510,23 +511,70 @@ fn target_url(server: Server, raw: &str) -> Option<String> {
     Some(url.to_string())
 }
 
-fn ids(server: Server, client: &client::Client, port: u16) -> Result<Vec<u64>, ScanError> {
-    let bytes = client.request_typed(
-        port,
-        "filter",
-        Some(
-            &serde_json::json!({"filters":[{"type":"keyword","pattern":target::selector(server)}]}),
-        ),
-        MAX_ID_BYTES,
-    )?;
-    let ids: Vec<u64> = serde_json::from_slice(&bytes)
-        .map_err(|_| ScanError::Fatal("Reqable 记录列表无效".into()))?;
-    Ok(ids)
+fn live_tab(client: &client::Client, port: u16) -> Result<String, ScanError> {
+    #[derive(Deserialize)]
+    struct Tabs {
+        tabs: Vec<Tab>,
+    }
+    #[derive(Deserialize)]
+    struct Tab {
+        id: String,
+        #[serde(rename = "type")]
+        kind: String,
+    }
+
+    let bytes = client.request_typed(port, "/tab/list", None, MAX_ID_BYTES)?;
+    let tabs: Tabs = serde_json::from_slice(&bytes)
+        .map_err(|_| ScanError::Fatal("Reqable 标签页列表无效".into()))?;
+    let mut live = tabs
+        .tabs
+        .into_iter()
+        .filter(|tab| tab.kind == "captureLive");
+    let tab = live
+        .next()
+        .ok_or_else(|| ScanError::Retryable("Reqable 当前没有实时抓包标签页".into()))?;
+    if tab.id.is_empty() || live.next().is_some() {
+        return Err(ScanError::Fatal("无法确定 Reqable 实时抓包标签页".into()));
+    }
+    Ok(tab.id)
 }
 
-fn record(client: &client::Client, port: u16, id: u64) -> Result<Record, ScanError> {
+fn filter_records(
+    server: Server,
+    client: &client::Client,
+    port: u16,
+    tab_id: Option<&str>,
+) -> Result<Vec<u8>, client::Error> {
+    let mut body =
+        serde_json::json!({"filters":[{"type":"keyword","pattern":target::selector(server)}]});
+    let route = if let Some(tab_id) = tab_id {
+        body["tabId"] = tab_id.into();
+        "/capture/record/filter"
+    } else {
+        "/capture/live/filter"
+    };
+    client.request_typed(port, route, Some(&body), MAX_ID_BYTES)
+}
+
+fn decode_record_ids(bytes: &[u8]) -> Result<Vec<u64>, ScanError> {
+    serde_json::from_slice(bytes).map_err(|_| ScanError::Fatal("Reqable 记录列表无效".into()))
+}
+
+fn record(
+    client: &client::Client,
+    port: u16,
+    tab_id: Option<&str>,
+    id: u64,
+) -> Result<Record, ScanError> {
+    let mut body = serde_json::json!({ "id": id });
+    let route = if let Some(tab_id) = tab_id {
+        body["tabId"] = tab_id.into();
+        "/capture/record/get"
+    } else {
+        "/capture/live/get"
+    };
     let bytes = client
-        .request_typed(port, "get", Some(&serde_json::json!({"id":id})), MAX_RECORD)
+        .request_typed(port, route, Some(&body), MAX_RECORD)
         .map_err(|error| match error {
             client::Error::Http(_) | client::Error::ResponseTooLarge => {
                 ScanError::InvalidRecord(error.to_string())
@@ -568,13 +616,24 @@ pub(super) fn baseline_controlled(
     check()?;
     debug("开始查询已有登录记录列表");
     let began = Instant::now();
-    let ids = ids(server, client, port).map_err(|error| error.to_string())?;
+    let mut baseline = Baseline::default();
+    let bytes = match filter_records(server, client, port, None) {
+        Err(client::Error::Http(404)) => {
+            check()?;
+            debug("Reqable 旧记录接口返回 HTTP 404，开始查找实时抓包标签页");
+            baseline.live_tab_id = Some(live_tab(client, port).map_err(|error| error.to_string())?);
+            check()?;
+            filter_records(server, client, port, baseline.live_tab_id.as_deref())
+        }
+        result => result,
+    }
+    .map_err(|error| error.to_string())?;
+    let ids = decode_record_ids(&bytes).map_err(|error| error.to_string())?;
     debug(&format!(
         "已有记录列表查询完成，共 {} 条，耗时 {} ms",
         ids.len(),
         began.elapsed().as_millis()
     ));
-    let mut baseline = Baseline::default();
     for (index, id) in ids.iter().enumerate() {
         check()?;
         if index % 16 == 0 {
@@ -586,7 +645,7 @@ pub(super) fn baseline_controlled(
             ids.len()
         ));
         let began = Instant::now();
-        match record(client, port, *id) {
+        match record(client, port, baseline.live_tab_id.as_deref(), *id) {
             Ok(record) => {
                 let matched = target_url(server, &record.url).is_some();
                 debug(&format!(
@@ -654,12 +713,20 @@ fn scan_session(
     debug: &mut dyn FnMut(&str),
 ) -> Result<ScanOutcome, ScanError> {
     let mut baseline = baseline.clone();
+    let tab_id = baseline
+        .live_tab_id
+        .as_ref()
+        .map(|_| live_tab(client, port))
+        .transpose()?;
+    let bytes = filter_records(server, client, port, tab_id.as_deref())?;
+    // Numeric IDs can be reused across live tabs; baseline UIDs remain unique.
+    let same_tab = tab_id == baseline.live_tab_id;
     // Latest completed response wins; incomplete/transient records remain retryable.
-    for id in ids(server, client, port)?.into_iter().rev() {
-        if baseline.ignored_ids.contains(&id) {
+    for id in decode_record_ids(&bytes)?.into_iter().rev() {
+        if same_tab && baseline.ignored_ids.contains(&id) {
             continue;
         }
-        let record = match record(client, port, id) {
+        let record = match record(client, port, tab_id.as_deref(), id) {
             Ok(record) => record,
             Err(error @ ScanError::InvalidRecord(_)) => {
                 baseline.warn(format!("记录 {id} 暂时无法读取：{error}；将继续等待"));
@@ -740,8 +807,13 @@ fn scan_session(
             baseline,
         });
     }
-    if !super::capture::decode_status(&client.request_typed(port, "status", None, 4096)?)
-        .map_err(ScanError::Fatal)?
+    if !super::capture::decode_status(&client.request_typed(
+        port,
+        "/capture/live/status",
+        None,
+        4096,
+    )?)
+    .map_err(ScanError::Fatal)?
     {
         return Err(ScanError::Fatal("Reqable 抓包已停止".into()));
     }

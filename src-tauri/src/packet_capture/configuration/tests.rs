@@ -297,6 +297,9 @@ fn fake_with_logs(
                 "../../../tests/fixtures/packet-capture/ca.pem"
             )));
         }
+        if command.contains("head -c 65537") && command.contains("/certificate/") {
+            return Err("No such file".into());
+        }
         if command.contains("MASH_CA_INSTALLED") {
             if scenario.cancel_certificate {
                 cancellation.cancel();

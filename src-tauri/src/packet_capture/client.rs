@@ -116,8 +116,8 @@ impl Client {
         limit: usize,
         timeout: Duration,
     ) -> Result<Vec<u8>, Error> {
-        let url = format!("http://127.0.0.1:{port}/capture/live/{route}");
-        let request = if route == "status" {
+        let url = format!("http://127.0.0.1:{port}{route}");
+        let request = if matches!(route, "/capture/live/status" | "/tab/list") {
             self.0.get(url)
         } else {
             let request = self.0.post(url);

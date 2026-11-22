@@ -71,7 +71,13 @@ pub(super) fn authorize(
         match validate_saved_key(
             &mut |timeout| {
                 let client = client::Client::with_api_key(Some(key))?;
-                let bytes = client.request_with_timeout(port, "status", None, 4096, timeout)?;
+                let bytes = client.request_with_timeout(
+                    port,
+                    "/capture/live/status",
+                    None,
+                    4096,
+                    timeout,
+                )?;
                 decode_status(&bytes).map(|_| ())
             },
             &mut || cancellation.wait(Duration::from_millis(250)),
@@ -167,8 +173,13 @@ pub(super) fn authorize(
 pub(super) fn probe_access(port: u16, cancellation: &OperationCancellation) -> Result<(), String> {
     validate_saved_key(
         &mut |timeout| {
-            let bytes =
-                client::Client::new()?.request_with_timeout(port, "status", None, 4096, timeout)?;
+            let bytes = client::Client::new()?.request_with_timeout(
+                port,
+                "/capture/live/status",
+                None,
+                4096,
+                timeout,
+            )?;
             decode_status(&bytes).map(|_| ())
         },
         &mut || cancellation.wait(Duration::from_millis(250)),
@@ -207,7 +218,7 @@ fn reqable_has_focus(window: &[u8]) -> Option<bool> {
 
 fn validate_with_timeout(port: u16, key: &str, timeout: Duration) -> Result<(), String> {
     let client = client::Client::with_api_key(Some(key))?;
-    let bytes = client.request_with_timeout(port, "status", None, 4096, timeout)?;
+    let bytes = client.request_with_timeout(port, "/capture/live/status", None, 4096, timeout)?;
     decode_status(&bytes).map(|_| ())
 }
 
