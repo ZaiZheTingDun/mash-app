@@ -261,6 +261,39 @@ fn manual_adb_endpoint(host: &str, port: &str) -> Result<String, String> {
     Ok(format!("{host}:{port}"))
 }
 
+fn check_adb_connect_response(
+    serial: &str,
+    exit_success: bool,
+    stdout: &str,
+    stderr: &str,
+) -> Result<(), String> {
+    let response = stdout.trim();
+    // ADB can print a connection error to stdout and still exit successfully.
+    if exit_success
+        && ["connected to ", "already connected to "]
+            .iter()
+            .any(|prefix| response.starts_with(prefix))
+    {
+        return Ok(());
+    }
+
+    let (message, diagnostics) = if exit_success {
+        (
+            format!("无法确认 ADB 已连接 {serial}，可重新扫描设备或重试"),
+            [response, stderr.trim()],
+        )
+    } else {
+        (
+            format!("adb connect {serial} 失败"),
+            [stderr.trim(), response],
+        )
+    };
+    match diagnostics.into_iter().find(|detail| !detail.is_empty()) {
+        Some(detail) => Err(format!("{message}: {detail}")),
+        None => Err(message),
+    }
+}
+
 #[tauri::command]
 pub(crate) async fn connect_adb_device(
     app: tauri::AppHandle,
@@ -270,31 +303,22 @@ pub(crate) async fn connect_adb_device(
     let serial = manual_adb_endpoint(&host, &port)?;
     let adb_path = adb::resolve_adb_path(&app);
     tauri::async_runtime::spawn_blocking(move || {
-        let output = adb::adb_command(&adb_path)
-            .args(["connect", serial.as_str()])
-            .output()
-            .map_err(|e| format!("failed to run adb connect: {e}"))?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let detail = if stderr.trim().is_empty() {
-                stdout.trim()
-            } else {
-                stderr.trim()
-            };
-            return Err(if detail.is_empty() {
-                format!("adb connect {serial} 失败")
-            } else {
-                format!("adb connect {serial} 失败: {detail}")
-            });
-        }
-        let response = stdout.trim();
-        if ["failed ", "unable ", "cannot "]
-            .iter()
-            .any(|prefix| response.starts_with(prefix))
-        {
-            return Err(format!("adb connect {serial} 失败: {response}"));
-        }
+        let output = platform::output_with_timeout(
+            adb::adb_command(&adb_path).args(["connect", serial.as_str()]),
+            Duration::from_secs(10),
+        )
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::TimedOut => {
+                format!("等待 ADB 连接 {serial} 超时，可重新扫描设备或重试")
+            }
+            _ => format!("无法运行 adb connect: {error}"),
+        })?;
+        check_adb_connect_response(
+            &serial,
+            output.status.success(),
+            &String::from_utf8_lossy(&output.stdout),
+            &String::from_utf8_lossy(&output.stderr),
+        )?;
         Ok(serial)
     })
     .await
@@ -649,6 +673,29 @@ mod tests {
         for port in ["", "0", "65536", "5555abc"] {
             assert!(manual_adb_endpoint("192.168.1.42", port).is_err(), "{port}");
         }
+    }
+
+    #[test]
+    fn manual_connection_requires_an_adb_success_response() {
+        let serial = "localhost:5555";
+        for response in [
+            "connected to localhost:5555\r\n",
+            "already connected to localhost:5555\n",
+        ] {
+            assert!(check_adb_connect_response(serial, true, response, "").is_ok());
+        }
+        assert_eq!(
+            check_adb_connect_response(serial, true, "Connection refused\n", "daemon started"),
+            Err(
+                "无法确认 ADB 已连接 localhost:5555，可重新扫描设备或重试: Connection refused"
+                    .into()
+            )
+        );
+        assert_eq!(
+            check_adb_connect_response(serial, false, "", "error: server unavailable\n"),
+            Err("adb connect localhost:5555 失败: error: server unavailable".into())
+        );
+        assert!(check_adb_connect_response(serial, true, "", "").is_err());
     }
 
     #[test]

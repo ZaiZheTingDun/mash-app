@@ -645,13 +645,25 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return { connected: true, deviceName: selectedAdbSerial } as T;
     case "connect_adb_device": {
       const host = String(args.host).trim();
-      const port = Number(args.port);
-      if (!host) throw new Error("请输入设备的 IP 地址或主机名，端口号请单独填写");
-      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      const portText = String(args.port).trim();
+      const port = Number(portText);
+      if (!/^\+?[0-9]+$/.test(portText) || port < 1 || port > 65535) {
         throw new Error("请输入 1-65535 之间的端口号");
       }
-      const address = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
-      const serial = `${address}:${port}`;
+
+      const address = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+      const invalidHost = "请输入设备的 IP 地址或主机名，端口号请单独填写";
+      if (!address || /[[\]/\\@?#\p{White_Space}\p{Cc}]/u.test(address)) {
+        throw new Error(invalidHost);
+      }
+      const isIpv6 = address.includes(":");
+      if (isIpv6) {
+        const [ip] = address.split("%", 1);
+        if (!URL.canParse(`http://[${ip}]/`)) throw new Error(invalidHost);
+      } else if (host !== address) {
+        throw new Error(invalidHost);
+      }
+      const serial = `${isIpv6 ? `[${address}]` : address}:${port}`;
       connectedAdbSerials.add(serial);
       return serial as T;
     }
