@@ -894,6 +894,7 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       } as T;
     case "start_automation":
     case "start_rank_up_quest_automation":
+    case "start_interlude_automation":
     case "stop_automation":
     case "stop_automation_after_current":
     case "start_enhancement_automation":
@@ -904,6 +905,7 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "debug_reload_sidecar":
       return null as T;
     case "capture_rank_up_quest_page":
+    case "capture_interlude_page":
       return {
         captureId: "dev-rank-up-capture",
         imagePath: "/dev/rank-up-quest.png",

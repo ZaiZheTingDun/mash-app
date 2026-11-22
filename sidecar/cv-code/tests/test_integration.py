@@ -127,6 +127,23 @@ def test_detect_screen(image, expected_screen):
     )
 
 
+def test_find_interlude_rows_returns_visible_rows_from_the_repl():
+    responses = _run_commands(_production_load_commands() + [
+        {
+            "cmd": "find_interlude_rows",
+            "id": 42,
+            "imagePath": _resolve("screenshots/interlude/list.jpg"),
+            "screen": "InterludeList",
+        },
+        {"cmd": "quit"},
+    ])
+    result = responses[4]
+    assert result["id"] == 42
+    assert result["atTop"]
+    assert [row["kind"] for row in result["rows"]] == ["quickLink", "quest", "quest"]
+    assert all("lastPlayed" not in row for row in result["rows"])
+
+
 # ── 元素识别测试 ───────────────────────────────────────────────────────
 
 

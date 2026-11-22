@@ -89,6 +89,7 @@ type View =
   | "craftEssenceEnhancement"
   | "friendPointSummon"
   | "rankUpQuest"
+  | "interlude"
   | "packetCapture"
   | "debug";
 
@@ -1112,6 +1113,7 @@ function App({
               onOpenSummon={handleOpenFriendPointSummon}
               onOpenCraftEssenceEnhancement={handleOpenCraftEssenceEnhancement}
               onOpenRankUpQuest={handleOpenRankUpQuest}
+              onOpenInterlude={() => setView("interlude")}
             />
           ) : view === "battle" ? (
             <BattlePage
@@ -1142,8 +1144,10 @@ function App({
               onLogEntry={appendOperationLog}
               battleRunStatus={battleRunStatus}
             />
-          ) : view === "rankUpQuest" && featureToggles.rankUpQuest ? (
+          ) : (view === "rankUpQuest" && featureToggles.rankUpQuest) || view === "interlude" ? (
             <RankUpQuestPage
+              key={view}
+              interlude={view === "interlude"}
               server={server}
               projects={projects}
               projectCatalog={projectCatalog}

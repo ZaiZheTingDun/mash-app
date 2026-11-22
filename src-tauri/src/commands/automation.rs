@@ -278,6 +278,21 @@ pub(crate) fn start_rank_up_quest_automation(
     start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
 }
 
+#[tauri::command]
+pub(crate) fn start_interlude_automation(
+    app: tauri::AppHandle,
+    mut config: RunConfig,
+    workflow: RankUpQuestStartRequest,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
+    debug_state: tauri::State<'_, debug::DebugSidecar>,
+    capture_state: tauri::State<'_, super::interlude::InterludeCaptureState>,
+) -> Result<(), String> {
+    let server = *app.state::<Mutex<Server>>().lock().unwrap();
+    super::interlude::apply_interlude_workflow(&mut config, workflow, &capture_state, server)?;
+    start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
+}
+
 fn start_automation_with_config(
     app: &tauri::AppHandle,
     mut config: RunConfig,

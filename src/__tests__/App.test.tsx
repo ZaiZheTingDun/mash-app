@@ -759,6 +759,26 @@ describe("App active project restore", () => {
     expect(screen.getByRole("radio", { name: "按顺序完成所有强化任务" })).toBeChecked();
   });
 
+  it.each(["日服", "国服"])("opens Interlude automation from the %s battle menu", async (server) => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+    if (server === "国服") {
+      await user.click(screen.getByRole("button", { name: "日服" }));
+      await screen.findByRole("button", { name: "国服" });
+    }
+    await user.click(screen.getByRole("button", { name: "主页" }));
+    await user.click(screen.getByRole("button", { name: "战斗" }));
+    await user.click(screen.getByRole("button", { name: "幕间物语" }));
+    expect(screen.getByRole("heading", { name: "幕间物语" })).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "按顺序完成所有幕间物语" }));
+    await user.click(screen.getByRole("button", { name: "开始幕间物语" }));
+    expect(invoke).toHaveBeenCalledWith("start_interlude_automation", expect.objectContaining({
+      workflow: { mode: "all", captureId: null, candidateId: null },
+    }));
+  });
+
   it("keeps the current server and rank-up workflow when the server switch is rejected", async () => {
     installAppMock("project-1", { serverChangeError: "runner is busy" });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

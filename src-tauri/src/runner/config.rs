@@ -63,6 +63,12 @@ impl RankUpQuestWorkflowConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum InterludeWorkflowConfig {
+    All,
+    Single(crate::screen::InterludeIdentity),
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct GrandServantRuntimeConfig {
     pub(crate) slot_index: usize,
@@ -152,6 +158,8 @@ pub struct RunConfig {
     pub project_id: String,
     #[serde(skip)]
     pub rank_up_quest: Option<RankUpQuestWorkflowConfig>,
+    #[serde(skip)]
+    pub interlude: Option<InterludeWorkflowConfig>,
     /// Mystic Code selected for this team. When present, TeamConfirm checks
     /// the outfit icon in the lower-left corner before starting the quest.
     #[serde(default)]

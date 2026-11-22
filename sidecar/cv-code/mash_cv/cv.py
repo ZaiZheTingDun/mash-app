@@ -86,6 +86,7 @@ import sys
 import time
 import unicodedata
 from contextlib import contextmanager
+from functools import partial
 from typing import TYPE_CHECKING, Any, Optional
 
 import cv2
@@ -104,6 +105,7 @@ from mash_cv.digit_regions import (
     DEFAULT_NP_GAUGE_DIGIT_REGIONS,
     DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS,
 )
+from mash_cv.interlude import INTERLUDE_REFERENCE_WIDTH, find_interlude_rows
 from mash_cv.recognition_diagnostics import RecognitionDiagnostics, begin_candidate, record_match
 from mash_cv.sequence_classifier import SequencePrediction, get_sequence_classifier
 
@@ -1909,10 +1911,11 @@ def _find_all_template_matches(
     region: dict,
     threshold: float,
     width_scales: tuple[float, ...] = (1.0,),
+    template_reference_width: Optional[float] = None,
 ) -> list[dict]:
     """Return vertically distinct matches for one static UI label."""
     tmpl = _get_template(template_key)
-    tmpl = _scale_static_template_for_image(tmpl, img, template_key)
+    tmpl = _scale_static_template_for_image(tmpl, img, template_key, template_reference_width)
     h, w = img.shape[:2]
     rx = max(0, int(round(float(region["x"]) * w)))
     ry = max(0, int(round(float(region["y"]) * h)))
@@ -2079,6 +2082,19 @@ def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
     }
 
 
+def _find_interlude_rows(img: np.ndarray, screen: str) -> dict:
+    return find_interlude_rows(
+        img,
+        screen,
+        find_matches=partial(
+            _find_all_template_matches, template_reference_width=INTERLUDE_REFERENCE_WIDTH,
+        ),
+        find_element=partial(
+            _find_element, template_reference_width=INTERLUDE_REFERENCE_WIDTH,
+        ),
+    )
+
+
 def _named_targets(screen: dict) -> list[tuple[str, dict]]:
     targets: list[tuple[str, dict]] = []
     detect = screen.get("detect")
@@ -2131,6 +2147,21 @@ def _find_element_by_name(
             "found": False,
             "error": f"unknown element: {screen_name}.{element_name}",
         }
+    if pattern := element.get("textPattern"):
+        fragments = _ocr_region(img, element["region"]).get("fragments", [])
+        for fragment in fragments:
+            content = re.sub(r"\s+", "", fragment["text"])
+            score = fragment["ocrConfidence"]
+            if score >= 0.8 and re.fullmatch(pattern, content):
+                box = fragment["region"]
+                return {
+                    "found": True,
+                    "score": score,
+                    "x": box["x"] + box["w"] / 2,
+                    "y": box["y"] + box["h"] / 2,
+                    "region": box,
+                }
+        return {"found": False}
     template_key = element.get("template")
     if not template_key:
         return {"found": False, "error": "element missing 'template'"}
@@ -2203,6 +2234,7 @@ def _detect_screen(
                         option.get("region", region),
                         float(option.get("threshold", threshold)),
                         key,
+                        option.get("templateReferenceWidth"),
                     )
                 if result.get("found"):
                     screen_score = float(result.get("score", 0.0))
@@ -7370,6 +7402,12 @@ def _main_repl() -> None:
                     )
                 else:
                     _reply(req_id, _find_rank_up_quest_rows(img))
+            elif action == "find_interlude_rows":
+                img, err = _load_frame(cmd)
+                if img is None:
+                    _reply(req_id, {"error": err})
+                else:
+                    _reply(req_id, _find_interlude_rows(img, cmd["screen"]))
             elif action == "read_region_luma":
                 img, err = _load_frame(cmd)
                 if img is None:

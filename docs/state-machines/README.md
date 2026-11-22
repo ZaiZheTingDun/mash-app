@@ -4,7 +4,7 @@
 
 | 流程 | 区服 | 文档 |
 | --- | --- | --- |
-| 战斗 | JP / CN；强化任务仅 CN | [战斗自动化](battle-automation.md) |
+| 战斗及幕间物语 | JP / CN | [战斗自动化](battle-automation.md) |
 | 从者强化 | JP | [从者强化](enhancement-automation.md) |
 | 礼装强化与丸子制作 | CN | [概念礼装强化](craft-essence-enhancement-automation.md) |
 | 友情点召唤 | CN | [友情点召唤](friend-point-summon-automation.md) |

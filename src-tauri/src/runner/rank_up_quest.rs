@@ -143,7 +143,7 @@ impl Runner {
         }
     }
 
-    pub(crate) fn complete_rank_up_quest_run(&mut self) {
+    pub(crate) fn record_quest_battle_completion(&mut self) {
         self.completed_mission_runs += 1;
         self.emit_run_progress();
         self.team_changed = false;
@@ -151,7 +151,7 @@ impl Runner {
         self.support_scroll_count = 0;
         self.support_refresh_count = 0;
         self.support_class_search = SupportClassSearchProgress::default();
-        // Every rank-up quest returns to the list and opens a fresh support
+        // Each quest phase opens a fresh support
         // selection page. Reapply CN's second-level EXTRA filter there too;
         // its modal choice may persist in-game, but the new page still needs
         // the configured filter to be explicitly selected for this run.
@@ -177,7 +177,7 @@ impl Runner {
                 // detectable BattleResultContinue frame. Seeing the list
                 // after SupportSelect was reached is the safe completion
                 // boundary for that route.
-                self.complete_rank_up_quest_run();
+                self.record_quest_battle_completion();
             }
             runtime.phase = RankUpQuestPhase::NeedList;
             runtime.reset_stability();
