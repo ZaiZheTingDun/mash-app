@@ -92,6 +92,8 @@ const craftEssences: CraftEssence[] = [
   { id: 1004, rarity: 4, category: "normal", name: "虚数魔术" },
 ];
 
+const defaultAdbSerial = "127.0.0.1:5555";
+const connectedAdbSerials = new Set([defaultAdbSerial]);
 let selectedAdbSerial: string | null = null;
 let deviceResolutionOverridden = true;
 
@@ -631,21 +633,28 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "get_selected_adb_device":
       return selectedAdbSerial as T;
     case "refresh_adb_devices_with_previews":
-      if (selectedAdbSerial == null) selectedAdbSerial = "127.0.0.1:5555";
-      return [
-        {
-          serial: "127.0.0.1:5555",
-          description: "product:bluestacks model:dev",
-          previewPath: "/tmp/mash-dev-adb-preview.png",
-          selected: selectedAdbSerial === "127.0.0.1:5555",
-        },
-      ] as T;
+      if (selectedAdbSerial == null) selectedAdbSerial = defaultAdbSerial;
+      return Array.from(connectedAdbSerials, (serial) => ({
+        serial,
+        description: serial === defaultAdbSerial ? "product:bluestacks model:dev" : "",
+        previewPath: "/tmp/mash-dev-adb-preview.png",
+        selected: selectedAdbSerial === serial,
+      })) as T;
     case "select_adb_device":
       selectedAdbSerial = String(args.serial);
       return { connected: true, deviceName: selectedAdbSerial } as T;
-    case "connect_adb_port":
-      selectedAdbSerial = `127.0.0.1:${Number(args.port)}`;
-      return selectedAdbSerial as T;
+    case "connect_adb_device": {
+      const host = String(args.host).trim();
+      const port = Number(args.port);
+      if (!host) throw new Error("请输入设备的 IP 地址或主机名，端口号请单独填写");
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error("请输入 1-65535 之间的端口号");
+      }
+      const address = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+      const serial = `${address}:${port}`;
+      connectedAdbSerials.add(serial);
+      return serial as T;
+    }
     case "reset_bluestacks_adb_connection":
       return {
         ok: true,

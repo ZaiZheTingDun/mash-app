@@ -209,7 +209,7 @@ pub fn run() {
             commands::projects::delete_project,
             commands::projects::delete_slot_servant,
             commands::adb::check_adb,
-            commands::adb::connect_adb_port,
+            commands::adb::connect_adb_device,
             commands::adb::get_selected_adb_device,
             commands::adb::refresh_adb_devices_with_previews,
             commands::adb::reset_bluestacks_adb_connection,

@@ -288,10 +288,6 @@
   min-height: 220px;
 }
 
-.adb-manual-port-dialog .rt-TextFieldRoot {
-  width: 120px;
-}
-
 .adb-device-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
