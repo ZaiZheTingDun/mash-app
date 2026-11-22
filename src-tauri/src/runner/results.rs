@@ -42,6 +42,18 @@ pub(crate) const BATTLE_RESULT_CONTINUE_STOP: Point = Point::new(0.348, 0.809);
 /// Same physical position as the battle animation-skip button, but kept as
 /// a separate semantic constant so result-popup behavior can be tuned alone.
 pub(crate) const BATTLE_RESULT_POPUP_SKIP: Point = Point::new(0.685, 0.095);
+/// Close button on the dialog announcing that the next rank-up quest opened.
+pub(crate) const RANK_UP_QUEST_UNLOCK_CLOSE: Point = Point::new(0.500, 0.785);
+const QUEST_CLEAR_NOTICE_REGION: NormRect = NormRect {
+    x: 0.12,
+    y: 0.02,
+    w: 0.76,
+    h: 0.62,
+};
+pub(crate) const SETTLEMENT_UNKNOWN_DISMISS_START: u32 = 3;
+pub(crate) const SETTLEMENT_UNKNOWN_DISMISS_END: u32 = 8;
+pub(crate) const SETTLEMENT_UNKNOWN_FINISH_AT: u32 = 16;
+const SETTLEMENT_UNKNOWN_SKIP_LIMIT: u8 = 6;
 
 /// Cadence used by `tap_until_screen_changes` when dismissing post-battle
 /// result pages. Slow enough for the device to register each tap and for
@@ -212,6 +224,67 @@ pub(crate) fn bond_level_up_screenshot_filename(
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SettlementUnknownStep {
+    Wait,
+    Dismiss,
+    Finish,
+}
+
+/// After the last recognized result page, a quest without 「连续出击」
+/// stays Unknown: first a load, then the clear-reward and skill/NP
+/// strengthen pages, then the quest board. Stop tapping once those
+/// forward clicks are done, and end the run if no continue page appears.
+pub(crate) fn settlement_unknown_step(unknown_count: u32) -> SettlementUnknownStep {
+    if unknown_count >= SETTLEMENT_UNKNOWN_FINISH_AT {
+        SettlementUnknownStep::Finish
+    } else if (SETTLEMENT_UNKNOWN_DISMISS_START..=SETTLEMENT_UNKNOWN_DISMISS_END)
+        .contains(&unknown_count)
+    {
+        SettlementUnknownStep::Dismiss
+    } else {
+        SettlementUnknownStep::Wait
+    }
+}
+
+pub(crate) fn settlement_skip_allowed(unknown_count: u32, attempts: u8) -> bool {
+    (SETTLEMENT_UNKNOWN_DISMISS_START..=SETTLEMENT_UNKNOWN_DISMISS_END).contains(&unknown_count)
+        && attempts < SETTLEMENT_UNKNOWN_SKIP_LIMIT
+}
+
+pub(crate) fn quest_clear_notice_action(text: &str) -> Option<(&'static str, Point)> {
+    let compact: String = text.chars().filter(|ch| !ch.is_whitespace()).collect();
+    if (compact.contains("强化关卡") && compact.contains("已开放"))
+        || (compact.contains("強化クエスト") && compact.contains("開放"))
+    {
+        return Some(("后续强化关卡已开放，关闭提示", RANK_UP_QUEST_UNLOCK_CLOSE));
+    }
+    if compact.contains("获得报酬") {
+        return Some(("获得报酬，前往下一画面", BATTLE_RESULT_BOND_NEXT));
+    }
+    if compact.contains("获得奖励")
+        || compact.contains("報酬を獲得")
+        || compact.contains("クリア報酬")
+    {
+        return Some(("获得奖励，前往下一画面", BATTLE_RESULT_BOND_NEXT));
+    }
+    if compact.contains("技能获得强化")
+        || compact.contains("宝具获得强化")
+        || compact.contains("技能强化")
+        || compact.contains("宝具强化")
+        || compact.contains("スキル強化")
+        || compact.contains("宝具強化")
+    {
+        return Some(("技能或宝具获得强化，前往下一画面", BATTLE_RESULT_BOND_NEXT));
+    }
+    None
+}
+
+#[cfg(test)]
+pub(crate) fn quest_clear_notice_message(text: &str) -> Option<&'static str> {
+    quest_clear_notice_action(text).map(|(message, _)| message)
+}
+
 pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
     matches!(
         screen,
@@ -224,6 +297,63 @@ pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
 }
 
 impl Runner {
+    pub(crate) fn dismiss_quest_clear_notice(&mut self) -> AutomationResult<bool> {
+        let text = match self
+            .sidecar()
+            .ocr_region(None, QUEST_CLEAR_NOTICE_REGION)
+            .recoverable()?
+        {
+            Ok(result) => result.full_text,
+            Err(error) => {
+                self.emit_debug("Unknown", &format!("结算离开页识别失败: {error}"));
+                String::new()
+            }
+        };
+        let Some((message, point)) = quest_clear_notice_action(&text) else {
+            return Ok(false);
+        };
+        self.emit("BattleResult", message);
+        if self.tap_at("BattleResult", point) {
+            thread::sleep(ACTION_DELAY);
+        }
+        Ok(true)
+    }
+
+    pub(crate) fn dismiss_settlement_unknown(
+        &mut self,
+        unknown_count: u32,
+    ) -> AutomationResult<()> {
+        if self.dismiss_quest_clear_notice()? {
+            return Ok(());
+        }
+        if settlement_skip_allowed(unknown_count, self.settlement_popup_skip_attempts) {
+            self.settlement_popup_skip_attempts =
+                self.settlement_popup_skip_attempts.saturating_add(1);
+            self.emit_debug("Unknown", "结算页可能被弹窗遮挡，尝试点击跳过区域");
+            if self.tap_at("Unknown", BATTLE_RESULT_POPUP_SKIP) {
+                thread::sleep(ACTION_DELAY);
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn finish_battle_without_continue_prompt(&mut self) {
+        if self.map_free_quest_active() {
+            self.finish_or_resume_map_free_quest_after_result();
+            return;
+        }
+        self.completed_mission_runs += 1;
+        self.emit_run_progress();
+        self.emit(
+            "Unknown",
+            &format!(
+                "结算后已离开战斗，结束任务（已完成 {} 轮）",
+                self.completed_mission_runs
+            ),
+        );
+        self.transition_lifecycle(RunnerLifecycleEvent::Finished);
+    }
+
     pub(crate) fn handle_battle_result_bond(&mut self) -> AutomationResult<()> {
         let detected_label = match self.sidecar().detect_label_full(None).recoverable()? {
             Ok((label, _score)) => label,
@@ -529,13 +659,15 @@ impl Runner {
         }
         self.battle_result_continue_handled = true;
 
-        if self.rank_up_quest_active() {
-            self.complete_rank_up_quest_run();
-            self.emit("BattleResultContinue", "结束当前强化关卡，返回任务列表");
+        if self.map_free_quest_active() {
+            self.complete_map_free_quest_run();
+            self.emit("BattleResultContinue", "结束当前自由关卡，返回地图");
             if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
                 return;
             }
-            self.mark_rank_up_quest_return_pending();
+            if self.should_stop_after_current() {
+                self.transition_lifecycle(RunnerLifecycleEvent::Finished);
+            }
             thread::sleep(ACTION_DELAY);
             return;
         }

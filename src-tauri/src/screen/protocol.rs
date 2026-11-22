@@ -17,6 +17,8 @@ pub(super) enum SidecarCommand {
     FindItemGrid,
     FindNoblePhantasms,
     FindRankUpQuestRows,
+    FindMapRedDotLocations,
+    FindFreeQuestRows,
     FindRegion,
     FindSupports,
     GetFrame,

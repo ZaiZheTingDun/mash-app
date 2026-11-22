@@ -33,6 +33,19 @@
   min-height: 273px;
 }
 
+.battle-page .battle-panel.battle-panel-compact {
+  min-height: 0;
+}
+
+.battle-page .battle-body-rank-up {
+  gap: clamp(16px, 2.5vw, 28px);
+}
+
+.battle-body-rank-up > .battle-panel {
+  min-height: 0;
+  gap: clamp(9px, 1.5vw, 16px);
+}
+
 .battle-page .battle-panel:first-child {
   min-height: 127.5px;
   gap: 16.5px;

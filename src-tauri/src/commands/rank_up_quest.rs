@@ -139,11 +139,9 @@ pub(crate) fn apply_rank_up_quest_workflow(
 ) -> Result<(), String> {
     config.repeat_mission = false;
     config.max_mission_runs = None;
-    config.rank_up_quest = Some(resolve_rank_up_quest_workflow(
-        request,
-        capture_state,
-        server,
-    )?);
+    config.quest_workflow = Some(crate::runner::QuestWorkflowConfig::RankUp(
+        resolve_rank_up_quest_workflow(request, capture_state, server)?,
+    ));
     Ok(())
 }
 

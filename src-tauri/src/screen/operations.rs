@@ -473,6 +473,7 @@ impl SidecarClient {
 
 mod battle;
 mod enhancement;
+mod map_free_quest;
 mod rank_up_quest;
 mod support;
 mod team_verification;

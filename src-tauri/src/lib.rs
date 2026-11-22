@@ -257,6 +257,7 @@ pub fn run() {
             commands::automation::start_automation,
             commands::rank_up_quest::capture_rank_up_quest_page,
             commands::automation::start_rank_up_quest_automation,
+            commands::automation::start_map_free_quest_automation,
             commands::automation::stop_automation,
             commands::automation::stop_automation_after_current,
             commands::automation::get_automation_status,

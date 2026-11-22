@@ -40,49 +40,13 @@ function rowStyle(row: RankUpQuestRow) {
   };
 }
 
-export function RankUpQuestPage(props: RankUpQuestPageProps) {
-  const [mode, setMode] = useState<RankUpQuestMode>("single");
-  return <RankUpQuestServerPage key={props.server ?? "loading"} {...props} mode={mode} setMode={setMode} />;
-}
-
-function RankUpQuestServerPage({
-  server,
-  projects,
-  activeProjectId,
-  onBack,
-  onAutomationStart,
-  onAutomationStartFailed,
-  onLogEntry,
-  mode,
-  setMode,
-  ...projectBarProps
-}: RankUpQuestPageProps & { mode: RankUpQuestMode; setMode: (mode: RankUpQuestMode) => void }) {
+function useRankUpQuestCapture(setError: (value: string | null) => void) {
   const [capture, setCapture] = useState<RankUpQuestCaptureResult | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [currentScreen, setCurrentScreen] = useState("");
   const captureRequest = useRef(0);
 
   useEffect(() => () => { captureRequest.current += 1; }, []);
-
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === activeProjectId) ?? null,
-    [activeProjectId, projects],
-  );
-
-  useEffect(() => {
-    const unlisten = listen<AutomationEvent>("automation-status", (event) => {
-      setCurrentScreen(event.payload.currentScreen);
-      if (isAutomationTerminal(event.payload)) {
-        setRunning(false);
-      }
-    });
-    return () => {
-      void unlisten.then((fn) => fn());
-    };
-  }, []);
 
   const capturePage = useCallback(() => {
     const request = ++captureRequest.current;
@@ -101,6 +65,49 @@ function RankUpQuestServerPage({
       .finally(() => {
         if (request === captureRequest.current) setCapturing(false);
       });
+  }, [setError]);
+
+  return { capture, capturing, capturePage, selectedCandidateId, setSelectedCandidateId };
+}
+
+export function RankUpQuestPage(props: RankUpQuestPageProps) {
+  const [mode, setMode] = useState<RankUpQuestMode>("single");
+  return <RankUpQuestServerPage key={props.server ?? "loading"} {...props} mode={mode} setMode={setMode} />;
+}
+
+function RankUpQuestServerPage({
+  server,
+  projects,
+  activeProjectId,
+  onBack,
+  onAutomationStart,
+  onAutomationStartFailed,
+  onLogEntry,
+  mode,
+  setMode,
+  ...projectBarProps
+}: RankUpQuestPageProps & { mode: RankUpQuestMode; setMode: (mode: RankUpQuestMode) => void }) {
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentScreen, setCurrentScreen] = useState("");
+  const selection = useRankUpQuestCapture(setError);
+  const { capture, selectedCandidateId, capturing } = selection;
+
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === activeProjectId) ?? null,
+    [activeProjectId, projects],
+  );
+
+  useEffect(() => {
+    const unlisten = listen<AutomationEvent>("automation-status", (event) => {
+      setCurrentScreen(event.payload.currentScreen);
+      if (isAutomationTerminal(event.payload)) {
+        setRunning(false);
+      }
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
   }, []);
 
   const handleStart = useCallback(() => {
@@ -170,6 +177,30 @@ function RankUpQuestServerPage({
       </PageHeader>
 
       <Flex direction="column" className="battle-body battle-body-scroll">
+        <RankUpQuestPanels {...selection} server={server} running={running} mode={mode} setMode={setMode} />
+      </Flex>
+
+      <Flex justify="between" className="page-footer rank-up-quest-footer" gap="4">
+        <FooterNote className="task-status" role={statusError ? "alert" : "status"}>
+          {statusMessage}
+        </FooterNote>
+        <TaskActionButton label={running ? "停止" : "开始强化任务"} running={running} disabled={!running && !canStart}
+          onClick={running ? () => void invoke("stop_automation") : handleStart} />
+      </Flex>
+    </main>
+  );
+}
+
+function RankUpQuestPanels({
+  server, running, mode, setMode, capture, capturing, capturePage, selectedCandidateId, setSelectedCandidateId,
+}: ReturnType<typeof useRankUpQuestCapture> & {
+  server: Server | null;
+  running: boolean;
+  mode: RankUpQuestMode;
+  setMode: (mode: RankUpQuestMode) => void;
+}) {
+  return (
+    <>
         <Box className="battle-panel">
           <SectionHeading rail stacked english="MODE">完成方式</SectionHeading>
           <OptionCardRadioGroup
@@ -240,15 +271,30 @@ function RankUpQuestServerPage({
             )}
           </Box>
         )}
-      </Flex>
-
-      <Flex justify="between" className="page-footer rank-up-quest-footer" gap="4">
-        <FooterNote className="task-status" role={statusError ? "alert" : "status"}>
-          {statusMessage}
-        </FooterNote>
-        <TaskActionButton label={running ? "停止" : "开始强化任务"} running={running} disabled={!running && !canStart}
-          onClick={running ? () => void invoke("stop_automation") : handleStart} />
-      </Flex>
-    </main>
+    </>
   );
+}
+
+export interface RankUpQuestWorkflowDraft {
+  mode: RankUpQuestMode;
+  captureId: string | null;
+  candidateId: string | null;
+}
+
+export function RankUpQuestSelector({ running, onChange, onError }: {
+  running: boolean;
+  onChange: (workflow: RankUpQuestWorkflowDraft | null) => void;
+  onError: (message: string | null) => void;
+}) {
+  const [mode, setMode] = useState<RankUpQuestMode>("single");
+  const selection = useRankUpQuestCapture(onError);
+  const { capture, selectedCandidateId, capturing } = selection;
+  useEffect(() => {
+    if (capturing) onChange(null);
+    else if (mode === "all") onChange({ mode, captureId: null, candidateId: null });
+    else if (capture && selectedCandidateId) onChange({ mode, captureId: capture.captureId, candidateId: selectedCandidateId });
+    else onChange(null);
+  }, [mode, capture, selectedCandidateId, capturing, onChange]);
+
+  return <RankUpQuestPanels {...selection} server="CN" running={running} mode={mode} setMode={setMode} />;
 }

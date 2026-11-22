@@ -278,6 +278,20 @@ pub(crate) fn start_rank_up_quest_automation(
     start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
 }
 
+#[tauri::command]
+pub(crate) fn start_map_free_quest_automation(
+    app: tauri::AppHandle,
+    mut config: RunConfig,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
+    debug_state: tauri::State<'_, debug::DebugSidecar>,
+) -> Result<(), String> {
+    config.repeat_mission = false;
+    config.max_mission_runs = None;
+    config.quest_workflow = Some(crate::runner::QuestWorkflowConfig::MapFreeQuest);
+    start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
+}
+
 fn start_automation_with_config(
     app: &tauri::AppHandle,
     mut config: RunConfig,

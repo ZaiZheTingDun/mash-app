@@ -1115,6 +1115,8 @@ function App({
             />
           ) : view === "battle" ? (
             <BattlePage
+              server={server}
+              showRankUpQuest={featureToggles.rankUpQuest}
               projects={projects}
               projectCatalog={projectCatalog}
               grandClassDefinitions={grandClassDefinitions}

@@ -176,6 +176,61 @@ def _set_sequence_recognition_mode(mode: str) -> dict:
     _sequence_recognition_mode = normalized
     return {"ok": True, "mode": normalized}
 
+# Map coordinates are fractions of the game frame (excluding emulator chrome).
+MAP_SAFE_REGION = {"x": 0.15, "y": 0.07, "w": 0.84, "h": 0.75}  # Exclude fixed HUD notifications.
+MAP_FINGERPRINT_REGION = {"x": 0.18, "y": 0.14, "w": 0.73, "h": 0.66}
+MAP_FINGERPRINT_SIZE = (17, 16)  # One extra column for a 16-by-16 horizontal difference hash.
+MAP_MOTION_REGION = {"x": 0.22, "y": 0.18, "w": 0.67, "h": 0.56}  # Terrain away from the HUD.
+MAP_MOTION_SAMPLE_SIZE = (180, 96)  # Pixels, divided into equal tiles for independent motion votes.
+MAP_MOTION_GRID_SIZE = 3
+MAP_MOTION_MIN_STDDEV = 2  # Ignore low-contrast tiles.
+MAP_MOTION_MIN_CORRELATION = 0.85
+MAP_MOTION_MIN_VOTES = 3
+MAP_MOTION_AGREEMENT = 0.7
+MAP_MOTION_MIN_PHASE_CONFIDENCE = 0.18  # Fallback when tile matches are inconclusive.
+MAP_MOTION_MAX_SHIFT_PX = 2  # Measured in the downsampled image.
+
+# Map badge colour (OpenCV HSV), shape, and area relative to the entire frame.
+MAP_BADGE_ORANGE_HSV = ((0, 105, 145), (24, 255, 255))
+MAP_BADGE_RED_HSV = ((170, 105, 145), (179, 255, 255))
+MAP_BADGE_CLOSE_KERNEL = (3, 3)  # Join small gaps in badge contours.
+MAP_BADGE_MIN_AREA_RATIO, MAP_BADGE_MAX_AREA_RATIO = 0.00018, 0.0035
+MAP_BADGE_MIN_CIRCULARITY = 0.42
+MAP_BADGE_MIN_ASPECT, MAP_BADGE_MAX_ASPECT = 0.55, 1.45
+MAP_NODE_TAP_DX, MAP_NODE_TAP_DY = -0.45, 1.75  # Badge widths/heights from its top-left to the node.
+MAP_TAP_LEFT, MAP_TAP_RIGHT = 0.15, 0.94
+MAP_TAP_TOP, MAP_TAP_BOTTOM = 0.12, 0.82
+MAP_SIGNATURE_HALF_WIDTH = 0.09  # Capture the icon and name around the tap point.
+MAP_SIGNATURE_ABOVE, MAP_SIGNATURE_BELOW = 0.10, 0.11
+
+# Detail-panel OCR regions and scales. Adjacent Free / Quest tokens can be stacked or inline.
+QUEST_LIST_REGION = {"x": 0.47, "y": 0.12, "w": 0.49, "h": 0.72}
+QUEST_CLOSE_LABEL_REGION = {"x": 0.052, "y": 0.019, "w": 0.063, "h": 0.067}
+QUEST_LIST_OCR_SCALE, QUEST_NAV_OCR_SCALE = 1.25, 1.5
+FREE_QUEST_LABELS = ("freequest", "自由关卡", "フリークエスト", "freeクエスト")
+QUEST_TOKEN_ALIGNMENT = 0.025
+QUEST_STACKED_TOKEN_GAP, QUEST_INLINE_TOKEN_GAP = 0.08, 0.12
+
+# Unlit infinity glyph: horizontal progress strip relative to the OCR label, gray HSV and two holes.
+QUEST_PROGRESS_X, QUEST_PROGRESS_WIDTH = 0.745, 0.060
+QUEST_PROGRESS_TOP_OFFSET, QUEST_PROGRESS_HEIGHT = -0.01, 0.18
+QUEST_PROGRESS_GLYPH_LUMA, QUEST_PROGRESS_BRIGHT_LUMA = 85, 220  # Diagnostics only.
+QUEST_INFINITY_GRAY_HSV = ((0, 0, 65), (179, 48, 190))
+QUEST_INFINITY_MIN_WIDTH, QUEST_INFINITY_MAX_WIDTH = 0.024, 0.054  # Fraction of frame width.
+QUEST_INFINITY_MIN_ASPECT, QUEST_INFINITY_MAX_ASPECT = 1.05, 2.4
+QUEST_INFINITY_MIN_HOLE_AREA = 0.025  # Fraction of glyph bounding box.
+
+# Infer a tappable card from its label. Offsets and height scale are in units of label height.
+QUEST_LABEL_MIN_HEIGHT, QUEST_LABEL_DEFAULT_HEIGHT = 0.02, 0.04
+QUEST_ROW_TOP_OFFSET, QUEST_ROW_HEIGHT_SCALE = 0.65, 3.3
+QUEST_ROW_MIN_HEIGHT, QUEST_ROW_MAX_HEIGHT = 0.14, 0.24
+QUEST_ROW_VISIBLE_TOP, QUEST_ROW_VISIBLE_BOTTOM = 0.12, 0.84
+QUEST_ROW_X, QUEST_ROW_WIDTH, QUEST_ROW_TAP_X = 0.49, 0.47, 0.73
+QUEST_ROW_DUPLICATE_DISTANCE = 0.08  # Maximum vertical distance between labels on one card.
+QUEST_SCROLL_TRACK_REGION = {"x": 0.981, "y": 0.145, "w": 0.003, "h": 0.645}  # Exclude pointed caps.
+QUEST_SCROLL_WHITE_MIN, QUEST_SCROLL_FULL_FRACTION = 175, 0.98
+RANK_UP_COST_DEDUP_HEIGHT_RATIO = 0.65  # Suppress duplicate cost glyphs within one rank-up card.
+
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
 RANK_UP_QUEST_ROW_TEMPLATE = "rank-up-quest/text_rank_up_quest_anchor"
@@ -1958,6 +2013,212 @@ def _find_all_template_matches(
     return sorted(distinct, key=lambda match: (match["y"], match["x"]))
 
 
+def _binary_fingerprint(crop: np.ndarray) -> str:
+    """Small translation-state fingerprint used for map boundary checks."""
+    if crop.size == 0:
+        return ""
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+    small = cv2.resize(gray, MAP_FINGERPRINT_SIZE, interpolation=cv2.INTER_AREA)
+    bits = (small[:, 1:] > small[:, :-1]).reshape(-1)
+    packed = np.packbits(bits.astype(np.uint8))
+    return packed.tobytes().hex()
+
+
+def _map_frame_fingerprint(img: np.ndarray) -> str:
+    return _binary_fingerprint(_crop_template(img, MAP_FINGERPRINT_REGION))
+
+
+def _find_map_red_dot_locations(img: np.ndarray) -> dict:
+    """Find map-node notification badges while excluding fixed HUD badges."""
+    h, w = img.shape[:2]
+    x0 = int(MAP_SAFE_REGION["x"] * w)
+    y0 = int(MAP_SAFE_REGION["y"] * h)
+    x1 = int((MAP_SAFE_REGION["x"] + MAP_SAFE_REGION["w"]) * w)
+    y1 = int((MAP_SAFE_REGION["y"] + MAP_SAFE_REGION["h"]) * h)
+    crop = img[y0:y1, x0:x1]
+    if crop.size == 0:
+        return {"locations": [], "fingerprint": ""}
+
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    # Notification dots range from red through orange on CN and JP skins.
+    mask_a = cv2.inRange(hsv, *MAP_BADGE_ORANGE_HSV)
+    mask_b = cv2.inRange(hsv, *MAP_BADGE_RED_HSV)
+    mask = cv2.bitwise_or(mask_a, mask_b)
+    kernel = np.ones(MAP_BADGE_CLOSE_KERNEL, dtype=np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    locations: list[dict] = []
+    frame_area = float(w * h)
+    for contour in contours:
+        area = float(cv2.contourArea(contour))
+        area_ratio = area / frame_area
+        if not (MAP_BADGE_MIN_AREA_RATIO <= area_ratio <= MAP_BADGE_MAX_AREA_RATIO):
+            continue
+        perimeter = float(cv2.arcLength(contour, True))
+        if perimeter <= 0:
+            continue
+        circularity = 4.0 * np.pi * area / (perimeter * perimeter)
+        if circularity < MAP_BADGE_MIN_CIRCULARITY:
+            continue
+        bx, by, bw, bh = cv2.boundingRect(contour)
+        aspect = bw / max(1.0, float(bh))
+        if not MAP_BADGE_MIN_ASPECT <= aspect <= MAP_BADGE_MAX_ASPECT:
+            continue
+        abs_x, abs_y = x0 + bx, y0 + by
+        badge = {
+            "x": abs_x / w,
+            "y": abs_y / h,
+            "w": bw / w,
+            "h": bh / h,
+        }
+        tap_x = min(MAP_TAP_RIGHT, max(MAP_TAP_LEFT, badge["x"] + badge["w"] * MAP_NODE_TAP_DX))
+        tap_y = min(MAP_TAP_BOTTOM, max(MAP_TAP_TOP, badge["y"] + badge["h"] * MAP_NODE_TAP_DY))
+        sx0 = max(0, int((tap_x - MAP_SIGNATURE_HALF_WIDTH) * w))
+        sy0 = max(0, int((tap_y - MAP_SIGNATURE_ABOVE) * h))
+        sx1 = min(w, int((tap_x + MAP_SIGNATURE_HALF_WIDTH) * w))
+        sy1 = min(h, int((tap_y + MAP_SIGNATURE_BELOW) * h))
+        locations.append({
+            "badgeRegion": badge,
+            "tap": {"x": tap_x, "y": tap_y},
+            "signature": _binary_fingerprint(img[sy0:sy1, sx0:sx1]),
+            "score": min(1.0, circularity),
+        })
+    locations.sort(key=lambda item: (item["tap"]["y"], item["tap"]["x"]))
+    return {"locations": locations, "fingerprint": _map_frame_fingerprint(img)}
+
+
+def _normalize_quest_label(text: str) -> str:
+    return "".join(ch for ch in unicodedata.normalize("NFKC", text).lower() if not ch.isspace())
+
+
+def _quest_navigation_label(img: np.ndarray) -> str:
+    # The map's Back button occupies the same position as the detail's Close.
+    label = _ocr_region(img, QUEST_CLOSE_LABEL_REGION, scale=QUEST_NAV_OCR_SCALE)
+    return _normalize_quest_label(label.get("fullText", ""))
+
+
+def _has_gray_infinity(sample, frame_width):
+    if not sample.size:
+        return False
+    hsv = cv2.cvtColor(sample, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, *QUEST_INFINITY_GRAY_HSV)
+    contours, tree = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    if tree is None:
+        return False
+    for index, contour in enumerate(contours):
+        _, _, width, height = cv2.boundingRect(contour)
+        if not (QUEST_INFINITY_MIN_WIDTH * frame_width <= width <= QUEST_INFINITY_MAX_WIDTH * frame_width and QUEST_INFINITY_MIN_ASPECT <= width / height <= QUEST_INFINITY_MAX_ASPECT):
+            continue
+        holes = [c for c, links in zip(contours, tree[0])
+                 if links[3] == index and cv2.contourArea(c) > width * height * QUEST_INFINITY_MIN_HOLE_AREA]
+        if len(holes) == 2:
+            return True
+    return False
+
+
+def _find_free_quest_rows(img: np.ndarray) -> dict:
+    """Find Free Quest rows and classify the progress infinity as lit/unlit."""
+    ocr = _ocr_region(img, QUEST_LIST_REGION, scale=QUEST_LIST_OCR_SCALE)
+    rows: list[dict] = []
+    w = img.shape[1]
+    label_fragments, free_tokens, quest_tokens = [], [], []
+    for fragment in ocr.get("fragments", []):
+        label = _normalize_quest_label(str(fragment.get("text", "")))
+        if any(name in label for name in FREE_QUEST_LABELS):
+            label_fragments.append(fragment)
+        elif label == "free":
+            free_tokens.append(fragment)
+        elif label == "quest":
+            quest_tokens.append(fragment)
+
+    for free in free_tokens:
+        fr = free.get("region") or {}
+        free_cy = float(fr.get("y", 0.0)) + float(fr.get("h", 0.0)) * 0.5
+        def same_badge_or_line(quest):
+            qr = quest.get("region") or {}
+            dx = float(qr.get("x", 0)) - float(fr.get("x", 0))
+            dy = float(qr.get("y", 0)) + float(qr.get("h", 0)) / 2 - free_cy
+            return ((abs(dx) < QUEST_TOKEN_ALIGNMENT and 0 <= dy <= QUEST_STACKED_TOKEN_GAP)
+                    or (0 <= dx <= QUEST_INLINE_TOKEN_GAP and abs(dy) < QUEST_TOKEN_ALIGNMENT))
+
+        nearest = min(
+            (quest for quest in quest_tokens if same_badge_or_line(quest)),
+            key=lambda quest: abs(
+                free_cy
+                - (float((quest.get("region") or {}).get("y", 0.0)) + float((quest.get("region") or {}).get("h", 0.0)) * 0.5)
+            ),
+            default=None,
+        )
+        if nearest is None:
+            continue
+        qr = nearest.get("region") or {}
+        y0 = min(float(fr.get("y", 0.0)), float(qr.get("y", 0.0)))
+        y1 = max(float(fr.get("y", 0.0)) + float(fr.get("h", 0.0)), float(qr.get("y", 0.0)) + float(qr.get("h", 0.0)))
+        label_fragments.append({"text": "Free Quest", "region": {"y": y0, "h": y1 - y0}})
+
+    for fragment in label_fragments:
+        text = str(fragment.get("text", ""))
+        label = fragment.get("region") or {}
+        label_y = float(label.get("y", 0.0))
+        label_h = max(QUEST_LABEL_MIN_HEIGHT, float(label.get("h", QUEST_LABEL_DEFAULT_HEIGHT)))
+        # The mission-progress arrows/infinity sit to the right and slightly
+        # below the large Free Quest label on both card layouts.
+        progress = {
+            "x": QUEST_PROGRESS_X,
+            "y": max(0, label_y + QUEST_PROGRESS_TOP_OFFSET),
+            "w": QUEST_PROGRESS_WIDTH,
+            "h": QUEST_PROGRESS_HEIGHT,
+        }
+        sample = _crop_template(img, progress)
+        mean_luma = 255.0
+        bright_fraction = 1.0
+        if sample.size:
+            gray = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)
+            # Preserve the panel brightness readings for diagnostics.
+            glyph = gray[gray >= QUEST_PROGRESS_GLYPH_LUMA]
+            if glyph.size:
+                mean_luma = float(glyph.mean())
+                bright_fraction = float((glyph >= QUEST_PROGRESS_BRIGHT_LUMA).mean())
+        unlit = _has_gray_infinity(sample, w)
+        row_y = max(QUEST_ROW_VISIBLE_TOP, label_y - label_h * QUEST_ROW_TOP_OFFSET)
+        row_h = min(QUEST_ROW_MAX_HEIGHT, max(QUEST_ROW_MIN_HEIGHT, label_h * QUEST_ROW_HEIGHT_SCALE))
+        row = {"x": QUEST_ROW_X, "y": row_y, "w": QUEST_ROW_WIDTH, "h": min(row_h, QUEST_ROW_VISIBLE_BOTTOM - row_y)}
+        rows.append({
+            "region": row,
+            "tap": {"x": QUEST_ROW_TAP_X, "y": row["y"] + row["h"] * 0.5},
+            "labelText": text,
+            "progressRegion": progress,
+            "progressMeanLuma": mean_luma,
+            "progressBrightFraction": bright_fraction,
+            "eligible": unlit,
+        })
+    rows.sort(key=lambda row: row["tap"]["y"])
+    distinct_rows: list[dict] = []
+    for row in rows:
+        if any(abs(row["tap"]["y"] - kept["tap"]["y"]) < QUEST_ROW_DUPLICATE_DISTANCE for kept in distinct_rows):
+            continue
+        row["candidateId"] = f"free-{len(distinct_rows)}"
+        distinct_rows.append(row)
+    navigation = _quest_navigation_label(img)
+    close = navigation in {"关闭", "關閉", "閉じる", "close"}
+    back = navigation in {"返回", "戻る", "back"}
+    # Inside the confirmed detail panel the white scroll thumb spans the
+    # track when all entries fit. Ignore the pointed caps at either end.
+    track = _crop_template(img, QUEST_SCROLL_TRACK_REGION)
+    full_track = close and track.size > 0 and (track.min(axis=2) > QUEST_SCROLL_WHITE_MIN).mean() > QUEST_SCROLL_FULL_FRACTION
+    return {
+        "listFullyVisible": bool(full_track),
+        "overlayDetected": close or (bool(distinct_rows) and not back),
+        "closeConfirmed": close,
+        "backConfirmed": back,
+        "rows": distinct_rows,
+        "ocrText": ocr.get("fullText", ""),
+        "listFingerprint": _binary_fingerprint(_crop_template(img, QUEST_LIST_REGION)),
+        "error": ocr.get("error"),
+    }
+
+
 def _rank_up_quest_row_color_stats(img: np.ndarray, row: dict) -> tuple[float, float, float]:
     """Sample a text-free part of the gold header to classify bright/dark rows."""
     h, w = img.shape[:2]
@@ -1997,6 +2258,18 @@ def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
         RANK_UP_QUEST_LIST_REGION,
         RANK_UP_QUEST_ANCHOR_THRESHOLD,
     )
+    # A high-contrast glyph elsewhere in a row can occasionally look like the
+    # short "cost" label.  Keep the strongest anchor for each row-height band
+    # so one quest is not exposed twice to the runner.
+    distinct_cost_anchors: list[dict] = []
+    for cost in sorted(cost_anchors, key=lambda match: match["score"], reverse=True):
+        if any(
+            abs(cost["y"] - kept["y"]) < RANK_UP_QUEST_ROW_H * RANK_UP_COST_DEDUP_HEIGHT_RATIO
+            for kept in distinct_cost_anchors
+        ):
+            continue
+        distinct_cost_anchors.append(cost)
+    cost_anchors = sorted(distinct_cost_anchors, key=lambda match: (match["y"], match["x"]))
     rows: list[dict] = []
     used_ranks: set[int] = set()
     for cost in cost_anchors:
@@ -7251,7 +7524,36 @@ def _template_request(cmd: dict):
         _reply(cmd.get("id"), exc.response)
 
 
+def _map_motion_sample(img):
+    crop = _crop_template(img, MAP_MOTION_REGION)
+    return cv2.resize(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), MAP_MOTION_SAMPLE_SIZE, interpolation=cv2.INTER_AREA)
+
+
+def _map_view_stationary(before, after):
+    if before is None:
+        return None
+    # Compare textured terrain in separate regions so animated decorations
+    # and broad areas of featureless sky do not dominate the comparison.
+    votes = []
+    tile_w, tile_h = (size // MAP_MOTION_GRID_SIZE for size in MAP_MOTION_SAMPLE_SIZE)
+    for y in range(0, before.shape[0], tile_h):
+        for x in range(0, before.shape[1], tile_w):
+            tile = before[y:y + tile_h, x:x + tile_w]
+            if tile.std() < MAP_MOTION_MIN_STDDEV:
+                continue
+            target = after[y:y + tile_h, x:x + tile_w]
+            score = cv2.matchTemplate(target, tile, cv2.TM_CCOEFF_NORMED)[0, 0]
+            votes.append(score >= MAP_MOTION_MIN_CORRELATION)
+    if len(votes) >= MAP_MOTION_MIN_VOTES and sum(votes) >= MAP_MOTION_AGREEMENT * len(votes):
+        return True
+    shift, confidence = cv2.phaseCorrelate(before.astype(np.float32), after.astype(np.float32))
+    if confidence >= MAP_MOTION_MIN_PHASE_CONFIDENCE:
+        return bool(max(abs(v) for v in shift) <= MAP_MOTION_MAX_SHIFT_PX)
+    return None
+
+
 def _main_repl() -> None:
+    previous_map = None
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -7370,6 +7672,22 @@ def _main_repl() -> None:
                     )
                 else:
                     _reply(req_id, _find_rank_up_quest_rows(img))
+            elif action == "find_map_red_dot_locations":
+                img, err = _load_frame(cmd)
+                if img is None:
+                    _reply(req_id, {"locations": [], "fingerprint": "", "error": err})
+                else:
+                    current = _map_motion_sample(img)
+                    result = _find_map_red_dot_locations(img)
+                    result["stationary"] = _map_view_stationary(previous_map, current)
+                    previous_map = current
+                    _reply(req_id, result)
+            elif action == "find_free_quest_rows":
+                img, err = _load_frame(cmd)
+                if img is None:
+                    _reply(req_id, {"overlayDetected": False, "rows": [], "ocrText": "", "listFingerprint": "", "error": err})
+                else:
+                    _reply(req_id, _find_free_quest_rows(img))
             elif action == "read_region_luma":
                 img, err = _load_frame(cmd)
                 if img is None:

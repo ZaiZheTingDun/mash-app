@@ -41,7 +41,14 @@ import {
 } from "../advanced/grandClassModel";
 import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
 import type { BattleRunStatus } from "../../types/battleRunStatus";
+import type { Server } from "../../types/server";
 import { buildProjectRunConfig } from "./projectRunConfig";
+import {
+  RankUpQuestSelector,
+  type RankUpQuestWorkflowDraft,
+} from "../rank-up-quest/RankUpQuestPage";
+
+type BattleQuestSource = "current" | "mapFreeQuest" | "rankUpQuest";
 
 interface AutomationEvent {
   state: string;
@@ -100,6 +107,8 @@ const AP_RECOVERY_HELP_TEXT =
   "选中恢复道具后默认为无限使用；点击无限图标可设置本次运行的使用数量。某种道具达到上限后会继续尝试其他已选道具，全部达到上限后停止。";
 
 interface BattlePageProps {
+  server: Server | null;
+  showRankUpQuest: boolean;
   projects: Project[];
   projectCatalog: ProjectCatalog;
   grandClassDefinitions: GrandClassDefinition[];
@@ -189,6 +198,8 @@ function projectDraftFromProject(project: Project): BattleProjectDraft {
 }
 
 export function BattlePage({
+  server,
+  showRankUpQuest,
   projects,
   projectCatalog,
   grandClassDefinitions,
@@ -220,6 +231,9 @@ export function BattlePage({
   const [stopAfterCurrentRequested, setStopAfterCurrentRequested] = useState(false);
   const [draft, setDraft] = useState<BattleProjectDraft | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const [selectedSource, setQuestSource] = useState<BattleQuestSource>("current");
+  const questSource = server === "CN" ? selectedSource : "current";
+  const [rankUpWorkflow, setRankUpWorkflow] = useState<RankUpQuestWorkflowDraft | null>(null);
   const draftRef = useRef<BattleProjectDraft | null>(null);
 
   useEffect(() => {
@@ -285,20 +299,27 @@ export function BattlePage({
       draftRef.current?.projectId === selectedProject.id
         ? draftRef.current
         : projectDraftFromProject(selectedProject);
-    const maxMissionRuns =
-      latestDraft.repeatMode === "count" ? latestDraft.repeatCount : null;
+    const maxMissionRuns = questSource === "current" && latestDraft.repeatMode === "count"
+      ? latestDraft.repeatCount
+      : null;
     setRunning(true);
     setStopAfterCurrentRequested(false);
     onAutomationStart?.(maxMissionRuns);
 
     const config = buildProjectRunConfig(selectedProject, {
-      repeatMission: latestDraft.repeatMode === "infinite",
+      repeatMission: questSource === "current" && latestDraft.repeatMode === "infinite",
       maxMissionRuns,
       apRecoveryItems: latestDraft.apRecoveryItems,
       apRecoveryLimits: latestDraft.apRecoveryLimits,
     });
 
-    invoke("start_automation", { config }).catch((err) => {
+    const request = questSource === "rankUpQuest"
+      ? invoke("start_rank_up_quest_automation", { config, workflow: rankUpWorkflow })
+      : questSource === "mapFreeQuest"
+        ? invoke("start_map_free_quest_automation", { config })
+        : invoke("start_automation", { config });
+
+    request.catch((err) => {
       onLogEntry?.(`启动失败: ${String(err)}`);
       onAutomationStartFailed?.();
       setRunning(false);
@@ -309,18 +330,21 @@ export function BattlePage({
     onAutomationStartFailed,
     onLogEntry,
     selectedProject,
+    questSource,
+    rankUpWorkflow,
     validateGrandServants,
   ]);
 
   const handleStart = useCallback(() => {
     if (!selectedProject) return;
+    if (questSource === "rankUpQuest" && rankUpWorkflow == null) return;
     if (!validateGrandServants()) return;
     if (apRecoveryItems.includes("rainbow")) {
       setRainbowConfirmOpen(true);
       return;
     }
     startAutomation();
-  }, [apRecoveryItems, selectedProject, startAutomation, validateGrandServants]);
+  }, [apRecoveryItems, questSource, rankUpWorkflow, selectedProject, startAutomation, validateGrandServants]);
 
   const handleStop = useCallback(() => {
     invoke("stop_automation")
@@ -469,8 +493,35 @@ export function BattlePage({
         /></PageHeader>
       </Box>
 
-      <Flex direction="column" className="battle-body battle-body-scroll">
-        <Box className="battle-panel">
+      <Flex
+        direction="column"
+        className={`battle-body battle-body-scroll${questSource === "rankUpQuest" ? " battle-body-rank-up" : ""}`}
+      >
+        {server === "CN" && (
+          <Box className="battle-panel battle-panel-compact">
+            <SectionHeading rail stacked english="QUEST SOURCE">关卡来源</SectionHeading>
+            <OptionCardRadioGroup
+              indicator="diamond"
+              value={questSource}
+              className="battle-repeat-cards"
+              disabled={running || !selectedProject}
+              onValueChange={(value) => {
+                setQuestSource(value as BattleQuestSource);
+                setStartError(null);
+              }}
+              options={[
+                { value: "current", title: "当前关卡", description: "从游戏当前页面开始普通战斗" },
+                { value: "mapFreeQuest", title: "自由关卡", description: "扫描当前地图红点，只完成未首通自由关卡" },
+                ...(showRankUpQuest
+                  ? [{ value: "rankUpQuest", title: "强化任务", description: "选择指定任务或依次完成全部强化任务" }]
+                  : []),
+              ]}
+            />
+          </Box>
+        )}
+
+        {questSource === "current" ? (
+        <Box className={server === "CN" ? "battle-panel battle-panel-compact" : "battle-panel"}>
           <SectionHeading rail stacked english="REPEAT">重复任务</SectionHeading>
           <OptionCardRadioGroup
             indicator="diamond"
@@ -549,6 +600,13 @@ export function BattlePage({
             ]}
           />
         </Box>
+        ) : questSource === "rankUpQuest" ? (
+          <RankUpQuestSelector
+            running={running}
+            onChange={setRankUpWorkflow}
+            onError={setStartError}
+          />
+        ) : null}
 
         <Box className="battle-panel">
           <SectionHeading rail stacked english="AP RECOVERY"
@@ -660,7 +718,11 @@ export function BattlePage({
               <span className="battle-task-action-divider" aria-hidden="true" />
             </>
           )}
-          <TaskActionButton running={running} disabled={!selectedProject} onClick={running ? handleStop : handleStart} />
+          <TaskActionButton
+            running={running}
+            disabled={!running && (!selectedProject || (questSource === "rankUpQuest" && rankUpWorkflow == null))}
+            onClick={running ? handleStop : handleStart}
+          />
         </Flex>
       </Flex>
 

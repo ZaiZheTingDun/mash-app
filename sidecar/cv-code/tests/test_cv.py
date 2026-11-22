@@ -228,6 +228,44 @@ def test_find_rank_up_quest_rows_does_not_pair_anchors_from_other_rows(monkeypat
     assert result["rows"][0]["actionable"] is False
 
 
+def test_find_rank_up_quest_rows_deduplicates_false_cost_anchor_within_a_row(monkeypatch):
+    from mash_cv import cv as cv_module
+
+    image = _make_bgr_image(2560, 1440, bgr=(160, 160, 160))
+    rank_anchors = [
+        {"x": 0.62, "y": 0.18, "w": 0.05, "h": 0.04, "score": 0.97},
+        {"x": 0.62, "y": 0.44, "w": 0.05, "h": 0.04, "score": 0.97},
+        {"x": 0.62, "y": 0.70, "w": 0.06, "h": 0.04, "score": 0.97},
+    ]
+    cost_anchors = [
+        {"x": 0.62, "y": 0.25, "w": 0.04, "h": 0.03, "score": 0.98},
+        # Spurious match inside the first quest card.
+        {"x": 0.68, "y": 0.36, "w": 0.04, "h": 0.03, "score": 0.68},
+        {"x": 0.62, "y": 0.51, "w": 0.04, "h": 0.03, "score": 0.98},
+        {"x": 0.62, "y": 0.77, "w": 0.04, "h": 0.03, "score": 0.98},
+    ]
+
+    def fake_matches(_image, key, _region, _threshold, **_options):
+        return rank_anchors if key == cv_module.RANK_UP_QUEST_ROW_TEMPLATE else cost_anchors
+
+    monkeypatch.setattr(cv_module, "_find_all_template_matches", fake_matches)
+    rows = cv_module._find_rank_up_quest_rows(image)["rows"]
+
+    assert len(rows) == 3
+    assert all(row["actionable"] for row in rows)
+
+
+def test_cn_rank_up_config_accepts_compact_title_anchors():
+    resources = Path(__file__).resolve().parents[3] / "src-tauri/resources/servers"
+    mash_cv._load_config(str(resources / "cn/cv.json"))
+
+    row_detection = mash_cv._get_config()["screens"]["RankUpQuest"]["rowDetection"]
+
+    assert row_detection["anchorPairAlignment"] == "left"
+    assert min(row_detection["anchorWidthScales"]) <= 0.8
+    assert 1.0 in row_detection["anchorWidthScales"]
+
+
 def test_find_rank_up_quest_rows_drops_top_and_bottom_clipped_rows(monkeypatch):
     from mash_cv import cv as cv_module
 

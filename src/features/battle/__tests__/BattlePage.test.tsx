@@ -110,7 +110,7 @@ function renderBattlePage(
     onLogEntry: vi.fn(),
   };
 
-  function Harness() {
+  function Harness({ server }: { server: "CN" | "JP" }) {
     const [projects, setProjects] = useState<Project[]>([initialProject]);
     const [activeProjectId, setActiveProjectId] = useState<string | null>(initialProject.id);
     const handleUpdateProject = async (project: Project) => {
@@ -120,6 +120,8 @@ function renderBattlePage(
 
     return (
       <BattlePage
+        server={server}
+        showRankUpQuest
         projects={projects}
         projectCatalog={{
           schemaVersion: 1,
@@ -150,11 +152,68 @@ function renderBattlePage(
     );
   }
 
-  renderWithTheme(<Harness />);
-  return callbacks;
+  const view = renderWithTheme(<Harness server="CN" />);
+  return { ...callbacks, switchToJp: () => view.rerender(<Harness server="JP" />) };
 }
 
 describe("BattlePage", () => {
+  it("offers current, map Free Quest, and rank-up quest sources", () => {
+    mockProjectCommands();
+    renderBattlePage(PROJECT);
+
+    expect(screen.getByRole("radio", { name: "当前关卡" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "自由关卡" })).toBeEnabled();
+    expect(screen.getByRole("radio", { name: "强化任务" })).toBeEnabled();
+    expect(screen.getByText("重复任务")).toBeInTheDocument();
+  });
+
+  it("starts map Free Quest automation without ordinary repeat settings", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({ ...PROJECT, repeatMission: true, repeatMode: "infinite" });
+
+    await user.click(screen.getByRole("radio", { name: "自由关卡" }));
+    expect(screen.queryByText("重复任务")).not.toBeInTheDocument();
+    expect(screen.queryByText("首次通关")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "开始任务" }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith(
+      "start_map_free_quest_automation",
+      { config: expect.objectContaining({ repeatMission: false, maxMissionRuns: null }) },
+    ));
+  });
+
+  it.each(["自由关卡", "强化任务"])("uses ordinary battle after switching from CN %s to JP", async (source) => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    const { switchToJp } = renderBattlePage(PROJECT);
+    await user.click(screen.getByRole("radio", { name: source }));
+    switchToJp();
+    expect(screen.queryByText("关卡来源")).not.toBeInTheDocument();
+    expect(screen.getByText("重复任务")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "开始任务" }));
+    expect(invoke).toHaveBeenCalledWith("start_automation", { config: expect.any(Object) });
+  });
+
+  it("embeds rank-up selection and starts the all-quests workflow", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage(PROJECT);
+
+    await user.click(screen.getByRole("radio", { name: "强化任务" }));
+    expect(screen.queryByText("重复任务")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "按顺序完成所有强化任务" }));
+    await user.click(screen.getByRole("button", { name: "开始任务" }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith(
+      "start_rank_up_quest_automation",
+      {
+        config: expect.objectContaining({ repeatMission: false, maxMissionRuns: null }),
+        workflow: { mode: "all", captureId: null, candidateId: null },
+      },
+    ));
+  });
+
   it("explains AP recovery limits from the heading help icon", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

@@ -66,15 +66,25 @@ impl Runner {
                 return Ok(());
             }
 
-            let screen = match self.sidecar().detect(None).recoverable()? {
-                Ok(s) => s,
-                Err(e) => {
-                    self.transition_lifecycle(RunnerLifecycleEvent::Failed {
-                        message: e.to_string(),
-                    });
-                    self.emit("", &format!("画面识别失败: {e}"));
-                    self.save_recognition_failure(&e.to_string());
-                    return Ok(());
+            let navigating_map = self.map_free_quest.as_ref().is_some_and(|runtime| {
+                matches!(
+                    runtime.phase,
+                    MapFreeQuestPhase::Scanning | MapFreeQuestPhase::AwaitingLocation
+                )
+            });
+            let screen = if navigating_map {
+                Screen::Unknown
+            } else {
+                match self.sidecar().detect(None).recoverable()? {
+                    Ok(s) => s,
+                    Err(e) => {
+                        self.transition_lifecycle(RunnerLifecycleEvent::Failed {
+                            message: e.to_string(),
+                        });
+                        self.emit("", &format!("画面识别失败: {e}"));
+                        self.save_recognition_failure(&e.to_string());
+                        return Ok(());
+                    }
                 }
             };
 
@@ -87,6 +97,7 @@ impl Runner {
             if !self.observe_rank_up_quest_screen(screen) {
                 return Ok(());
             }
+            self.observe_map_free_quest_screen(screen);
 
             if self.handle_battle_load_screen(screen)? {
                 if matches!(*self.state.lock().unwrap(), RunnerState::Error { .. }) {
@@ -113,6 +124,10 @@ impl Runner {
             }
             if screen != Screen::BattleResultBond {
                 self.battle_result_bond_handled = false;
+            }
+
+            if screen != Screen::Unknown {
+                self.settlement_popup_skip_attempts = 0;
             }
 
             match screen {
@@ -208,11 +223,34 @@ impl Runner {
                     self.handle_ap_recovery()?;
                 }
                 Screen::Unknown => {
+                    if self.handle_map_free_quest_unknown()? {
+                        if matches!(
+                            *self.state.lock().unwrap(),
+                            RunnerState::Finished | RunnerState::Error { .. }
+                        ) {
+                            return Ok(());
+                        }
+                        unknown_count = 0;
+                        last_detected_screen = Screen::Unknown;
+                        thread::sleep(POLL_INTERVAL);
+                        continue;
+                    }
                     unknown_count += 1;
-                    let timeout = self.config.unknown_screen_timeout_count;
+                    let probing_rank_up_notice = is_battle_result_screen(last_detected_screen)
+                        && self.rank_up_quest_should_probe_clear_notice();
+                    if probing_rank_up_notice && self.dismiss_quest_clear_notice()? {
+                        self.mark_rank_up_quest_clear_notice_dismissed();
+                        unknown_count = 0;
+                        thread::sleep(POLL_INTERVAL);
+                        continue;
+                    }
                     if unknown_count >= timeout {
-                        let message = if self.rank_up_quest_transition_message().is_some() {
+                        let message = if probing_rank_up_notice {
+                            "等待强化任务结算页面切换超时"
+                        } else if self.rank_up_quest_transition_message().is_some() {
                             "等待强化任务页面切换超时"
+                        } else if self.map_free_quest_transition_message().is_some() {
+                            "等待地图自由关卡页面切换超时"
                         } else {
                             "无法识别当前画面"
                         };
@@ -222,6 +260,8 @@ impl Runner {
                         self.emit(
                             if self.rank_up_quest_transition_message().is_some() {
                                 "RankUpQuest"
+                            } else if self.map_free_quest_transition_message().is_some() {
+                                "MapFreeQuest"
                             } else {
                                 "Unknown"
                             },
@@ -230,31 +270,36 @@ impl Runner {
                         self.save_recognition_failure(message);
                         return Ok(());
                     }
-                    if let Some(message) = self.rank_up_quest_transition_message() {
+                    if let Some(message) = self
+                        .rank_up_quest_transition_message()
+                        .or(probing_rank_up_notice.then_some("等待识别强化任务结算页面…"))
+                    {
                         self.emit(
                             "RankUpQuest",
                             &format!("{message} ({unknown_count}/{timeout})"),
                         );
-                        if is_battle_result_screen(last_detected_screen) {
-                            self.emit_debug(
-                                "RankUpQuest",
-                                "返回任务列表时可能被结算弹窗遮挡，尝试点击跳过区域",
+                    } else {
+                        if let Some(message) = self.map_free_quest_transition_message() {
+                            self.emit(
+                                "MapFreeQuest",
+                                &format!("{message} ({unknown_count}/{timeout})"),
                             );
-                            if self.tap_at("RankUpQuest", BATTLE_RESULT_POPUP_SKIP) {
-                                thread::sleep(ACTION_DELAY);
-                            }
+                        } else {
+                            self.emit(
+                                "Unknown",
+                                &unknown_screen_wait_message(self.server, unknown_count, timeout),
+                            );
                         }
-                        thread::sleep(POLL_INTERVAL);
-                        continue;
-                    }
-                    self.emit(
-                        "Unknown",
-                        &unknown_screen_wait_message(self.server, unknown_count, timeout),
-                    );
-                    if is_battle_result_screen(last_detected_screen) {
-                        self.emit_debug("Unknown", "结算页可能被弹窗遮挡，尝试点击跳过区域");
-                        if self.tap_at("Unknown", BATTLE_RESULT_POPUP_SKIP) {
-                            thread::sleep(ACTION_DELAY);
+                        if is_battle_result_screen(last_detected_screen) {
+                            match settlement_unknown_step(unknown_count) {
+                                SettlementUnknownStep::Finish => {
+                                    self.finish_battle_without_continue_prompt()
+                                }
+                                SettlementUnknownStep::Dismiss => {
+                                    self.dismiss_settlement_unknown(unknown_count)?
+                                }
+                                SettlementUnknownStep::Wait => {}
+                            }
                         }
                     }
                 }

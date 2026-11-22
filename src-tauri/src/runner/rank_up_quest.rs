@@ -33,7 +33,7 @@ fn rank_up_list_is_return(phase: RankUpQuestPhase) -> bool {
     )
 }
 
-fn rank_up_list_return_needs_completion_record(phase: RankUpQuestPhase) -> bool {
+fn rank_up_completion_needs_record(phase: RankUpQuestPhase) -> bool {
     phase == RankUpQuestPhase::InQuest
 }
 
@@ -94,12 +94,14 @@ impl RankUpQuestRuntime {
 }
 
 impl Runner {
-    pub(crate) fn rank_up_quest_active(&self) -> bool {
-        self.rank_up_quest.is_some()
-    }
-
     pub(crate) fn rank_up_quest_transition_message(&self) -> Option<&'static str> {
         rank_up_transition_message(self.rank_up_quest.as_ref()?.phase)
+    }
+
+    pub(crate) fn rank_up_quest_should_probe_clear_notice(&self) -> bool {
+        self.rank_up_quest
+            .as_ref()
+            .is_some_and(|runtime| rank_up_list_is_return(runtime.phase))
     }
 
     pub(crate) fn observe_rank_up_quest_screen(&mut self, screen: Screen) -> bool {
@@ -136,14 +138,21 @@ impl Runner {
         }
     }
 
-    pub(crate) fn mark_rank_up_quest_return_pending(&mut self) {
+    pub(crate) fn mark_rank_up_quest_clear_notice_dismissed(&mut self) {
+        let should_record_completion = self
+            .rank_up_quest
+            .as_ref()
+            .is_some_and(|runtime| rank_up_completion_needs_record(runtime.phase));
+        if should_record_completion {
+            self.complete_quest_workflow_run();
+        }
         if let Some(runtime) = self.rank_up_quest.as_mut() {
             runtime.phase = RankUpQuestPhase::AwaitingReturn;
             runtime.reset_stability();
         }
     }
 
-    pub(crate) fn complete_rank_up_quest_run(&mut self) {
+    pub(crate) fn complete_quest_workflow_run(&mut self) {
         self.completed_mission_runs += 1;
         self.emit_run_progress();
         self.team_changed = false;
@@ -151,10 +160,7 @@ impl Runner {
         self.support_scroll_count = 0;
         self.support_refresh_count = 0;
         self.support_class_search = SupportClassSearchProgress::default();
-        // Every rank-up quest returns to the list and opens a fresh support
-        // selection page. Reapply CN's second-level EXTRA filter there too;
-        // its modal choice may persist in-game, but the new page still needs
-        // the configured filter to be explicitly selected for this run.
+        // A new quest opens a fresh support selection page. Reapply its class filter.
         self.support_extra_class_filter_configured = false;
         self.support_level_progress = SupportLevelPanelProgress::default();
         self.servants_placed.clear();
@@ -172,12 +178,12 @@ impl Runner {
             return Ok(());
         }
         if rank_up_list_is_return(runtime.phase) {
-            if rank_up_list_return_needs_completion_record(runtime.phase) {
+            if rank_up_completion_needs_record(runtime.phase) {
                 // Some rank-up quests return directly to the list without a
                 // detectable BattleResultContinue frame. Seeing the list
                 // after SupportSelect was reached is the safe completion
                 // boundary for that route.
-                self.complete_rank_up_quest_run();
+                self.complete_quest_workflow_run();
             }
             runtime.phase = RankUpQuestPhase::NeedList;
             runtime.reset_stability();
@@ -445,11 +451,9 @@ mod tests {
     #[test]
     fn list_arrival_recovers_both_result_routes_without_double_counting() {
         assert!(rank_up_list_is_return(RankUpQuestPhase::InQuest));
-        assert!(rank_up_list_return_needs_completion_record(
-            RankUpQuestPhase::InQuest
-        ));
+        assert!(rank_up_completion_needs_record(RankUpQuestPhase::InQuest));
         assert!(rank_up_list_is_return(RankUpQuestPhase::AwaitingReturn));
-        assert!(!rank_up_list_return_needs_completion_record(
+        assert!(!rank_up_completion_needs_record(
             RankUpQuestPhase::AwaitingReturn
         ));
         assert!(!rank_up_list_is_return(RankUpQuestPhase::NeedList));

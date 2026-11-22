@@ -188,6 +188,58 @@ pub struct FindRankUpQuestRowsResult {
     pub diagnostics: RankUpQuestDiagnostics,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MapRedDotLocation {
+    pub badge_region: NormRect,
+    pub tap: Point,
+    pub signature: String,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindMapRedDotLocationsResult {
+    #[serde(default)]
+    pub stationary: Option<bool>,
+    #[serde(default)]
+    pub locations: Vec<MapRedDotLocation>,
+    #[serde(default)]
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FreeQuestRow {
+    pub candidate_id: String,
+    pub region: NormRect,
+    pub tap: Point,
+    pub label_text: String,
+    pub progress_region: NormRect,
+    pub progress_mean_luma: f64,
+    pub progress_bright_fraction: f64,
+    pub eligible: bool,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindFreeQuestRowsResult {
+    #[serde(default)]
+    pub list_fully_visible: bool,
+    #[serde(default)]
+    pub close_confirmed: bool,
+    #[serde(default)]
+    pub back_confirmed: bool,
+    #[serde(default)]
+    pub overlay_detected: bool,
+    #[serde(default)]
+    pub rows: Vec<FreeQuestRow>,
+    #[serde(default)]
+    pub ocr_text: String,
+    #[serde(default)]
+    pub list_fingerprint: String,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OrderChangeSelectionProbe {

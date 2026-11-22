@@ -865,6 +865,42 @@ fn frontline_member(
 }
 
 #[test]
+fn settlement_unknown_waits_then_dismisses_then_finishes() {
+    assert_eq!(settlement_unknown_step(1), SettlementUnknownStep::Wait);
+    assert_eq!(settlement_unknown_step(2), SettlementUnknownStep::Wait);
+    assert_eq!(settlement_unknown_step(3), SettlementUnknownStep::Dismiss);
+    assert_eq!(settlement_unknown_step(8), SettlementUnknownStep::Dismiss);
+    assert_eq!(settlement_unknown_step(9), SettlementUnknownStep::Wait);
+    assert_eq!(settlement_unknown_step(16), SettlementUnknownStep::Finish);
+    assert!(settlement_skip_allowed(3, 0));
+    assert!(!settlement_skip_allowed(3, 6));
+    assert!(!settlement_skip_allowed(2, 0));
+    assert_eq!(
+        quest_clear_notice_message("获得奖励"),
+        Some("获得奖励，前往下一画面")
+    );
+    assert_eq!(
+        quest_clear_notice_message("任务完成\n获得报酬"),
+        Some("获得报酬，前往下一画面")
+    );
+    assert_eq!(
+        quest_clear_notice_message("技能获得强化"),
+        Some("技能或宝具获得强化，前往下一画面")
+    );
+    assert_eq!(
+        quest_clear_notice_message("宝具获得强化"),
+        Some("技能或宝具获得强化，前往下一画面")
+    );
+    assert_eq!(quest_clear_notice_message("获得强化"), None);
+    assert_eq!(quest_clear_notice_message("羁绊点数"), None);
+    let (message, point) = quest_clear_notice_action("「强化关卡 阿周那 2」\n已开放!")
+        .expect("rank-up unlock dialog should be recognized");
+    assert_eq!(message, "后续强化关卡已开放，关闭提示");
+    assert!((point.x - 0.500).abs() < f64::EPSILON);
+    assert!((point.y - 0.785).abs() < f64::EPSILON);
+}
+
+#[test]
 fn battle_result_popup_skip_only_applies_to_result_screens() {
     assert!(is_battle_result_screen(Screen::BattleResultBond));
     assert!(is_battle_result_screen(Screen::BattleResultExp));

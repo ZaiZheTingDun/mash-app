@@ -11,6 +11,7 @@ mod diagnostics;
 mod engine;
 mod fault_injection;
 mod grand;
+mod map_free_quest;
 mod party;
 mod prebattle;
 mod rank_up_quest;
@@ -28,6 +29,7 @@ use config::GrandServantRuntimeConfig;
 pub use config::*;
 pub(crate) use coords::*;
 pub(crate) use grand::*;
+pub(crate) use map_free_quest::*;
 pub(crate) use party::*;
 pub(crate) use rank_up_quest::*;
 pub(crate) use results::*;
@@ -116,6 +118,7 @@ pub struct Runner {
     sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     config: RunConfig,
     rank_up_quest: Option<RankUpQuestRuntime>,
+    map_free_quest: Option<MapFreeQuestRuntime>,
     scenes: Vec<BattleScene>,
     advanced_mode: bool,
     advanced_scenes: Vec<AdvancedBattleScene>,
@@ -198,6 +201,7 @@ pub struct Runner {
     battle_result_loot_handled: bool,
     battle_result_friend_request_handled: bool,
     battle_result_continue_handled: bool,
+    settlement_popup_skip_attempts: u8,
     /// Pluggable touch-injection backend (see `touch::TouchBackend`).
     /// Chooses scrcpy when available, otherwise ADB Input.
     /// The runner just calls `tap` / `swipe` /
@@ -233,7 +237,15 @@ impl Runner {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
         let touch = touch::build(&adb, &sidecar, &app_handle, (screen_w, screen_h));
-        let rank_up_quest = config.rank_up_quest.clone().map(RankUpQuestRuntime::new);
+        let rank_up_quest = match config.quest_workflow.clone() {
+            Some(QuestWorkflowConfig::RankUp(config)) => Some(RankUpQuestRuntime::new(config)),
+            _ => None,
+        };
+        let map_free_quest = matches!(
+            config.quest_workflow,
+            Some(QuestWorkflowConfig::MapFreeQuest)
+        )
+        .then(MapFreeQuestRuntime::new);
         Self {
             diagnostic_adb: adb,
             touch,
@@ -241,6 +253,7 @@ impl Runner {
             sidecar_cache,
             config,
             rank_up_quest,
+            map_free_quest,
             scenes,
             advanced_mode,
             advanced_scenes,
@@ -280,6 +293,7 @@ impl Runner {
             battle_result_loot_handled: false,
             battle_result_friend_request_handled: false,
             battle_result_continue_handled: false,
+            settlement_popup_skip_attempts: 0,
             team_verification,
             team_check_targets,
             mystic_code_name,

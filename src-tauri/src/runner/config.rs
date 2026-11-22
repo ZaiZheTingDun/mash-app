@@ -47,6 +47,12 @@ pub struct RankUpQuestWorkflowConfig {
     pub target: Option<RankUpQuestTarget>,
 }
 
+#[derive(Debug, Clone)]
+pub enum QuestWorkflowConfig {
+    RankUp(RankUpQuestWorkflowConfig),
+    MapFreeQuest,
+}
+
 impl RankUpQuestWorkflowConfig {
     pub fn all() -> Self {
         Self {
@@ -151,7 +157,7 @@ pub struct BattleRunProgressEvent {
 pub struct RunConfig {
     pub project_id: String,
     #[serde(skip)]
-    pub rank_up_quest: Option<RankUpQuestWorkflowConfig>,
+    pub quest_workflow: Option<QuestWorkflowConfig>,
     /// Mystic Code selected for this team. When present, TeamConfirm checks
     /// the outfit icon in the lower-left corner before starting the quest.
     #[serde(default)]
