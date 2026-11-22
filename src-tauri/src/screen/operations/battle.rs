@@ -16,11 +16,15 @@ impl SidecarClient {
         card_regions: Option<&[NormRect]>,
         servant_ids: &[u32],
         assets_dir: Option<&Path>,
+        await_card_presentation: bool,
+        include_critical_chance: bool,
     ) -> Result<Vec<CommandCardMatch>, CvError> {
         let mut req = request(
             SidecarCommand::FindCommandCards,
             serde_json::json!({
                 "servantIds": servant_ids,
+                "awaitCardPresentation": await_card_presentation,
+                "includeCriticalChance": include_critical_chance,
             }),
         )?;
         if let Some(regions) = card_regions {

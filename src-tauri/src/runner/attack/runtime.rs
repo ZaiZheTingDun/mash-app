@@ -442,6 +442,14 @@ impl Runner {
             self.config.prefer_higher_critical_chance,
             self.current_attack_is_critical(),
         );
+        let include_critical_chance = recognize_critical_chance
+            || self.advanced_mode
+            || normal_turn_for_current_scene(
+                &self.scenes,
+                self.battle.current_scene_index,
+                self.battle.current_turn_index,
+            )
+            .is_some_and(|turn| turn.attack_mode == AttackMode::Advanced);
         let recognition_settle_delay =
             command_card_recognition_settle_delay(recognize_critical_chance);
         if !recognition_settle_delay.is_zero() {
@@ -460,6 +468,7 @@ impl Runner {
             command_card_candidate_ids(party_ids)
         };
 
+        let mut await_card_presentation = true;
         let cards = if recognize_command_cards {
             self.emit_attack(
                 &format!("指令卡候选从者: {:?}", candidate_ids),
@@ -482,7 +491,14 @@ impl Runner {
                     self.battle.command_card_owner_fallback_to_full_party;
                 let cards = match self
                     .sidecar()
-                    .find_command_cards(None, None, &candidate_ids, assets_dir.as_deref())
+                    .find_command_cards(
+                        None,
+                        None,
+                        &candidate_ids,
+                        assets_dir.as_deref(),
+                        std::mem::take(&mut await_card_presentation),
+                        include_critical_chance,
+                    )
                     .recoverable()?
                 {
                     Ok(c) => c,
@@ -560,7 +576,14 @@ impl Runner {
             let cards = loop {
                 let cards = match self
                     .sidecar()
-                    .find_command_cards(None, None, &[], None)
+                    .find_command_cards(
+                        None,
+                        None,
+                        &[],
+                        None,
+                        std::mem::take(&mut await_card_presentation),
+                        include_critical_chance,
+                    )
                     .recoverable()?
                 {
                     Ok(c) => c,

@@ -123,6 +123,7 @@ class ScrcpyStream:
 
         self._latest_frame: Optional[np.ndarray] = None
         self._latest_lock = threading.Lock()
+        self._frame_changed = threading.Condition(self._latest_lock)
         self._stream_id = uuid.uuid4().hex
         self._frame_id = 0
         self._decoded_at_ms = None
@@ -243,10 +244,11 @@ class ScrcpyStream:
     # -- frame access --------------------------------------------------------
 
     def _publish_frame(self, bgr: np.ndarray) -> None:
-        with self._latest_lock:
+        with self._frame_changed:
             self._latest_frame = bgr
             self._frame_id += 1
             self._decoded_at_ms = int(time.time() * 1000)
+            self._frame_changed.notify_all()
 
     def get_latest_snapshot(self):
         """Pixels and identity are read together under the frame lock."""
@@ -263,6 +265,17 @@ class ScrcpyStream:
             if self._latest_frame is None:
                 return None
             return self._latest_frame.copy()
+
+    def wait_for_new_snapshot(self, frame_id: int, timeout: float):
+        """Wait for a newer decoded frame without periodically copying the old one."""
+        with self._frame_changed:
+            changed = self._frame_changed.wait_for(
+                lambda: self._frame_id > frame_id or self._stop_event.is_set(),
+                timeout=timeout,
+            )
+        if not changed or self._stop_event.is_set():
+            return None, None
+        return self.get_latest_snapshot()
 
     def wait_for_frame(self, timeout: float = 5.0) -> Optional[np.ndarray]:
         """Block until at least one frame has been decoded or ``timeout`` s pass."""
