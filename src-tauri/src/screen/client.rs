@@ -289,6 +289,21 @@ impl SidecarClient {
         );
     }
 
+    pub fn use_interlude_detection(&mut self) {
+        self.use_battle_detection();
+        if let Some(screens) = &mut self.detection_screens {
+            screens.extend(
+                [
+                    "InterludeList",
+                    "InterludeMap",
+                    "InterludeStory",
+                    "InterludeCompletion",
+                ]
+                .map(str::to_owned),
+            );
+        }
+    }
+
     fn check_response(&mut self, response: &serde_json::Value) -> CvResult<()> {
         if let Some(error) = template_response_error(response) {
             self.healthy = false;

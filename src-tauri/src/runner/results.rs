@@ -529,8 +529,14 @@ impl Runner {
         }
         self.battle_result_continue_handled = true;
 
+        if self.interlude.is_some() {
+            self.emit("BattleResultContinue", "结束结算，等待幕间关卡进度");
+            let _ = self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP);
+            return;
+        }
+
         if self.rank_up_quest_active() {
-            self.complete_rank_up_quest_run();
+            self.record_quest_battle_completion();
             self.emit("BattleResultContinue", "结束当前强化关卡，返回任务列表");
             if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
                 return;

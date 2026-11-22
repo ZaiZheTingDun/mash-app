@@ -1909,10 +1909,11 @@ def _find_all_template_matches(
     region: dict,
     threshold: float,
     width_scales: tuple[float, ...] = (1.0,),
+    template_reference_width: Optional[float] = None,
 ) -> list[dict]:
     """Return vertically distinct matches for one static UI label."""
     tmpl = _get_template(template_key)
-    tmpl = _scale_static_template_for_image(tmpl, img, template_key)
+    tmpl = _scale_static_template_for_image(tmpl, img, template_key, template_reference_width)
     h, w = img.shape[:2]
     rx = max(0, int(round(float(region["x"]) * w)))
     ry = max(0, int(round(float(region["y"]) * h)))
@@ -2079,6 +2080,112 @@ def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
     }
 
 
+INTERLUDE_REFERENCE_WIDTH = 1920
+INTERLUDE_REFERENCE_HEIGHT = 1080
+
+
+def _interlude_region(x: float, y: float, width: float, height: float) -> dict:
+    return {
+        "x": x / INTERLUDE_REFERENCE_WIDTH,
+        "y": y / INTERLUDE_REFERENCE_HEIGHT,
+        "w": width / INTERLUDE_REFERENCE_WIDTH,
+        "h": height / INTERLUDE_REFERENCE_HEIGHT,
+    }
+
+
+def _interlude_crop(img: np.ndarray, x: float, y: float, width: int, height: int) -> np.ndarray:
+    frame_height, frame_width = img.shape[:2]
+    left = round(x * frame_width / INTERLUDE_REFERENCE_WIDTH)
+    right = round((x + width) * frame_width / INTERLUDE_REFERENCE_WIDTH)
+    top = round(y * frame_height / INTERLUDE_REFERENCE_HEIGHT)
+    bottom = round((y + height) * frame_height / INTERLUDE_REFERENCE_HEIGHT)
+    return img[top:bottom, left:right]
+
+
+def _interlude_signature(crop: np.ndarray) -> list[int]:
+    """A local contrast hash, robust to the animated NEW label and row brightness."""
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    small = cv2.resize(gray, (17, 8), interpolation=cv2.INTER_AREA)
+    bits = (small[:, 1:] > small[:, :-1]).reshape(4, 32)
+    return [int.from_bytes(np.packbits(word).tobytes(), "big") for word in bits]
+
+
+def _interlude_progress(img: np.ndarray, y: float) -> int:
+    """Read the leading filled chevrons; the remaining ones are gray."""
+    completed = 0
+    for x in range(1388, 1640, 38):
+        patch = _interlude_crop(img, x - 6, y + 143, 12, 15)
+        blue, _, red = np.median(patch, axis=(0, 1))
+        if blue - red < 32:
+            break
+        completed += 1
+    return completed
+
+
+def _interlude_scroll_edges(img: np.ndarray) -> tuple[bool, bool]:
+    # The thumb grows when the list is short. Its white center gives both
+    # boundaries without assuming a particular thumb height.
+    strip = _interlude_crop(img, 1881, 140, 13, 745)
+    white = (strip.min(axis=(1, 2)) > 190).astype(np.int8)
+    edges = np.flatnonzero(np.diff(np.pad(white, (1, 1))))
+    runs = list(zip(edges[::2], edges[1::2]))
+    if not runs:
+        return False, False
+    start, end = max(runs, key=lambda run: run[1] - run[0])
+    height = len(white)
+    if end - start < 24 * height / 745:
+        return False, False
+    return bool(start <= 19 * height / 745), bool(end >= 730 * height / 745)
+
+
+def _find_interlude_rows(img: np.ndarray, screen: str) -> dict:
+    rows = []
+    labels = [("quest", "quest-label", 72, _interlude_region(1160, 190, 260, 822))]
+    if screen == "InterludeList":
+        labels.append(("quickLink", "quick-link", 124, _interlude_region(1200, 245, 360, 767)))
+    for kind, template, y_offset, search in labels:
+        for anchor in _find_all_template_matches(
+            img, f"interlude/{template}", search, 0.82,
+            template_reference_width=INTERLUDE_REFERENCE_WIDTH,
+        ):
+            y = anchor["y"] * INTERLUDE_REFERENCE_HEIGHT - y_offset
+            if y < 137 or y + 211 > 1016:
+                continue
+            restriction = _match_template_region(
+                img, _get_template("interlude/formation-restricted"),
+                _interlude_region(949, y + 147, 208, 55), 0.79,
+                "interlude/formation-restricted", INTERLUDE_REFERENCE_WIDTH,
+            )["found"]
+            last_played = kind == "quest" and _match_template_region(
+                img, _get_template("interlude/last-played"),
+                _interlude_region(919, y - 4, 138, 53), 0.86,
+                "interlude/last-played", INTERLUDE_REFERENCE_WIDTH,
+            )["found"]
+            portrait = _interlude_crop(img, 969, y + 48, 151, 104)
+            title = _interlude_crop(img, 1171, y + 25, 455, 33)
+            # Locked or completed cards dim the gold title area.
+            bright = float(cv2.cvtColor(title, cv2.COLOR_BGR2GRAY).mean()) >= 95
+            rows.append({
+                "region": _interlude_region(937, y, 908, 211),
+                "kind": kind,
+                "identity": {
+                    "portrait": _interlude_signature(portrait),
+                    "title": _interlude_signature(title),
+                },
+                "restricted": restriction,
+                "lastPlayed": last_played,
+                "actionable": bool(bright and not restriction),
+                "progress": _interlude_progress(img, y) if kind == "quest" else None,
+            })
+    rows.sort(key=lambda row: row["region"]["y"])
+    at_top, at_bottom = _interlude_scroll_edges(img)
+    return {
+        "rows": [{"candidateId": f"row-{index}", **row} for index, row in enumerate(rows)],
+        "atTop": at_top,
+        "atBottom": at_bottom,
+    }
+
+
 def _named_targets(screen: dict) -> list[tuple[str, dict]]:
     targets: list[tuple[str, dict]] = []
     detect = screen.get("detect")
@@ -2131,6 +2238,21 @@ def _find_element_by_name(
             "found": False,
             "error": f"unknown element: {screen_name}.{element_name}",
         }
+    if pattern := element.get("textPattern"):
+        fragments = _ocr_region(img, element["region"]).get("fragments", [])
+        for fragment in fragments:
+            content = re.sub(r"\s+", "", fragment["text"])
+            score = fragment["ocrConfidence"]
+            if score >= 0.8 and re.fullmatch(pattern, content):
+                box = fragment["region"]
+                return {
+                    "found": True,
+                    "score": score,
+                    "x": box["x"] + box["w"] / 2,
+                    "y": box["y"] + box["h"] / 2,
+                    "region": box,
+                }
+        return {"found": False}
     template_key = element.get("template")
     if not template_key:
         return {"found": False, "error": "element missing 'template'"}
@@ -2203,6 +2325,7 @@ def _detect_screen(
                         option.get("region", region),
                         float(option.get("threshold", threshold)),
                         key,
+                        option.get("templateReferenceWidth"),
                     )
                 if result.get("found"):
                     screen_score = float(result.get("score", 0.0))
@@ -7370,6 +7493,12 @@ def _main_repl() -> None:
                     )
                 else:
                     _reply(req_id, _find_rank_up_quest_rows(img))
+            elif action == "find_interlude_rows":
+                img, err = _load_frame(cmd)
+                if img is None:
+                    _reply(req_id, {"error": err})
+                else:
+                    _reply(req_id, _find_interlude_rows(img, cmd["screen"]))
             elif action == "read_region_luma":
                 img, err = _load_frame(cmd)
                 if img is None:

@@ -33,3 +33,17 @@ export interface RankUpQuestCaptureResult {
   imagePath: string;
   rows: RankUpQuestRow[];
 }
+
+export interface InterludeRow {
+  candidateId: string;
+  region: NormalizedRect;
+  kind: "quickLink" | "quest";
+  restricted: boolean;
+  actionable: boolean;
+}
+
+export interface InterludeCaptureResult {
+  captureId: string;
+  imagePath: string;
+  rows: InterludeRow[];
+}

@@ -344,3 +344,56 @@ describe("RankUpQuestPage", () => {
     expect(screen.getByRole("button", { name: "队伍操作" })).toBeEnabled();
   });
 });
+
+describe("Interlude automation", () => {
+  it("offers only the specified and ordered modes, and starts ordered mode without a screenshot", async () => {
+    mockCommands();
+    const user = userEvent.setup();
+    renderPage({ interlude: true });
+
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    await user.click(screen.getByRole("radio", { name: "按顺序完成所有幕间物语" }));
+    expect(screen.queryByRole("button", { name: "截取游戏画面" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("就绪，将按列表顺序执行");
+    await user.click(screen.getByRole("button", { name: "开始幕间物语" }));
+    expect(invoke).toHaveBeenCalledWith("start_interlude_automation", expect.objectContaining({
+      workflow: { mode: "all", captureId: null, candidateId: null },
+    }));
+  });
+
+  it("disables restricted quests and starts the selected map shortcut", async () => {
+    vi.mocked(invoke).mockImplementation(async (command: string) => {
+      if (command !== "capture_interlude_page") return null;
+      return {
+        captureId: "interlude-capture",
+        imagePath: "/tmp/interlude.png",
+        rows: [
+          {
+            candidateId: "shortcut",
+            region: { x: 0.5, y: 0.2, w: 0.4, h: 0.18 },
+            kind: "quickLink",
+            actionable: true,
+            restricted: false,
+          },
+          {
+            candidateId: "restricted",
+            region: { x: 0.5, y: 0.4, w: 0.4, h: 0.18 },
+            kind: "quest",
+            actionable: false,
+            restricted: true,
+          },
+        ],
+      };
+    });
+    const user = userEvent.setup();
+    renderPage({ server: "JP", interlude: true });
+
+    await user.click(screen.getByRole("button", { name: "截取游戏画面" }));
+    expect(await screen.findByRole("button", { name: "有编成条件的幕间物语" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "选择幕间物语" }));
+    await user.click(screen.getByRole("button", { name: "开始幕间物语" }));
+    expect(invoke).toHaveBeenCalledWith("start_interlude_automation", expect.objectContaining({
+      workflow: { mode: "single", captureId: "interlude-capture", candidateId: "shortcut" },
+    }));
+  });
+});

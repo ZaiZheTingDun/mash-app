@@ -11,6 +11,7 @@ mod diagnostics;
 mod engine;
 mod fault_injection;
 mod grand;
+mod interlude;
 mod party;
 mod prebattle;
 mod rank_up_quest;
@@ -28,6 +29,7 @@ use config::GrandServantRuntimeConfig;
 pub use config::*;
 pub(crate) use coords::*;
 pub(crate) use grand::*;
+use interlude::InterludeRuntime;
 pub(crate) use party::*;
 pub(crate) use rank_up_quest::*;
 pub(crate) use results::*;
@@ -116,6 +118,7 @@ pub struct Runner {
     sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     config: RunConfig,
     rank_up_quest: Option<RankUpQuestRuntime>,
+    interlude: Option<InterludeRuntime>,
     scenes: Vec<BattleScene>,
     advanced_mode: bool,
     advanced_scenes: Vec<AdvancedBattleScene>,
@@ -234,6 +237,7 @@ impl Runner {
         let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
         let touch = touch::build(&adb, &sidecar, &app_handle, (screen_w, screen_h));
         let rank_up_quest = config.rank_up_quest.clone().map(RankUpQuestRuntime::new);
+        let interlude = config.interlude.map(InterludeRuntime::new);
         Self {
             diagnostic_adb: adb,
             touch,
@@ -241,6 +245,7 @@ impl Runner {
             sidecar_cache,
             config,
             rank_up_quest,
+            interlude,
             scenes,
             advanced_mode,
             advanced_scenes,

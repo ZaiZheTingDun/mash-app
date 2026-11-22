@@ -43,7 +43,11 @@ impl Runner {
     }
 
     fn run_loop(&mut self) -> AutomationResult<()> {
-        self.sidecar().use_battle_detection();
+        if self.interlude.is_some() {
+            self.sidecar().use_interlude_detection();
+        } else {
+            self.sidecar().use_battle_detection();
+        }
         let timeout = self.config.unknown_screen_timeout_count;
         if let Err(error) = self.sidecar().configure_recognition_diagnostics(timeout) {
             self.emit_debug("CV", &error);
@@ -83,6 +87,21 @@ impl Runner {
             }
 
             self.resolve_pending_ap_recovery(screen);
+
+            if self.handle_interlude_screen(screen)? {
+                let finished = matches!(*self.state.lock().unwrap(), RunnerState::Finished);
+                if finished {
+                    self.emit("", "自动化已完成");
+                    return Ok(());
+                }
+                if matches!(*self.state.lock().unwrap(), RunnerState::Error { .. }) {
+                    return Ok(());
+                }
+                unknown_count = 0;
+                last_detected_screen = screen;
+                thread::sleep(POLL_INTERVAL);
+                continue;
+            }
 
             if !self.observe_rank_up_quest_screen(screen) {
                 return Ok(());
@@ -207,10 +226,17 @@ impl Runner {
                     last_detected_screen = screen;
                     self.handle_ap_recovery()?;
                 }
-                Screen::Unknown => {
+                Screen::Unknown
+                | Screen::InterludeList
+                | Screen::InterludeMap
+                | Screen::InterludeStory
+                | Screen::InterludeCompletion => {
                     unknown_count += 1;
                     let timeout = self.config.unknown_screen_timeout_count;
                     if unknown_count >= timeout {
+                        if screen == Screen::Unknown {
+                            self.save_interlude_settlement_timeout_sample();
+                        }
                         let message = if self.rank_up_quest_transition_message().is_some() {
                             "等待强化任务页面切换超时"
                         } else {
@@ -247,11 +273,15 @@ impl Runner {
                         thread::sleep(POLL_INTERVAL);
                         continue;
                     }
+                    if self.try_continue_interlude_settlement()? {
+                        thread::sleep(ACTION_DELAY);
+                        continue;
+                    }
                     self.emit(
                         "Unknown",
                         &unknown_screen_wait_message(self.server, unknown_count, timeout),
                     );
-                    if is_battle_result_screen(last_detected_screen) {
+                    if self.interlude.is_none() && is_battle_result_screen(last_detected_screen) {
                         self.emit_debug("Unknown", "结算页可能被弹窗遮挡，尝试点击跳过区域");
                         if self.tap_at("Unknown", BATTLE_RESULT_POPUP_SKIP) {
                             thread::sleep(ACTION_DELAY);

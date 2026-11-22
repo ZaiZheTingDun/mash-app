@@ -112,6 +112,7 @@ pub fn run() {
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(commands::debug::DebugSidecar::new());
             app.manage(commands::rank_up_quest::RankUpQuestCaptureState::default());
+            app.manage(commands::interlude::InterludeCaptureState::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -257,6 +258,8 @@ pub fn run() {
             commands::automation::start_automation,
             commands::rank_up_quest::capture_rank_up_quest_page,
             commands::automation::start_rank_up_quest_automation,
+            commands::interlude::capture_interlude_page,
+            commands::automation::start_interlude_automation,
             commands::automation::stop_automation,
             commands::automation::stop_automation_after_current,
             commands::automation::get_automation_status,
