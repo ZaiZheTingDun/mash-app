@@ -466,17 +466,23 @@ fn a_late_complete_response_cannot_stop_a_new_capture_session() {
 fn server(
     replies: Vec<serde_json::Value>,
 ) -> (u16, thread::JoinHandle<Vec<(String, serde_json::Value)>>) {
+    server_with_status(replies.into_iter().map(|reply| ("200 OK", reply)).collect())
+}
+
+fn server_with_status(
+    replies: Vec<(&'static str, serde_json::Value)>,
+) -> (u16, thread::JoinHandle<Vec<(String, serde_json::Value)>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let handle = thread::spawn(move || {
         let mut requests = Vec::new();
-        for reply in replies {
+        for (status, reply) in replies {
             let (mut stream, _) = listener.accept().unwrap();
             requests.push(read_request(&mut stream));
             let body = reply.to_string();
             write!(
                 stream,
-                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body.len(),
                 body
             )
@@ -527,6 +533,98 @@ fn jp_captured(id: u64, uid: &str, body: Option<serde_json::Value>) -> serde_jso
     let mut record = captured(id, uid, body);
     record["url"] = JP_URL.into();
     record
+}
+
+#[test]
+fn capture_recovers_from_removed_live_routes_and_only_reads_new_records_from_live_tab() {
+    use serde_json::json;
+
+    let api = client::Client::new().unwrap();
+    let (port, worker) = server_with_status(vec![
+        (
+            "404 Not Found",
+            json!({"message":"Route not found.","status":404}),
+        ),
+        (
+            "200 OK",
+            json!({"tabs":[
+                {"id":"history","type":"captureReviewHistory","name":"History"},
+                {"id":"before","type":"captureLive","name":"Live"}
+            ]}),
+        ),
+        ("200 OK", json!([1, 2])),
+        ("200 OK", jp_captured(1, "old-login", None)),
+        (
+            "404 Not Found",
+            json!({"message":"Record not found.","status":404}),
+        ),
+    ]);
+    let old = baseline(Server::Jp, &api, port).unwrap();
+    assert!(old.contains("old-login"));
+    assert_eq!(old.ignored_ids, HashSet::from([2]));
+    let filters = json!([{"type":"keyword","pattern":"/login/top"}]);
+    assert_eq!(
+        worker.join().unwrap(),
+        vec![
+            (
+                "POST /capture/live/filter HTTP/1.1".into(),
+                json!({"filters":filters})
+            ),
+            ("GET /tab/list HTTP/1.1".into(), json!(null)),
+            (
+                "POST /capture/record/filter HTTP/1.1".into(),
+                json!({"tabId":"before","filters":filters})
+            ),
+            (
+                "POST /capture/record/get HTTP/1.1".into(),
+                json!({"tabId":"before","id":1})
+            ),
+            (
+                "POST /capture/record/get HTTP/1.1".into(),
+                json!({"tabId":"before","id":2})
+            ),
+        ]
+    );
+
+    let (port, worker) = server(vec![
+        json!({"tabs":[{"id":"after","type":"captureLive","name":"Live"}]}),
+        json!([2, 8]),
+        jp_captured(
+            8,
+            "old-login",
+            Some(json!({"text":"old","encoding":"utf8"})),
+        ),
+        jp_captured(
+            2,
+            "new-login",
+            Some(json!({"text":"new","encoding":"utf8"})),
+        ),
+    ]);
+    let response = scan(Server::Jp, &api, port, "device", &old, &mut |_| {
+        panic!("inline record should not need to read device files")
+    })
+    .unwrap()
+    .unwrap();
+    assert_eq!(response.record_id, 2);
+    assert_eq!(response.body, "new");
+    assert_eq!(
+        worker.join().unwrap(),
+        vec![
+            ("GET /tab/list HTTP/1.1".into(), json!(null)),
+            (
+                "POST /capture/record/filter HTTP/1.1".into(),
+                json!({"tabId":"after","filters":filters})
+            ),
+            (
+                "POST /capture/record/get HTTP/1.1".into(),
+                json!({"tabId":"after","id":8})
+            ),
+            (
+                "POST /capture/record/get HTTP/1.1".into(),
+                json!({"tabId":"after","id":2})
+            ),
+        ]
+    );
 }
 
 #[test]

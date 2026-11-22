@@ -32,7 +32,8 @@ mod root_tests;
 #[cfg(test)]
 mod tests;
 
-const CERT_PATHS: [&str; 2] = [
+const CERT_PATHS: [&str; 3] = [
+    "/data/user/0/com.reqable.android/files/certificate/reqable-ca.crt",
     "/data/user/0/com.reqable.android/files/certificate/reqable-root.crt",
     "/sdcard/Android/data/com.reqable.android/files/certificate/reqable-root.crt",
 ];

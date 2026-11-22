@@ -131,9 +131,9 @@ pub(crate) fn start_capture(
         },
         &mut |port, request| {
             let route = match request {
-                Request::Status => "status",
-                Request::Start => "on",
-                Request::Stop => "off",
+                Request::Status => "/capture/live/status",
+                Request::Start => "/capture/live/on",
+                Request::Stop => "/capture/live/off",
             };
             debug.borrow_mut()(&format!("Reqable 控制请求开始：{route}"));
             let began = Instant::now();

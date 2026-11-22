@@ -35,7 +35,15 @@ pub(super) fn stop_capture(adb_path: &Path, serial: &str, key: Option<&str>) -> 
     stop_using(
         serial,
         &mut |args| run_adb(adb_path, args),
-        &mut |port, route, timeout| client.request_with_timeout(port, route, None, 4096, timeout),
+        &mut |port, route, timeout| {
+            client.request_with_timeout(
+                port,
+                &format!("/capture/live/{route}"),
+                None,
+                4096,
+                timeout,
+            )
+        },
         &mut |duration| std::thread::sleep(duration),
         &mut || started.elapsed(),
     )
