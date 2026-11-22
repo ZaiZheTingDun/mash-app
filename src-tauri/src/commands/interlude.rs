@@ -23,6 +23,8 @@ pub(crate) struct InterludeCapture {
     rows: Vec<InterludeRow>,
 }
 
+// The screenshot-based picker for a specific interlude uses this synchronous
+// command. The runner collects temporary development samples separately.
 #[tauri::command]
 pub(crate) fn capture_interlude_page(
     app: tauri::AppHandle,

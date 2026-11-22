@@ -219,7 +219,7 @@ impl Runner {
                 Screen::BattleResultContinue => {
                     unknown_count = 0;
                     last_detected_screen = screen;
-                    self.handle_battle_result_continue();
+                    self.handle_battle_result_continue()?;
                 }
                 Screen::APRecovery => {
                     unknown_count = 0;
@@ -237,13 +237,19 @@ impl Runner {
                         if screen == Screen::Unknown {
                             self.save_interlude_settlement_timeout_sample();
                         }
-                        let message = if self.rank_up_quest_transition_message().is_some() {
-                            "等待强化任务页面切换超时"
+                        let message = if let Some(guidance) = self
+                            .interlude
+                            .as_ref()
+                            .and_then(InterludeRuntime::pending_start_guidance)
+                        {
+                            format!("无法识别当前画面。{guidance}")
+                        } else if self.rank_up_quest_transition_message().is_some() {
+                            "等待强化任务页面切换超时".into()
                         } else {
-                            "无法识别当前画面"
+                            "无法识别当前画面".into()
                         };
                         self.transition_lifecycle(RunnerLifecycleEvent::Failed {
-                            message: message.into(),
+                            message: message.clone(),
                         });
                         self.emit(
                             if self.rank_up_quest_transition_message().is_some() {
@@ -253,7 +259,7 @@ impl Runner {
                             },
                             &format!("{message}，已停止"),
                         );
-                        self.save_recognition_failure(message);
+                        self.save_recognition_failure(&message);
                         return Ok(());
                     }
                     if let Some(message) = self.rank_up_quest_transition_message() {

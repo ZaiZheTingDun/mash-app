@@ -6,16 +6,28 @@ const SCROLL_UPPER: Point = Point::new(0.77, 0.31);
 const SCROLL_LOWER: Point = Point::new(0.77, 0.78);
 const MAP_ROWS_LOAD_POLLS: u32 = 3;
 const LIST_RETURN_RETRY_POLLS: u32 = 4;
+const BATCH_START_GUIDANCE: &str = "请从幕间物语总列表启动批量执行";
 
 #[derive(Debug, Clone, Copy)]
 enum InterludePhase {
     Starting,
+    CurrentBattle {
+        battle_seen: bool,
+        result_seen: bool,
+    },
     List,
     OpeningMap,
     LoadingMapRows,
     Map,
     Quest,
     ReturningToList,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum BattleTakeoverAction {
+    Continue,
+    Finish,
+    GuideToList,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,7 +85,7 @@ impl UnlockSamples {
 
 #[derive(Debug, Clone, Copy)]
 struct Attempt {
-    before: Option<u8>,
+    before: u8,
     start_confirmed: bool,
     story_seen: bool,
     battle_seen: bool,
@@ -82,7 +94,7 @@ struct Attempt {
 }
 
 impl Attempt {
-    fn new(before: Option<u8>) -> Self {
+    fn new(before: u8) -> Self {
         Self {
             before,
             start_confirmed: false,
@@ -98,7 +110,7 @@ impl Attempt {
     }
 
     fn progressed(self, current: Option<u8>) -> bool {
-        self.can_verify_progress() && current.is_some_and(|value| value > self.before.unwrap_or(0))
+        self.can_verify_progress() && current.is_some_and(|value| value > self.before)
     }
 
     fn completed_battle(self) -> bool {
@@ -162,30 +174,63 @@ impl InterludeRuntime {
     }
 
     fn start_at(&mut self, screen: Screen) -> bool {
-        let phase = match screen {
-            Screen::InterludeList => InterludePhase::List,
-            Screen::InterludeMap => {
-                self.active = self.selected_target();
+        let phase = match (self.config, screen) {
+            (_, Screen::InterludeList) => InterludePhase::List,
+            (InterludeWorkflowConfig::Single(identity), Screen::InterludeMap) => {
+                self.active = Some(identity);
                 InterludePhase::Map
             }
-            _ if matches!(self.config, InterludeWorkflowConfig::All)
-                && (matches!(
-                    screen,
-                    Screen::InterludeStory
-                        | Screen::InterludeCompletion
-                        | Screen::SupportSelect
-                        | Screen::TeamConfirm
-                        | Screen::TeamChange
-                        | Screen::Battle
-                ) || is_battle_result_screen(screen)) =>
-            {
-                self.attempt = Some(Attempt::new(None));
-                InterludePhase::Quest
+            (InterludeWorkflowConfig::All, screen) if is_battle_takeover_entry(screen) => {
+                InterludePhase::CurrentBattle {
+                    battle_seen: false,
+                    result_seen: false,
+                }
             }
             _ => return false,
         };
         self.transition(phase);
         true
+    }
+
+    fn observe_battle_takeover(&mut self, screen: Screen) -> Option<BattleTakeoverAction> {
+        let InterludePhase::CurrentBattle {
+            battle_seen,
+            result_seen,
+        } = &mut self.phase
+        else {
+            return None;
+        };
+
+        let action = if is_battle_result_screen(screen) {
+            *result_seen = true;
+            BattleTakeoverAction::Continue
+        } else if screen == Screen::Unknown {
+            BattleTakeoverAction::Continue
+        } else if *result_seen || (*battle_seen && screen == Screen::InterludeCompletion) {
+            BattleTakeoverAction::Finish
+        } else if is_battle_takeover_entry(screen)
+            || matches!(
+                screen,
+                Screen::Attack | Screen::ServantSelect | Screen::APRecovery
+            )
+        {
+            *battle_seen |= matches!(screen, Screen::Battle | Screen::Attack);
+            BattleTakeoverAction::Continue
+        } else {
+            BattleTakeoverAction::GuideToList
+        };
+        Some(action)
+    }
+
+    fn start_guidance(&self) -> &'static str {
+        match self.config {
+            InterludeWorkflowConfig::All => BATCH_START_GUIDANCE,
+            InterludeWorkflowConfig::Single(_) => "请从幕间物语总列表或所选关卡所在地图启动",
+        }
+    }
+
+    pub(super) fn pending_start_guidance(&self) -> Option<&'static str> {
+        matches!(self.phase, InterludePhase::Starting).then(|| self.start_guidance())
     }
 
     fn stable(&mut self, row: &InterludeRow) -> bool {
@@ -243,12 +288,6 @@ impl InterludeRuntime {
         }
     }
 
-    fn needs_to_locate_current_quest(&self) -> bool {
-        self.active.is_none()
-            && matches!(self.config, InterludeWorkflowConfig::All)
-            && (matches!(self.phase, InterludePhase::Map) || self.attempt.is_some())
-    }
-
     fn start_list_scan(&mut self, finished: Option<InterludeIdentity>) {
         self.skipped.extend(finished);
         self.active = None;
@@ -295,10 +334,11 @@ fn unique_target(rows: &[InterludeRow], target: InterludeIdentity) -> Option<&In
     candidates.next().is_none().then_some(first)
 }
 
-fn last_played_quest(rows: &[InterludeRow]) -> Option<&InterludeRow> {
-    let mut matches = rows.iter().filter(|row| row.last_played);
-    let first = matches.next()?;
-    matches.next().is_none().then_some(first)
+fn is_battle_takeover_entry(screen: Screen) -> bool {
+    matches!(
+        screen,
+        Screen::SupportSelect | Screen::TeamConfirm | Screen::TeamChange | Screen::Battle
+    ) || is_battle_result_screen(screen)
 }
 
 impl Runner {
@@ -316,24 +356,10 @@ impl Runner {
         runtime: &mut InterludeRuntime,
         screen: Screen,
     ) -> AutomationResult<bool> {
-        if matches!(runtime.phase, InterludePhase::Starting) {
+        if matches!(runtime.phase, InterludePhase::Starting)
+            && !matches!(screen, Screen::InterludeList | Screen::InterludeMap)
+        {
             if screen == Screen::Unknown {
-                if self.server == Server::Cn
-                    && matches!(runtime.config, InterludeWorkflowConfig::All)
-                {
-                    let frame = self.capture_interlude_frame()?;
-                    let path = frame.path().join("interlude.png");
-                    if self.sidecar().detect(Some(&path))? == Screen::Unknown
-                        && self.advance_interlude_unlock(runtime, &path)?
-                    {
-                        let mut attempt = Attempt::new(None);
-                        attempt.quest_cleared = true;
-                        runtime.attempt = Some(attempt);
-                        runtime.transition(InterludePhase::Quest);
-                        self.emit("InterludeCompletion", "已接续幕间通关通知");
-                        return Ok(true);
-                    }
-                }
                 return Ok(false);
             }
             if screen == Screen::Attack && matches!(runtime.config, InterludeWorkflowConfig::All) {
@@ -345,14 +371,29 @@ impl Runner {
                 return Ok(true);
             }
             if !runtime.start_at(screen) {
-                let detail = if matches!(runtime.config, InterludeWorkflowConfig::All) {
-                    "请停在幕间任务的剧情、助战、编队确认、战斗或结算页面"
-                } else {
-                    "当前画面无法确认所选幕间任务，请从幕间物语总列表或关卡所在地图启动"
-                };
-                self.fail_action("InterludeList", "识别幕间物语", detail.into());
+                self.fail_action(
+                    "InterludeList",
+                    "启动幕间物语",
+                    runtime.start_guidance().into(),
+                );
                 return Ok(true);
             }
+            self.emit(
+                &screen.to_string(),
+                &format!("仅接手当前战斗，结算后停止。{BATCH_START_GUIDANCE}"),
+            );
+        }
+        if let Some(action) = runtime.observe_battle_takeover(screen) {
+            match action {
+                BattleTakeoverAction::Continue => return Ok(false),
+                BattleTakeoverAction::Finish => self.finish_current_interlude_battle(screen),
+                BattleTakeoverAction::GuideToList => self.fail_action(
+                    &screen.to_string(),
+                    "接手当前战斗",
+                    BATCH_START_GUIDANCE.into(),
+                ),
+            }
+            return Ok(true);
         }
         if !matches!(screen, Screen::InterludeStory | Screen::Unknown) {
             runtime.skip_confirm_sent = false;
@@ -396,6 +437,25 @@ impl Runner {
         }
     }
 
+    pub(super) fn finish_interlude_takeover_after_settlement(&mut self) {
+        if self
+            .interlude
+            .as_ref()
+            .is_some_and(|runtime| matches!(runtime.phase, InterludePhase::CurrentBattle { .. }))
+        {
+            self.finish_current_interlude_battle(Screen::BattleResultContinue);
+        }
+    }
+
+    fn finish_current_interlude_battle(&mut self, screen: Screen) {
+        self.record_quest_battle_completion();
+        self.emit(
+            &screen.to_string(),
+            &format!("当前战斗已结束，自动化已停止。{BATCH_START_GUIDANCE}"),
+        );
+        self.transition_lifecycle(RunnerLifecycleEvent::Finished);
+    }
+
     fn handle_interlude_page(
         &mut self,
         runtime: &mut InterludeRuntime,
@@ -405,6 +465,12 @@ impl Runner {
         let frame = self.capture_interlude_frame()?;
         let path = frame.path().join("interlude.png");
         if self.sidecar().detect(Some(&path))? != screen {
+            return Ok(());
+        }
+
+        let starting = matches!(runtime.phase, InterludePhase::Starting);
+        if starting && !runtime.start_at(screen) {
+            self.fail_action(&label, "启动幕间物语", runtime.start_guidance().into());
             return Ok(());
         }
 
@@ -454,15 +520,18 @@ impl Runner {
             .find_element_by_name(Some(&path), &label, "start_confirm")?
             .found
         {
-            self.wait_for_interlude(runtime, &label, "等待关闭幕间任务确认框");
+            if starting {
+                self.fail_action(
+                    &label,
+                    "启动幕间物语",
+                    format!("请先在游戏内关闭任务确认框。{}", runtime.start_guidance()),
+                );
+            } else {
+                self.wait_for_interlude(runtime, &label, "等待关闭幕间任务确认框");
+            }
             return Ok(());
         }
         let view = self.sidecar().find_interlude_rows(Some(&path), screen)?;
-        if runtime.needs_to_locate_current_quest()
-            && !self.locate_current_interlude(runtime, &label, &view)
-        {
-            return Ok(());
-        }
         match (runtime.phase, screen) {
             (InterludePhase::List | InterludePhase::ReturningToList, Screen::InterludeList) => {
                 if matches!(runtime.phase, InterludePhase::ReturningToList) {
@@ -508,43 +577,6 @@ impl Runner {
                 Ok(())
             }
         }
-    }
-
-    fn locate_current_interlude(
-        &mut self,
-        runtime: &mut InterludeRuntime,
-        screen: &str,
-        view: &InterludeRows,
-    ) -> bool {
-        if let Some(row) = last_played_quest(&view.rows).filter(|row| {
-            runtime.attempt.is_none_or(|attempt| {
-                row.restricted || !row.actionable || attempt.progressed(row.progress)
-            })
-        }) {
-            runtime.waited = 0;
-            if !runtime.stable(row) {
-                return false;
-            }
-            runtime.active = Some(row.identity);
-            runtime.seek_top = false;
-            return true;
-        }
-
-        runtime.last_row = None;
-        if runtime.waited == 0 {
-            runtime.waited = 1;
-            return false;
-        }
-        if runtime.attempt.is_some() {
-            self.record_interlude_progress(runtime);
-            if self.should_stop_after_current() {
-                self.transition_lifecycle(RunnerLifecycleEvent::Finished);
-                return false;
-            }
-            self.emit(screen, "未确认当前关卡的下一节，继续按总列表顺序扫描");
-        }
-        runtime.seek_top = true;
-        true
     }
 
     fn scan_interlude_list(
@@ -695,7 +727,7 @@ impl Runner {
         }
         if self.tap_interlude_row(screen, row) {
             runtime.active = Some(row.identity);
-            runtime.attempt = Some(Attempt::new(Some(progress)));
+            runtime.attempt = Some(Attempt::new(progress));
             runtime.unlock_samples = UnlockSamples::default();
             runtime.empty_map_checked = false;
             runtime.transition(InterludePhase::Quest);
@@ -821,6 +853,8 @@ impl Runner {
         Ok(button.found && self.tap_at(screen, Point::new(button.x, button.y)))
     }
 
+    // Temporary dev-only captures for diagnosing CN unlock recognition.
+    // Remove the sample collection once recognition is verified.
     fn collect_interlude_unlock_samples(&self) -> bool {
         cfg!(debug_assertions) && tauri::is_dev() && self.server == Server::Cn
     }
@@ -1125,7 +1159,6 @@ mod tests {
             kind: InterludeRowKind::Quest,
             identity,
             restricted: false,
-            last_played: false,
             actionable: true,
             progress: Some(0),
         }
@@ -1210,37 +1243,90 @@ mod tests {
     }
 
     #[test]
-    fn ordered_mode_adopts_in_progress_screens_without_guessing_the_quest() {
+    fn ordered_mode_takes_over_only_the_current_battle_from_battle_screens() {
         let identity = InterludeIdentity {
             portrait: [1; 4],
             title: [2; 4],
         };
         for screen in [
-            Screen::InterludeStory,
             Screen::SupportSelect,
             Screen::TeamConfirm,
+            Screen::TeamChange,
             Screen::Battle,
             Screen::BattleResultLoot,
-            Screen::InterludeCompletion,
+            Screen::BattleResultContinue,
         ] {
             let mut runtime = InterludeRuntime::new(InterludeWorkflowConfig::All);
             assert!(runtime.start_at(screen), "{screen:?}");
-            assert!(matches!(runtime.phase, InterludePhase::Quest));
-            assert!(runtime.attempt.unwrap().before.is_none());
-            assert!(runtime.selected_target().is_none());
+            assert_eq!(
+                runtime.observe_battle_takeover(screen),
+                Some(BattleTakeoverAction::Continue),
+            );
 
             let mut single = InterludeRuntime::new(InterludeWorkflowConfig::Single(identity));
             assert!(!single.start_at(screen), "{screen:?}");
-            assert!(single.attempt.is_none());
+        }
+    }
+
+    #[test]
+    fn ordered_mode_starts_batch_selection_only_at_the_interlude_list() {
+        let mut runtime = InterludeRuntime::new(InterludeWorkflowConfig::All);
+        for screen in [
+            Screen::InterludeMap,
+            Screen::InterludeStory,
+            Screen::InterludeCompletion,
+            Screen::APRecovery,
+            Screen::RankUpQuest,
+        ] {
+            assert!(!runtime.start_at(screen), "{screen:?}");
+            assert_eq!(runtime.pending_start_guidance(), Some(BATCH_START_GUIDANCE));
         }
 
-        let mut runtime = InterludeRuntime::new(InterludeWorkflowConfig::All);
-        assert!(!runtime.start_at(Screen::APRecovery));
-        assert!(!runtime.start_at(Screen::RankUpQuest));
+        assert!(runtime.start_at(Screen::InterludeList));
+        assert!(runtime.seek_top);
+        assert_eq!(runtime.observe_battle_takeover(Screen::InterludeList), None);
+    }
 
-        let mut all = InterludeRuntime::new(InterludeWorkflowConfig::All);
-        assert!(all.start_at(Screen::InterludeMap));
-        assert!(all.needs_to_locate_current_quest());
+    #[test]
+    fn takeover_ends_when_settlement_leaves_the_battle_flow() {
+        for destination in [
+            Screen::InterludeList,
+            Screen::InterludeMap,
+            Screen::InterludeStory,
+            Screen::InterludeCompletion,
+            Screen::SupportSelect,
+        ] {
+            let mut runtime = InterludeRuntime::new(InterludeWorkflowConfig::All);
+            assert!(runtime.start_at(Screen::Battle));
+            for screen in [Screen::Battle, Screen::BattleResultLoot, Screen::Unknown] {
+                assert_eq!(
+                    runtime.observe_battle_takeover(screen),
+                    Some(BattleTakeoverAction::Continue)
+                );
+            }
+            assert_eq!(
+                runtime.observe_battle_takeover(destination),
+                Some(BattleTakeoverAction::Finish)
+            );
+        }
+    }
+
+    #[test]
+    fn takeover_leaves_interlude_pages_for_the_player() {
+        let mut runtime = InterludeRuntime::new(InterludeWorkflowConfig::All);
+        assert!(runtime.start_at(Screen::TeamConfirm));
+        assert_eq!(
+            runtime.observe_battle_takeover(Screen::InterludeStory),
+            Some(BattleTakeoverAction::GuideToList)
+        );
+        assert_eq!(
+            runtime.observe_battle_takeover(Screen::Battle),
+            Some(BattleTakeoverAction::Continue)
+        );
+        assert_eq!(
+            runtime.observe_battle_takeover(Screen::InterludeCompletion),
+            Some(BattleTakeoverAction::Finish)
+        );
     }
 
     #[test]
@@ -1257,19 +1343,8 @@ mod tests {
     }
 
     #[test]
-    fn a_resumed_attempt_requires_a_result_or_story_and_positive_progress() {
-        let mut attempt = Attempt::new(None);
-        attempt.battle_seen = true;
-        assert!(!attempt.progressed(Some(1)));
-        attempt.result_seen = true;
-        assert!(!attempt.progressed(None));
-        assert!(!attempt.progressed(Some(0)));
-        assert!(attempt.progressed(Some(1)));
-    }
-
-    #[test]
     fn verifies_progress_after_battle_results_or_a_story_only_phase() {
-        let mut attempt = Attempt::new(Some(1));
+        let mut attempt = Attempt::new(1);
         assert!(!attempt.progressed(Some(2)));
         attempt.story_seen = true;
         assert!(attempt.progressed(Some(2)));
@@ -1283,7 +1358,7 @@ mod tests {
 
     #[test]
     fn final_reward_counts_a_played_battle_even_when_the_standard_result_was_skipped() {
-        let mut attempt = Attempt::new(Some(2));
+        let mut attempt = Attempt::new(2);
         attempt.quest_cleared = true;
         assert!(!attempt.completed_battle());
         attempt.battle_seen = true;
@@ -1292,7 +1367,7 @@ mod tests {
 
     #[test]
     fn unclassified_settlement_requires_confirmed_result_or_quest_clear() {
-        let mut attempt = Attempt::new(Some(0));
+        let mut attempt = Attempt::new(0);
         assert!(!attempt.can_continue_unclassified_settlement());
         attempt.story_seen = true;
         assert!(!attempt.can_continue_unclassified_settlement());
@@ -1300,14 +1375,14 @@ mod tests {
         assert!(!attempt.can_continue_unclassified_settlement());
         attempt.result_seen = true;
         assert!(attempt.can_continue_unclassified_settlement());
-        let mut cleared = Attempt::new(Some(0));
+        let mut cleared = Attempt::new(0);
         cleared.quest_cleared = true;
         assert!(cleared.can_continue_unclassified_settlement());
     }
 
     #[test]
     fn cn_story_only_phase_can_handle_completion_notices_but_not_a_generic_prompt() {
-        let mut attempt = Attempt::new(Some(0));
+        let mut attempt = Attempt::new(0);
         assert!(!attempt.can_probe_localized_completion(Server::Cn));
         attempt.story_seen = true;
         assert!(attempt.can_probe_localized_completion(Server::Cn));
@@ -1338,7 +1413,6 @@ mod tests {
                 ..target
             },
             restricted: false,
-            last_played: false,
             actionable: true,
             progress: Some(1),
         };
@@ -1351,13 +1425,6 @@ mod tests {
         };
         assert!(unique_target(&[same_servant], target).is_none());
         assert!(unique_target(std::slice::from_ref(&row), target).is_some());
-        assert!(last_played_quest(std::slice::from_ref(&row)).is_none());
-        let last_played = InterludeRow {
-            last_played: true,
-            ..row.clone()
-        };
-        assert!(last_played_quest(&[last_played.clone(), row.clone()]).is_some());
-        assert!(last_played_quest(&[last_played.clone(), last_played]).is_none());
         assert!(unique_target(&[row.clone(), row], target).is_none());
     }
 
@@ -1379,7 +1446,6 @@ mod tests {
             kind: InterludeRowKind::QuickLink,
             identity,
             restricted: false,
-            last_played: false,
             actionable: true,
             progress: None,
         };
@@ -1405,11 +1471,10 @@ mod tests {
             runtime.list_candidate(&rows).unwrap().candidate_id,
             "next-quest"
         );
-        assert!(runtime.start_at(Screen::InterludeCompletion));
+        assert!(runtime.start_at(Screen::InterludeList));
         runtime.start_list_scan(None);
         assert!(runtime.seek_top);
         assert!(runtime.attempt.is_none());
-        assert!(!runtime.needs_to_locate_current_quest());
         assert_eq!(
             runtime.list_candidate(&rows).unwrap().candidate_id,
             "next-quest"

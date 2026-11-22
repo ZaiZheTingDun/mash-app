@@ -521,29 +521,42 @@ impl Runner {
     /// * `false` — tap "Close" and transition to `Finished`. The main
     ///   loop's post-handler check exits cleanly so the user sees the
     ///   "已完成" toast.
-    pub(crate) fn handle_battle_result_continue(&mut self) {
+    pub(crate) fn handle_battle_result_continue(&mut self) -> AutomationResult<()> {
+        if self.interlude.is_some() {
+            let screen = "BattleResultContinue";
+            self.emit(screen, "关闭战斗结算");
+            if self.tap_until_screen_changes(
+                screen,
+                Screen::BattleResultContinue,
+                BATTLE_RESULT_CONTINUE_STOP,
+                BATTLE_RESULT_TAP_INTERVAL,
+                BATTLE_RESULT_TAP_TIMEOUT,
+            )? {
+                self.finish_interlude_takeover_after_settlement();
+            } else if !self.is_cancelled()
+                && !matches!(*self.state.lock().unwrap(), RunnerState::Error { .. })
+            {
+                self.fail_action(screen, "关闭战斗结算", "请在游戏内手动关闭结算页".into());
+            }
+            return Ok(());
+        }
+
         if self.battle_result_continue_handled {
             self.emit("BattleResultContinue", "等待结算页切换…");
             thread::sleep(ACTION_DELAY);
-            return;
+            return Ok(());
         }
         self.battle_result_continue_handled = true;
-
-        if self.interlude.is_some() {
-            self.emit("BattleResultContinue", "结束结算，等待幕间关卡进度");
-            let _ = self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP);
-            return;
-        }
 
         if self.rank_up_quest_active() {
             self.record_quest_battle_completion();
             self.emit("BattleResultContinue", "结束当前强化关卡，返回任务列表");
             if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
-                return;
+                return Ok(());
             }
             self.mark_rank_up_quest_return_pending();
             thread::sleep(ACTION_DELAY);
-            return;
+            return Ok(());
         }
 
         self.completed_mission_runs += 1;
@@ -558,7 +571,7 @@ impl Runner {
         if should_repeat && !reached_run_cap && !self.should_stop_after_current() {
             self.emit("BattleResultContinue", "继续重复任务");
             if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_REPEAT) {
-                return;
+                return Ok(());
             }
             self.team_changed = false;
             self.servants_placed.clear();
@@ -570,9 +583,10 @@ impl Runner {
                 &format!("结束任务（已完成 {} 轮）", self.completed_mission_runs),
             );
             if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
-                return;
+                return Ok(());
             }
             self.transition_lifecycle(RunnerLifecycleEvent::Finished);
         }
+        Ok(())
     }
 }

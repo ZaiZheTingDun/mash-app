@@ -169,7 +169,7 @@ function RankUpQuestServerPage({
       : capturing ? "正在截取游戏画面…"
       : running ? `当前页面：${currentScreen || "正在启动"}`
       : !selectedProject ? projects.length === 0 ? "请先创建战斗队伍" : "请选择战斗队伍"
-      : mode === "all" ? "就绪，将按列表顺序执行"
+      : mode === "all" ? (interlude ? "可开始，接手当前战斗时会在结算后停止" : "就绪，将按列表顺序执行")
       : selectedCandidateId ? `已选择${title}，可以开始`
       : `请截图并选择${title}`);
 
@@ -197,7 +197,7 @@ function RankUpQuestServerPage({
               {
                 value: "all",
                 title: `按顺序完成所有${title}`,
-                description: interlude ? "接手续中的关卡，再按列表顺序执行" : "从列表顶部开始，依次完成所有亮色任务",
+                description: interlude ? "从幕间物语总列表启动批量执行" : "从列表顶部开始，依次完成所有亮色任务",
               },
             ]}
           />

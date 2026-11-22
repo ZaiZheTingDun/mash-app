@@ -211,8 +211,6 @@ pub struct InterludeRow {
     #[serde(skip_serializing)]
     pub identity: InterludeIdentity,
     pub restricted: bool,
-    #[serde(default, skip_serializing)]
-    pub last_played: bool,
     pub actionable: bool,
     #[serde(skip_serializing)]
     pub progress: Option<u8>,

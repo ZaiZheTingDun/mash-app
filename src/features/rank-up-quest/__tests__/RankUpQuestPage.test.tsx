@@ -354,7 +354,8 @@ describe("Interlude automation", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(2);
     await user.click(screen.getByRole("radio", { name: "按顺序完成所有幕间物语" }));
     expect(screen.queryByRole("button", { name: "截取游戏画面" })).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("就绪，将按列表顺序执行");
+    expect(screen.getByText("从幕间物语总列表启动批量执行")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("接手当前战斗时会在结算后停止");
     await user.click(screen.getByRole("button", { name: "开始幕间物语" }));
     expect(invoke).toHaveBeenCalledWith("start_interlude_automation", expect.objectContaining({
       workflow: { mode: "all", captureId: null, candidateId: null },
