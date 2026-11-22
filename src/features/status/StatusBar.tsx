@@ -647,6 +647,7 @@ export function StatusBar({
   const [manualPort, setManualPort] = useState("5555");
   const [manualDeviceBusy, setManualDeviceBusy] = useState(false);
   const [manualDeviceError, setManualDeviceError] = useState<string | null>(null);
+  const manualDeviceDismissedRef = useRef(false);
   const [server, setServer] = useState<Server>("JP");
   // The server selector must be locked while the runner is mid-run: the
   // sidecar already pinned templates / OCR for the previous server when
@@ -786,7 +787,6 @@ export function StatusBar({
   }, [pollAdb]);
 
   const refreshDevicePreviews = useCallback((refresh = false) => {
-    setDeviceDialogOpen(true);
     setDeviceScanState("loading");
     setDeviceScanError(null);
     setDevicePreviews([]);
@@ -823,16 +823,25 @@ export function StatusBar({
       .finally(() => setSelectingSerial(null));
   }, []);
 
+  const handleManualDeviceOpenChange = useCallback((open: boolean) => {
+    if (!open) manualDeviceDismissedRef.current = true;
+    setManualDeviceOpen(open);
+  }, []);
+
   const handleManualAddDevice = useCallback(() => {
     if (manualDeviceBusy) return;
+    manualDeviceDismissedRef.current = false;
     setManualDeviceBusy(true);
     setManualDeviceError(null);
     invoke<string>("connect_adb_device", { host: manualHost, port: manualPort })
       .then(() => {
+        if (manualDeviceDismissedRef.current) return;
         setManualDeviceOpen(false);
-        refreshDevicePreviews(false);
+        refreshDevicePreviews();
       })
-      .catch((err) => setManualDeviceError(String(err)))
+      .catch((err) => {
+        if (!manualDeviceDismissedRef.current) setManualDeviceError(String(err));
+      })
       .finally(() => setManualDeviceBusy(false));
   }, [manualDeviceBusy, manualHost, manualPort, refreshDevicePreviews]);
 
@@ -998,7 +1007,7 @@ export function StatusBar({
         </Dialog.Content>
       </Dialog.Root>
 
-      <Dialog.Root open={manualDeviceOpen} onOpenChange={setManualDeviceOpen}>
+      <Dialog.Root open={manualDeviceOpen} onOpenChange={handleManualDeviceOpenChange}>
         <Dialog.Content maxWidth="360px">
           <Dialog.Title>手动添加 ADB 设备</Dialog.Title>
           <Dialog.Description size="2" color="gray">
@@ -1038,8 +1047,8 @@ export function StatusBar({
             )}
             <Flex justify="end" gap="2" mt="4">
               <Dialog.Close>
-                <Button type="button" size="2" variant="soft" color="gray" disabled={manualDeviceBusy}>
-                  取消
+                <Button type="button" size="2" variant="soft" color="gray">
+                  {manualDeviceBusy ? "关闭" : "取消"}
                 </Button>
               </Dialog.Close>
               <Button type="submit" size="2" disabled={manualDeviceBusy}>
@@ -1258,7 +1267,10 @@ export function StatusBar({
                   size="1"
                   variant="soft"
                   disabled={deviceScanState === "loading"}
-                  onClick={() => refreshDevicePreviews(false)}
+                  onClick={() => {
+                    setDeviceDialogOpen(true);
+                    refreshDevicePreviews();
+                  }}
                 >
                   {deviceScanState === "loading" ? <Spinner size="1" /> : <DesktopIcon width={14} height={14} />}
                   选择设备

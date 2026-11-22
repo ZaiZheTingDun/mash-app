@@ -16,6 +16,29 @@ it("returns an empty packet capture index without a default record and rejects m
   await expect(invokeDevMock("select_packet_capture_record", { recordId: "missing" })).rejects.toThrow("抓包记录不存在");
 });
 
+describe("invokeDevMock manual ADB connections", () => {
+  it.each(["1e3", "0x15b3", "0", "65536"])("rejects invalid port %s", async (port) => {
+    await expect(invokeDevMock("connect_adb_device", { host: "android.local", port }))
+      .rejects.toThrow("请输入 1-65535 之间的端口号");
+  });
+
+  it.each(["http://android.local", "android.local:5555", "[android.local]", "2001:db8:::42"])(
+    "rejects invalid host %s",
+    async (host) => {
+      await expect(invokeDevMock("connect_adb_device", { host, port: "5555" }))
+        .rejects.toThrow("请输入设备的 IP 地址或主机名，端口号请单独填写");
+    },
+  );
+
+  it.each([
+    [" android.local ", " +05555 ", "android.local:5555"],
+    ["2001:db8::42", "5555", "[2001:db8::42]:5555"],
+    ["[fe80::1%en0]", "65535", "[fe80::1%en0]:65535"],
+  ])("formats supported endpoint %s", async (host, port, serial) => {
+    await expect(invokeDevMock("connect_adb_device", { host, port })).resolves.toBe(serial);
+  });
+});
+
 describe("invokeDevMock project catalog", () => {
   it("supports the complete project grouping workflow", async () => {
     const initialProjects = await invokeDevMock<Project[]>("list_projects");
