@@ -32,11 +32,14 @@ pub(crate) struct BattleRunRecorder {
 }
 
 impl BattleRunRecorder {
-    pub(crate) fn start(app: &tauri::AppHandle, max_runs: Option<u32>) -> Result<Self, String> {
+    pub(crate) fn start(
+        app: &tauri::AppHandle,
+        max_runs: Option<u32>,
+        run_id: uuid::Uuid,
+    ) -> Result<Self, String> {
         let path = battle_statistics_path(app);
         initialize_path(&path)?;
         let now_ms = unix_timestamp_ms();
-        let run_id = uuid::Uuid::new_v4();
         let active_run = ActiveRun::acquire(&path, run_id)
             .map_err(|err| format!("lock battle run record failed: {err}"))?;
         let run_id = run_id.to_string();

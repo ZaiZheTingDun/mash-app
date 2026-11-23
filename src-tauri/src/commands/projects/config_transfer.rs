@@ -92,6 +92,19 @@ pub(crate) fn load_battle_scenes_from_root(
     root: &Path,
     project_id: &str,
 ) -> Result<Vec<BattleScene>, String> {
+    let (scenes, legacy) = read_battle_scenes_snapshot(root, project_id)?;
+    if let Some(legacy) = legacy {
+        let path = project_battle_scenes_path_in_root(root, project_id);
+        write_json_atomic(&path, &scenes, "普通指令配置")?;
+        fs::remove_file(legacy).map_err(|error| format!("移除旧版指令配置失败：{error}"))?;
+    }
+    Ok(scenes)
+}
+
+pub(super) fn read_battle_scenes_snapshot(
+    root: &Path,
+    project_id: &str,
+) -> Result<(Vec<BattleScene>, Option<PathBuf>), String> {
     let path = project_battle_scenes_path_in_root(root, project_id);
     let legacy = path.with_file_name("turns.json");
     let source = if !path.exists() && legacy.exists() {
@@ -107,11 +120,8 @@ pub(crate) fn load_battle_scenes_from_root(
     let scenes = super::member_references::normalize_stored_member_metadata(
         root, project_id, scenes, false,
     )?;
-    if source == &legacy {
-        write_json_atomic(&path, &scenes, "普通指令配置")?;
-        fs::remove_file(&legacy).map_err(|error| format!("移除旧版指令配置失败：{error}"))?;
-    }
-    Ok(scenes)
+    let legacy_path = (source == &legacy).then_some(legacy);
+    Ok((scenes, legacy_path))
 }
 
 pub(crate) fn load_advanced_battle_scenes_from_root(

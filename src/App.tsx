@@ -269,6 +269,13 @@ function App({
     );
   }, []);
 
+  useEffect(() => {
+    const unlisten = listen<number | null>("mcp-battle-started", ({ payload }) =>
+      handleBattleAutomationStart(payload)
+    );
+    return () => { void unlisten.then((fn) => fn()); };
+  }, [handleBattleAutomationStart]);
+
   const handleOperationLogOpenChange = useCallback((open: boolean) => {
     setOperationLogOpen(open);
     if (open) setBattleRunStatusOpen(false);
@@ -670,12 +677,20 @@ function App({
     }
   }, [persistActiveProjectId]);
 
-  // Load the project list once at startup so the team-builder can read/write
+  // Load the project list at startup so the team-builder can read/write
   // `supportServantId` directly off the active project. The active project id
   // is also backend-owned, so app restarts reopen the last chosen lineup.
   useEffect(() => {
     if (!startupReady) return;
     void invoke("ensure_default_project").then(refreshProjects).catch(console.error);
+  }, [refreshProjects, startupReady]);
+
+  useEffect(() => {
+    if (!startupReady) return;
+    const unlisten = listen("external-projects-updated", () => {
+      void refreshProjects().catch(console.error);
+    });
+    return () => { void unlisten.then((fn) => fn()); };
   }, [refreshProjects, startupReady]);
 
   useEffect(() => {

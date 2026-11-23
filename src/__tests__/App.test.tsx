@@ -605,6 +605,23 @@ describe("App active project restore", () => {
     ).not.toBeInTheDocument();
   });
 
+  it.each([[12, "0 次 / 12 次"], [null, "0 次"]] as const)("shows the MCP battle run count for %s", async (maxRuns, text) => {
+    let onMcpBattleStart: Parameters<typeof listen>[1] | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "mcp-battle-started") onMcpBattleStart = handler;
+      return () => {};
+    });
+    installAppMock("project-1", { battleStartPanel: "runStatus" });
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+
+    expect(onMcpBattleStart).toBeDefined();
+    await act(async () => onMcpBattleStart?.({ event: "mcp-battle-started", id: 0, payload: maxRuns }));
+
+    expect(screen.getByRole("button", { name: "关闭运行状态" })).toBeVisible();
+    expect(screen.getByText(text)).toBeVisible();
+  });
+
   it("keeps both bottom panels collapsed when battle automation starts with no popup", async () => {
     installAppMock("project-1", { battleStartPanel: "none" });
     const user = userEvent.setup();

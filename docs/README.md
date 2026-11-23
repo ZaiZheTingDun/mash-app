@@ -9,6 +9,7 @@
 - [mash-cv](../sidecar/cv-code/README.md)：Python 环境、通信协议、测试与打包。
 - [CV 资源](../src-tauri/resources/README.md)：区服配置、模板与运行时清单。
 - [队伍成员身份](team-member-identity.md)：成员标识、持久化与换人解析。
+- [MCP 服务](mcp.md)介绍如何连接本地客户端、生成编队和运行已保存的战斗项目。
 
 ## 自动化与识别
 

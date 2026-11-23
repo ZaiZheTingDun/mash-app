@@ -92,14 +92,13 @@ impl Runner {
         if let Some(recorder) = &self.run_recorder {
             recorder.checkpoint(self.completed_mission_runs, &self.ap_recovery_usage);
         }
-        let _ = self.app_handle.emit(
-            "battle-run-progress",
-            BattleRunProgressEvent {
-                completed_runs: self.completed_mission_runs,
-                max_runs: self.config.max_mission_runs,
-                ap_recovery_usage: self.ap_recovery_usage.clone(),
-            },
-        );
+        let progress = BattleRunProgressEvent {
+            completed_runs: self.completed_mission_runs,
+            max_runs: self.config.max_mission_runs,
+            ap_recovery_usage: self.ap_recovery_usage.clone(),
+        };
+        *self.progress.lock().unwrap() = progress.clone();
+        let _ = self.app_handle.emit("battle-run-progress", progress);
     }
 
     pub(crate) fn record_ap_recovery_usage(&mut self, item: ApRecoveryItem) {

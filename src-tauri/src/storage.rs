@@ -31,6 +31,32 @@ where
 }
 
 pub(crate) fn write_bytes_atomic(path: &Path, bytes: &[u8], label: &str) -> Result<(), String> {
+    stage_bytes(path, bytes, label)?
+        .persist(path)
+        .map_err(|error| format!("替换{label}失败（{}）：{}", path.display(), error.error))?;
+    Ok(())
+}
+
+/// Publish initial state without replacing a concurrent writer's file.
+pub(crate) fn create_json_atomic(
+    path: &Path,
+    value: &impl Serialize,
+    label: &str,
+) -> Result<bool, String> {
+    let json =
+        serde_json::to_vec_pretty(value).map_err(|error| format!("序列化{label}失败：{error}"))?;
+    match stage_bytes(path, &json, label)?.persist_noclobber(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(format!(
+            "保存{label}失败（{}）：{}",
+            path.display(),
+            error.error
+        )),
+    }
+}
+
+fn stage_bytes(path: &Path, bytes: &[u8], label: &str) -> Result<tempfile::NamedTempFile, String> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -49,10 +75,7 @@ pub(crate) fn write_bytes_atomic(path: &Path, bytes: &[u8], label: &str) -> Resu
         .as_file()
         .sync_all()
         .map_err(|error| format!("同步{label}临时文件失败：{error}"))?;
-    temporary
-        .persist(path)
-        .map_err(|error| format!("替换{label}失败（{}）：{}", path.display(), error.error))?;
-    Ok(())
+    Ok(temporary)
 }
 
 #[cfg(test)]
