@@ -1,13 +1,17 @@
 //! Compile a slot-based MCP draft into the ordinary team and command models.
 
 use crate::commands::{catalog, projects};
+use crate::runner::{
+    apply_completed_turn_lineup_changes, apply_party_member_lineup_change, build_party_members,
+    resolve_available_member_action, PartyMemberRuntime, RunConfig,
+};
 use crate::{
     Action, AttackCard, BattleScene, BattleTurn, OrderChangeSelection, Project, ProjectSlot,
     SkillSelection,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tauri::AppHandle;
 
 #[derive(Deserialize, JsonSchema)]
@@ -36,6 +40,7 @@ pub(super) struct DraftServant {
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct DraftSupport {
+    /// Initial support slot (1–6). A servant ID is needed to use or target its skills.
     pub slot: Option<u32>,
     pub servant_id: Option<u32>,
     pub variant_key: Option<String>,
@@ -285,8 +290,11 @@ impl Compiler<'_> {
             .enumerate()
             .map(|(index, action)| {
                 let location = format!("{location}第 {} 项行动", index + 1);
-                self.compile_action(action, &location)
-                    .map_err(|error| format!("{location}：{error}"))
+                let result = self.compile_action(action, &location).and_then(|action| {
+                    self.party.apply_action(&action)?;
+                    Ok(action)
+                });
+                result.map_err(|error| format!("{location}：{error}"))
             })
             .collect::<Result<Vec<_>, _>>()?;
         if draft.attack_priority.len() > 3 {
@@ -309,7 +317,7 @@ impl Compiler<'_> {
             servant_id: None,
             is_support: false,
         });
-        Ok(BattleTurn {
+        let turn = BattleTurn {
             id: new_id(),
             preparation_actions,
             servant_actions: Vec::new(),
@@ -320,7 +328,9 @@ impl Compiler<'_> {
             attack_mode: Default::default(),
             critical_strategy: Default::default(),
             advanced_card_strategy: Default::default(),
-        })
+        };
+        self.party.finish_turn(&turn);
+        Ok(turn)
     }
 
     fn compile_action(&mut self, action: &DraftAction, location: &str) -> Result<Action, String> {
@@ -339,13 +349,13 @@ impl Compiler<'_> {
                 selection_index,
             } => {
                 position(skill, 3)?;
-                let source = self.party.front_member(slot)?;
+                let source = self.party.skill_member(slot)?;
                 let source_id = source.servant_id;
                 let source_variant = source.variant.map(str::to_owned);
                 let servant_member_id = Some(source.slot.id.clone());
                 let servant_is_support = source.is_support();
                 let target = target_slot
-                    .map(|slot| self.party.front_member(slot))
+                    .map(|slot| self.party.skill_member(slot))
                     .transpose()?;
                 let target_member_id = target.as_ref().map(|member| member.slot.id.clone());
                 let target_servant_id = target.as_ref().and_then(|member| member.servant_id);
@@ -408,23 +418,7 @@ impl Compiler<'_> {
                     }
                 };
                 validate_mystic_code_target(mode, target_slot.is_some(), order_change.is_some())?;
-                let action = self
-                    .party
-                    .equipment_action(skill, target_slot, order_change)?;
-                match &action {
-                    Action::Equipment {
-                        order_change: Some(swap),
-                        ..
-                    } if (swap.front_is_support && swap.front_servant_id.is_none())
-                        || (swap.back_is_support && swap.back_servant_id.is_none()) =>
-                    {
-                        self.warnings.push(format!(
-                            "{location}：换人涉及未指定从者的助战，现有战斗执行器无法定位该成员"
-                        ));
-                    }
-                    _ => {}
-                }
-                Ok(action)
+                self.party.equipment_action(skill, target_slot, order_change)
             }
         }
     }
@@ -439,10 +433,10 @@ impl Compiler<'_> {
     ) -> Result<Option<SkillSelection>, String> {
         let Some((id, variant_key)) = servant else {
             if selection_index.is_some() {
-                return Err("指定技能选项时需要固定从者和形态".into());
+                return Err("指定技能选项时需要从者形态".into());
             }
             self.warnings
-                .push(format!("{location}：未固定助战，无法校验技能"));
+                .push(format!("{location}：无法确认从者形态，无法校验技能"));
             return Ok(None);
         };
         use catalog::SkillTargetingMode::*;
@@ -492,15 +486,36 @@ impl Compiler<'_> {
 
 struct DraftParty<'a> {
     project: &'a Project,
-    slots: [usize; 6],
+    original_members: [Option<PartyMemberRuntime>; 6],
+    members: [Option<PartyMemberRuntime>; 6],
+    np_use_counts: HashMap<PartyMemberRuntime, u32>,
 }
 
 impl<'a> DraftParty<'a> {
     fn new(project: &'a Project) -> Self {
+        let members = build_party_members(&RunConfig::from_project(project));
         Self {
             project,
-            slots: [0, 1, 2, 3, 4, 5],
+            original_members: members.clone(),
+            members,
+            np_use_counts: HashMap::new(),
         }
+    }
+
+    fn apply_action(&mut self, action: &Action) -> Result<(), String> {
+        let resolved = resolve_available_member_action(&self.members, &self.original_members, action)
+            .ok_or("行动的从者不在可用位置")?;
+        apply_party_member_lineup_change(&mut self.members, &resolved);
+        Ok(())
+    }
+
+    fn finish_turn(&mut self, turn: &BattleTurn) {
+        apply_completed_turn_lineup_changes(
+            &mut self.members,
+            &self.original_members,
+            turn,
+            &mut self.np_use_counts,
+        );
     }
 
     fn attack_card(&self, attack: &DraftAttack) -> Result<AttackCard, String> {
@@ -515,14 +530,14 @@ impl<'a> DraftParty<'a> {
     }
 
     fn equipment_action(
-        &mut self,
+        &self,
         skill: u32,
         target_slot: Option<u32>,
         order_change: Option<DraftOrderChange>,
     ) -> Result<Action, String> {
         let order_change = order_change.map(|swap| self.swap(swap)).transpose()?;
         let target = target_slot
-            .map(|slot| self.front_member(slot))
+            .map(|slot| self.skill_member(slot))
             .transpose()?;
         Ok(Action::Equipment {
             id: new_id(),
@@ -535,7 +550,7 @@ impl<'a> DraftParty<'a> {
         })
     }
 
-    fn swap(&mut self, swap: DraftOrderChange) -> Result<OrderChangeSelection, String> {
+    fn swap(&self, swap: DraftOrderChange) -> Result<OrderChangeSelection, String> {
         if !(4..=6).contains(&swap.back_slot) {
             return Err("换人的 backSlot 必须是后排槽位 4–6".into());
         }
@@ -544,7 +559,7 @@ impl<'a> DraftParty<'a> {
         let back_index = (swap.back_slot - 1) as usize;
         let front = self.member_at(front_index)?;
         let back = self.member_at(back_index)?;
-        let selection = OrderChangeSelection {
+        Ok(OrderChangeSelection {
             front: slot_key(Some(swap.front_slot)),
             front_member_id: Some(front.slot.id.clone()),
             front_servant_id: front.servant_id,
@@ -553,9 +568,15 @@ impl<'a> DraftParty<'a> {
             back_member_id: Some(back.slot.id.clone()),
             back_servant_id: back.servant_id,
             back_is_support: back.is_support(),
-        };
-        self.slots.swap(front_index, back_index);
-        Ok(selection)
+        })
+    }
+
+    fn skill_member(&self, slot: u32) -> Result<Member<'_>, String> {
+        let member = self.front_member(slot)?;
+        if member.servant_id.is_none() {
+            return Err(format!("槽位 {slot} 未指定从者"));
+        }
+        Ok(member)
     }
 
     fn front_member(&self, slot: u32) -> Result<Member<'_>, String> {
@@ -563,21 +584,18 @@ impl<'a> DraftParty<'a> {
     }
 
     fn member_at(&self, index: usize) -> Result<Member<'_>, String> {
-        let member = &self.project.slots[self.slots[index]];
-        let (id, variant) = if member.kind == "support" {
-            (
-                self.project.support_servant_id,
-                self.project.support_servant_variant_key.as_deref(),
-            )
+        let member = self.members[index]
+            .as_ref()
+            .ok_or_else(|| format!("槽位 {} 没有从者", index + 1))?;
+        let slot = &self.project.slots[member.slot_index];
+        let variant = if member.is_support {
+            self.project.support_servant_variant_key.as_deref()
         } else {
-            if member.servant_id.is_none() {
-                return Err(format!("槽位 {} 没有从者", index + 1));
-            }
-            (member.servant_id, member.servant_variant_key.as_deref())
+            slot.servant_variant_key.as_deref()
         };
         Ok(Member {
-            slot: member,
-            servant_id: id,
+            slot,
+            servant_id: member.servant_id,
             variant,
         })
     }
@@ -652,16 +670,62 @@ mod tests {
     }
 
     #[test]
-    fn moved_support_stays_distinct_from_an_owned_copy() {
-        let draft: FormationDraft = serde_json::from_value(serde_json::json!({
-            "name":"编队", "support": {"slot":1}, "waves":[[{}]]
+    fn unpinned_support_occupies_every_configurable_slot() {
+        for slot in 1..=6 {
+            let draft: FormationDraft = serde_json::from_value(serde_json::json!({
+                "name": "编队", "support": { "slot": slot }, "waves": [[{}]]
+            }))
+            .unwrap();
+            let project = build_lineup(&draft).unwrap();
+            let party = DraftParty::new(&project);
+            let member = party.member_at((slot - 1) as usize).unwrap();
+            assert!(member.is_support());
+            assert!(member.servant_id.is_none());
+            for front in 1..=3 {
+                assert!(party.skill_member(front).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn shared_lineup_replay_uses_the_reserve_after_miss_cranes_np() {
+        let mut project = projects::new_project("退场".into(), false, Default::default());
+        project.slots.swap(2, 5);
+        project.slots[0].servant_id = Some(307);
+        project.slots[1].servant_id = Some(16);
+        project.slots[3].servant_id = Some(9);
+        let mut party = DraftParty::new(&project);
+        let mut turn: BattleTurn = serde_json::from_value(serde_json::json!({
+            "id": "turn-1", "attackPriority": [], "preparationActions": []
         }))
         .unwrap();
-        let project = build_lineup(&draft).unwrap();
-        assert_eq!(project.slots[0].kind, "support");
-        assert_eq!(project.slots[2].kind, "servant");
-        assert_ne!(project.slots[0].id, project.slots[2].id);
-        assert_eq!(project.slots.len(), 6);
+        turn.attack_priority.push(
+            party.attack_card(&DraftAttack { slot: 1, card: Card::Np }).unwrap()
+        );
+        party.finish_turn(&turn);
+
+        let action = party.equipment_action(1, Some(1), None).unwrap();
+        party.apply_action(&action).unwrap();
+        assert!(matches!(action, Action::Equipment {
+            target_member_id: Some(ref id),
+            target_servant_id: Some(9),
+            ..
+        } if id == &project.slots[3].id));
+    }
+
+    #[test]
+    fn unpinned_support_can_swap_without_becoming_a_skill_target() {
+        let mut project = projects::new_project("换人".into(), false, Default::default());
+        project.slots.swap(2, 4);
+        project.slots[0].servant_id = Some(16);
+        let mut party = DraftParty::new(&project);
+        let swap = party.equipment_action(3, None, Some(DraftOrderChange {
+            front_slot: 1,
+            back_slot: 5,
+        })).unwrap();
+        party.apply_action(&swap).unwrap();
+        assert!(party.front_member(1).unwrap().is_support());
+        assert!(party.equipment_action(1, Some(1), None).is_err());
     }
 
     #[test]
@@ -694,6 +758,7 @@ mod tests {
         let swap = party
             .equipment_action(skill, target_slot, order_change)
             .unwrap();
+        party.apply_action(&swap).unwrap();
         let swap = serde_json::to_value(swap).unwrap();
         assert_eq!(swap["skill"], "skill_3");
         assert!(swap["target"].is_null());
@@ -731,7 +796,7 @@ mod tests {
         assert!(validate_mystic_code_target(NoTarget, false, true).is_err());
 
         let project = projects::new_project("换人".into(), false, Default::default());
-        let mut party = DraftParty::new(&project);
+        let party = DraftParty::new(&project);
         for (front_slot, back_slot) in [(0, 4), (4, 5), (1, 3), (3, 7), (3, 4)] {
             assert!(party
                 .swap(DraftOrderChange {

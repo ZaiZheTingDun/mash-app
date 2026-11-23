@@ -453,7 +453,7 @@ pub(crate) fn choose_ordinary_advanced_picks_with_crit(
     prefer_higher_critical_chance: bool,
 ) -> (Vec<Pick>, Option<String>) {
     let party_ids: [Option<u32>; 3] =
-        std::array::from_fn(|index| members[index].as_ref().map(|member| member.servant_id));
+        std::array::from_fn(|index| members[index].as_ref().and_then(|member| member.servant_id));
     let mut candidates = Vec::new();
     for np in nps.iter().filter(|np| np.ready) {
         let servant_index = Some(np.slot as usize).filter(|index| *index < 3);
@@ -480,7 +480,7 @@ pub(crate) fn choose_ordinary_advanced_picks_with_crit(
         let servant_index = card.servant_id.and_then(|servant_id| {
             members.iter().position(|candidate| {
                 candidate.as_ref().is_some_and(|member| {
-                    member.servant_id == servant_id && member.is_support == card.is_support
+                    member.servant_id == Some(servant_id) && member.is_support == card.is_support
                 })
             })
         });

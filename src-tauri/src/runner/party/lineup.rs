@@ -303,7 +303,7 @@ pub(crate) fn apply_party_member_lineup_change_at(
         return;
     };
     for rule in change_order_rules() {
-        if rule.servant_id != member.servant_id {
+        if Some(rule.servant_id) != member.servant_id {
             continue;
         }
         if rule.timing != timing {
@@ -387,7 +387,7 @@ pub(crate) fn apply_attack_card_member_lineup_change(
     np_use_counts.insert(member.clone(), next_count);
 
     for rule in change_order_rules() {
-        if rule.servant_id != member.servant_id {
+        if Some(rule.servant_id) != member.servant_id {
             continue;
         }
         if rule.timing != ChangeOrderTiming::Immediate {

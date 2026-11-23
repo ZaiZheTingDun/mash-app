@@ -859,7 +859,7 @@ fn frontline_member(
     Some(PartyMemberRuntime {
         member_id: Some(member_id.into()),
         slot_index,
-        servant_id,
+        servant_id: Some(servant_id),
         is_support,
     })
 }
@@ -3907,13 +3907,13 @@ fn startup_action_member_id_resolves_after_team_reorder() {
         Some(PartyMemberRuntime {
             member_id: Some("slot-a".into()),
             slot_index: 0,
-            servant_id: 10,
+            servant_id: Some(10),
             is_support: false,
         }),
         Some(PartyMemberRuntime {
             member_id: Some("slot-b".into()),
             slot_index: 1,
-            servant_id: 20,
+            servant_id: Some(20),
             is_support: false,
         }),
         None,
@@ -3925,13 +3925,13 @@ fn startup_action_member_id_resolves_after_team_reorder() {
         Some(PartyMemberRuntime {
             member_id: Some("slot-b".into()),
             slot_index: 1,
-            servant_id: 20,
+            servant_id: Some(20),
             is_support: false,
         }),
         Some(PartyMemberRuntime {
             member_id: Some("slot-a".into()),
             slot_index: 0,
-            servant_id: 10,
+            servant_id: Some(10),
             is_support: false,
         }),
         None,
@@ -3992,7 +3992,7 @@ fn runtime_member(
     PartyMemberRuntime {
         member_id: Some(member_id.into()),
         slot_index,
-        servant_id,
+        servant_id: Some(servant_id),
         is_support,
     }
 }
@@ -8031,7 +8031,8 @@ fn project_run_respects_repeat_modes_and_legacy_repeat_flag() {
         project.repeat_mode = mode;
         project.repeat_count = count;
         project.repeat_mission = legacy_repeat;
-        let run = RunConfig::from_project(&project);
+        let normalized = crate::commands::projects::normalize_project(project.clone());
+        let run = RunConfig::from_project(&normalized);
         assert_eq!(run.repeat_mission, expected_repeat);
         assert_eq!(run.max_mission_runs, None);
     }

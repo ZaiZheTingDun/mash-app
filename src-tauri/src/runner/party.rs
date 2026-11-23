@@ -16,19 +16,12 @@ pub(crate) fn parse_index(s: &str, prefix: &str) -> Option<usize> {
 pub(crate) struct PartyMemberRuntime {
     pub(crate) member_id: Option<String>,
     pub(crate) slot_index: usize,
-    pub(crate) servant_id: u32,
+    pub(crate) servant_id: Option<u32>,
     pub(crate) is_support: bool,
 }
 
 pub(crate) fn party_member_ids(members: &[Option<PartyMemberRuntime>; 6]) -> [Option<u32>; 6] {
-    [
-        members[0].as_ref().map(|member| member.servant_id),
-        members[1].as_ref().map(|member| member.servant_id),
-        members[2].as_ref().map(|member| member.servant_id),
-        members[3].as_ref().map(|member| member.servant_id),
-        members[4].as_ref().map(|member| member.servant_id),
-        members[5].as_ref().map(|member| member.servant_id),
-    ]
+    std::array::from_fn(|index| members[index].as_ref().and_then(|member| member.servant_id))
 }
 
 pub(crate) fn frontline_party_members(
@@ -42,9 +35,9 @@ pub(crate) fn frontline_party_ids_and_supports(
 ) -> ([Option<u32>; 3], [bool; 3]) {
     (
         [
-            members[0].as_ref().map(|member| member.servant_id),
-            members[1].as_ref().map(|member| member.servant_id),
-            members[2].as_ref().map(|member| member.servant_id),
+            members[0].as_ref().and_then(|member| member.servant_id),
+            members[1].as_ref().and_then(|member| member.servant_id),
+            members[2].as_ref().and_then(|member| member.servant_id),
         ],
         [
             members[0].as_ref().is_some_and(|member| member.is_support),
@@ -129,3 +122,4 @@ pub(crate) use resolution::*;
 mod replay;
 pub(crate) use replay::*;
 mod runtime;
+pub(crate) use runtime::build_party_members;

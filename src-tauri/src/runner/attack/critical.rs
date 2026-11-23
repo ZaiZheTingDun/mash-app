@@ -87,7 +87,8 @@ fn member_priority_rank(
                     .zip(member.member_id.as_deref())
                     .is_some_and(|(left, right)| left == right)
                     || (configured.slot_index as usize == member.slot_index
-                        && configured.servant_id == Some(member.servant_id)
+                        && member.servant_id.is_some()
+                        && configured.servant_id == member.servant_id
                         && configured.is_support == member.is_support)
             }) || (configured.servant_id == card.servant_id
                 && configured.is_support == card.is_support)
@@ -108,7 +109,7 @@ fn command_card_member<'a>(
     members
         .iter()
         .flatten()
-        .find(|member| member.servant_id == servant_id && member.is_support == card.is_support)
+        .find(|member| member.servant_id == Some(servant_id) && member.is_support == card.is_support)
 }
 
 fn command_card_owner_key(
@@ -116,11 +117,12 @@ fn command_card_owner_key(
     members: &[Option<PartyMemberRuntime>; 3],
 ) -> Option<String> {
     let member = command_card_member(card, members)?;
+    let servant_id = member.servant_id?;
     Some(
         member
             .member_id
             .clone()
-            .unwrap_or_else(|| format!("{}:{}", member.is_support, member.servant_id)),
+            .unwrap_or_else(|| format!("{}:{servant_id}", member.is_support)),
     )
 }
 

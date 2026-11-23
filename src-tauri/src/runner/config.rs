@@ -350,8 +350,7 @@ impl RunConfig {
             Some(ProjectRepeatMode::Count) => {
                 (false, project.repeat_count.filter(|count| *count > 0))
             }
-            Some(ProjectRepeatMode::Single) => (false, None),
-            None => (project.repeat_mission, None),
+            _ => (false, None),
         };
         let limits = project.ap_recovery_limits;
         let positive = |limit: Option<u32>| limit.filter(|value| *value > 0);
@@ -362,7 +361,7 @@ impl RunConfig {
             mystic_code_id: project.mystic_code_id,
             party_order: None,
             support_class_filter: None,
-            support_class_filter_mode: recognition.support_class_filter_mode.unwrap_or_default(),
+            support_class_filter_mode: Default::default(),
             support_servant_name: None,
             support_servant_id: project.support_servant_id,
             support_servant_variant_key: project.support_servant_variant_key.clone(),
@@ -428,7 +427,7 @@ impl RunConfig {
             } else {
                 1
             },
-            prefer_higher_critical_chance: project.prefer_higher_critical_chance,
+            prefer_higher_critical_chance: false,
             // App and project recognition settings are applied at runner startup.
             enable_extra_class_filter: true,
             support_full_list_ocr_fallback: false,
@@ -697,25 +696,52 @@ pub enum AttackLogPickKind {
     Card,
 }
 
-/// Handle stored in Tauri managed state to control / observe the runner.
-pub struct RunnerHandle {
-    pub team_verification: Arc<Mutex<TeamVerificationControl>>,
-    pub state: Arc<Mutex<RunnerState>>,
-    pub cancel: Arc<AtomicBool>,
-    pub stop_after_current: Arc<AtomicBool>,
+/// State and controls shared with a single battle worker.
+pub(crate) struct BattleRunHandle {
+    pub(crate) team_verification: Arc<Mutex<TeamVerificationControl>>,
+    pub(crate) state: Arc<Mutex<RunnerState>>,
+    pub(crate) cancel: Arc<AtomicBool>,
+    pub(crate) stop_after_current: Arc<AtomicBool>,
     pub(crate) progress: Arc<Mutex<BattleRunProgressEvent>>,
-    pub(crate) started_by_mcp: bool,
+}
+
+impl BattleRunHandle {
+    pub(crate) fn new(run_id: uuid::Uuid, state: RunnerState, max_runs: Option<u32>) -> Self {
+        Self {
+            team_verification: Arc::new(Mutex::new(TeamVerificationControl::new(run_id))),
+            state: Arc::new(Mutex::new(state)),
+            cancel: Arc::new(AtomicBool::new(false)),
+            stop_after_current: Arc::new(AtomicBool::new(false)),
+            progress: Arc::new(Mutex::new(BattleRunProgressEvent {
+                max_runs,
+                ..Default::default()
+            })),
+        }
+    }
+}
+
+/// Battle handles retained in Tauri managed state for the app session.
+pub struct RunnerHandle {
+    pub(crate) current: Arc<BattleRunHandle>,
+    pub(crate) latest_mcp: Option<Arc<BattleRunHandle>>,
 }
 
 impl RunnerHandle {
     pub fn new_idle() -> Self {
         Self {
-            team_verification: Arc::new(Mutex::new(TeamVerificationControl::default())),
-            state: Arc::new(Mutex::new(RunnerState::Idle)),
-            cancel: Arc::new(AtomicBool::new(false)),
-            stop_after_current: Arc::new(AtomicBool::new(false)),
-            progress: Arc::default(),
-            started_by_mcp: false,
+            current: Arc::new(BattleRunHandle::new(
+                uuid::Uuid::new_v4(),
+                RunnerState::Idle,
+                None,
+            )),
+            latest_mcp: None,
         }
+    }
+
+    pub(crate) fn replace_current(&mut self, run: Arc<BattleRunHandle>, started_by_mcp: bool) {
+        if started_by_mcp {
+            self.latest_mcp = Some(run.clone());
+        }
+        self.current = run;
     }
 }

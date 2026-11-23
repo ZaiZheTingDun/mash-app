@@ -44,9 +44,8 @@ use crate::operation_log::{self, DebugSource};
 use crate::paths::{AppUiSettings, MysticCodeGender};
 use crate::runner::{
     build_team_check_targets, grand_strategy, runner_lifecycle_transition, AutomationEvent,
-    BattleRunProgressEvent, LogLevel, RankUpQuestStartRequest, RunConfig, Runner, RunnerHandle,
-    RunnerLifecycleEvent, RunnerState, TeamVerificationControl, TeamVerificationDecision,
-    TeamVerificationReport,
+    BattleRunHandle, LogLevel, RankUpQuestStartRequest, RunConfig, Runner, RunnerHandle,
+    RunnerLifecycleEvent, RunnerState, TeamVerificationDecision, TeamVerificationReport,
 };
 use crate::screen;
 use crate::server::{Server, STREAM_BIT_RATE, STREAM_MAX_FPS, STREAM_MAX_SIZE};
@@ -367,7 +366,7 @@ pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result
     let debug_settings = *app.state::<Mutex<DebugSettings>>().lock().unwrap();
     config.auto_capture_battle_before_attack = debug_settings.auto_capture_battle_before_attack;
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;
-    config.auto_friend_request = !started_by_mcp && recognition_settings.auto_friend_request;
+    config.auto_friend_request = recognition_settings.auto_friend_request;
     config.auto_capture_skill_use_probe = debug_settings.auto_capture_skill_use_probe;
     config.auto_capture_unrecognized_critical_chance =
         debug_settings.auto_capture_unrecognized_critical_chance;
@@ -393,15 +392,12 @@ pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result
             .map(|code| code.name)
     });
     let run_id = uuid::Uuid::new_v4();
-    let team_verification = Arc::new(Mutex::new(TeamVerificationControl::new(run_id)));
-    let progress = Arc::new(Mutex::new(BattleRunProgressEvent {
-        max_runs: config.max_mission_runs,
-        ..Default::default()
-    }));
+    let run = Arc::new(BattleRunHandle::new(
+        run_id,
+        RunnerState::Starting,
+        config.max_mission_runs,
+    ));
     let app = app.clone();
-    let state = Arc::new(Mutex::new(RunnerState::Starting));
-    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let stop_after_current = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let run_recorder = match BattleRunRecorder::start(&app, config.max_mission_runs, run_id) {
         Ok(recorder) => Some(recorder),
         Err(err) => {
@@ -410,16 +406,10 @@ pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result
         }
     };
 
-    {
-        let handle_state = app.state::<Mutex<RunnerHandle>>();
-        let mut handle = handle_state.lock().unwrap();
-        handle.team_verification = team_verification.clone();
-        handle.state = state.clone();
-        handle.cancel = cancel.clone();
-        handle.stop_after_current = stop_after_current.clone();
-        handle.progress = progress.clone();
-        handle.started_by_mcp = started_by_mcp;
-    }
+    app.state::<Mutex<RunnerHandle>>()
+        .lock()
+        .unwrap()
+        .replace_current(run.clone(), started_by_mcp);
 
     if started_by_mcp {
         let _ = app.emit("mcp-battle-started", config.max_mission_runs);
@@ -429,7 +419,7 @@ pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result
         let _automation_lease = automation_lease;
         let _run_finish_guard = BattleRunFinishGuard {
             recorder: run_recorder.clone(),
-            state: state.clone(),
+            state: run.state.clone(),
         };
         let Some(AutomationSession {
             adb: adb_dev,
@@ -441,12 +431,12 @@ pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result
             server,
             selected_adb_serial,
             &debug::DebugSidecar(debug_sidecar.clone()),
-            &cancel,
+            &run.cancel,
             StartupFeedback {
                 scope: "runner",
-                progress: &|message| emit_automation_status(&app, &state, "", message),
-                failed: &|message| fail_automation_start(&app, &state, message),
-                cancelled: &|| stop_automation_start(&app, &state),
+                progress: &|message| emit_automation_status(&app, &run.state, "", message),
+                failed: &|message| fail_automation_start(&app, &run.state, message),
+                cancelled: &|| stop_automation_start(&app, &run.state),
             },
             |sidecar| {
                 sidecar
@@ -480,9 +470,9 @@ pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result
             advanced_mode,
             advanced_scenes,
             app,
-            state,
-            cancel,
-            stop_after_current,
+            run.state.clone(),
+            run.cancel.clone(),
+            run.stop_after_current.clone(),
             screen_size,
             frame_size,
             assets_dir,
@@ -491,8 +481,8 @@ pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result
             server,
             Some(debug_sidecar),
             run_recorder,
-            progress,
-            team_verification,
+            run.progress.clone(),
+            run.team_verification.clone(),
             team_check_targets,
             mystic_code_name,
         );
@@ -507,7 +497,8 @@ pub(crate) fn get_team_verification(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<Option<TeamVerificationReport>, String> {
     let handle = handle_state.lock().unwrap();
-    let report = handle.team_verification.lock().unwrap().report.clone();
+    let run = &handle.current;
+    let report = run.team_verification.lock().unwrap().report.clone();
     Ok(report)
 }
 
@@ -519,11 +510,11 @@ pub(crate) fn resolve_team_verification(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
-    if handle.cancel.load(Ordering::Relaxed) || *handle.state.lock().unwrap() != RunnerState::Paused
-    {
+    let run = &handle.current;
+    if run.cancel.load(Ordering::Relaxed) || *run.state.lock().unwrap() != RunnerState::Paused {
         return Err("当前没有待处理的编队检查".into());
     }
-    let result = handle
+    let result = run
         .team_verification
         .lock()
         .unwrap()
@@ -536,7 +527,8 @@ pub(crate) fn stop_automation(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
-    handle.cancel.store(true, Ordering::Relaxed);
+    let run = &handle.current;
+    run.cancel.store(true, Ordering::Relaxed);
     Ok(())
 }
 
@@ -545,7 +537,8 @@ pub(crate) fn stop_automation_after_current(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
-    handle.stop_after_current.store(true, Ordering::Relaxed);
+    let run = &handle.current;
+    run.stop_after_current.store(true, Ordering::Relaxed);
     Ok(())
 }
 
@@ -554,7 +547,8 @@ pub(crate) fn get_automation_status(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> RunnerState {
     let handle = handle_state.lock().unwrap();
-    let state = handle.state.lock().unwrap().clone();
+    let run = &handle.current;
+    let state = run.state.lock().unwrap().clone();
     state
 }
 

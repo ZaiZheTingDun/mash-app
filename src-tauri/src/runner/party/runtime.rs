@@ -5,11 +5,40 @@
 
 use super::*;
 
+pub(crate) fn build_party_members(config: &RunConfig) -> [Option<PartyMemberRuntime>; 6] {
+    let mut members = std::array::from_fn(|_| None);
+    for selection in &config.servant_selections {
+        let index = selection.slot_index as usize;
+        if let Some(slot) = members.get_mut(index) {
+            *slot = Some(PartyMemberRuntime {
+                member_id: selection.member_id.clone(),
+                slot_index: index,
+                servant_id: Some(selection.servant_id),
+                is_support: false,
+            });
+        }
+    }
+
+    let support_id = config.support_servant_id.or_else(|| {
+        config.support_servant_name.as_deref().and_then(parse_servant_name_id)
+    });
+    let support_index = config
+        .support_slot_index
+        .map(|index| index as usize)
+        .filter(|&index| index < members.len())
+        .or_else(|| support_id.and_then(|_| members[..3].iter().position(Option::is_none)));
+    if let Some(index) = support_index {
+        members[index] = Some(PartyMemberRuntime {
+            member_id: config.support_member_id.clone(),
+            slot_index: index,
+            servant_id: support_id,
+            is_support: true,
+        });
+    }
+    members
+}
+
 impl Runner {
-    /// Build the front-line ``[party_slot_0, party_slot_1, party_slot_2]``
-    /// id map. Player-configured slots take precedence; any remaining
-    /// front-line slot is assumed to be the support (its id parsed out of
-    /// ``support_servant_name`` when the user pinned a specific servant).
     pub(crate) fn build_party_ids(&self) -> [Option<u32>; 3] {
         let full = self.build_full_party_ids();
         [full[0], full[1], full[2]]
@@ -20,53 +49,7 @@ impl Runner {
     }
 
     pub(crate) fn build_full_party_members(&self) -> [Option<PartyMemberRuntime>; 6] {
-        let mut full: [Option<PartyMemberRuntime>; 6] = [None, None, None, None, None, None];
-        for sel in &self.config.servant_selections {
-            let slot = sel.slot_index as usize;
-            if slot < 6 {
-                full[slot] = Some(PartyMemberRuntime {
-                    member_id: sel.member_id.clone(),
-                    slot_index: slot,
-                    servant_id: sel.servant_id,
-                    is_support: false,
-                });
-            }
-        }
-
-        let support_id = self.config.support_servant_id.or_else(|| {
-            self.config
-                .support_servant_name
-                .as_deref()
-                .and_then(parse_servant_name_id)
-        });
-        if let Some(support_id) = support_id {
-            if let Some(slot) = self
-                .config
-                .support_slot_index
-                .and_then(|slot| usize::try_from(slot).ok())
-                .filter(|slot| *slot < full.len())
-            {
-                full[slot] = Some(PartyMemberRuntime {
-                    member_id: self.config.support_member_id.clone(),
-                    slot_index: slot,
-                    servant_id: support_id,
-                    is_support: true,
-                });
-            } else {
-                for (slot_index, slot) in full.iter_mut().take(3).enumerate() {
-                    if slot.is_none() {
-                        *slot = Some(PartyMemberRuntime {
-                            member_id: self.config.support_member_id.clone(),
-                            slot_index,
-                            servant_id: support_id,
-                            is_support: true,
-                        });
-                        break;
-                    }
-                }
-            }
-        }
-        full
+        build_party_members(&self.config)
     }
 
     pub(crate) fn normal_current_party_members(&self) -> [Option<PartyMemberRuntime>; 3] {
@@ -146,13 +129,13 @@ impl Runner {
                     .or_else(|| {
                         config.servant_id.and_then(|servant_id| {
                             full.iter().flatten().find(|member| {
-                                member.servant_id == servant_id
+                                member.servant_id == Some(servant_id)
                                     && member.is_support == config.is_support
                             })
                         })
                     })
                     .or_else(|| full.get(slot).and_then(|member| member.as_ref()))?;
-                let servant_id = member.servant_id;
+                let servant_id = member.servant_id?;
                 Some(GrandServantRuntimeConfig {
                     slot_index: slot,
                     servant_id,

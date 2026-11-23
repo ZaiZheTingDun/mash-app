@@ -288,23 +288,28 @@ impl McpTools {
 }
 
 fn run_snapshot(handle: &RunnerHandle, run_id: &str, stop: bool) -> Result<Value, String> {
-    let verification = handle
+    let not_found = || "未找到此 MCP 战斗任务".to_string();
+    let run = handle.latest_mcp.as_ref().ok_or_else(not_found)?;
+    if stop && !Arc::ptr_eq(run, &handle.current) {
+        return Err(not_found());
+    }
+    let verification = run
         .team_verification
         .lock()
         .map_err(|error| error.to_string())?;
-    if !handle.started_by_mcp || verification.run_id() != run_id {
-        return Err("未找到此 MCP 战斗任务".into());
+    if verification.run_id() != run_id {
+        return Err(not_found());
     }
     let check = verification.report.clone();
     drop(verification);
-    let state = handle.state.lock().map_err(|error| error.to_string())?;
-    let progress = handle.progress.lock().map_err(|error| error.to_string())?;
+    let state = run.state.lock().map_err(|error| error.to_string())?;
+    let progress = run.progress.lock().map_err(|error| error.to_string())?;
     let active = matches!(
         *state,
         RunnerState::Starting | RunnerState::Running | RunnerState::Paused
     );
     if stop && active {
-        handle.cancel.store(true, Ordering::Relaxed);
+        run.cancel.store(true, Ordering::Relaxed);
     }
     let status = if *state == RunnerState::Idle {
         "stopped"
@@ -317,7 +322,7 @@ fn run_snapshot(handle: &RunnerHandle, run_id: &str, stop: bool) -> Result<Value
     };
     Ok(json!({
         "runId": run_id, "status": status, "progress": *progress, "error": error,
-        "stopRequested": active && handle.cancel.load(Ordering::Relaxed),
+        "stopRequested": active && run.cancel.load(Ordering::Relaxed),
         "teamVerification": if *state == RunnerState::Paused { check } else { None },
     }))
 }
@@ -383,33 +388,76 @@ register_tools! {
     start_battle_run(ProjectQuery, false, true) =>
         "Run a saved ordinary or Grand battle project using Mash's current ADB settings. Requires the local run permission to be enabled when called. Uses the current in-game quest and follows the saved repeat, AP recovery (including Saint Quartz if configured), and stop settings. Returns a run ID before ADB setup completes.",
     get_battle_run(RunQuery, true, false) =>
-        "Read the status, result, progress or pending lineup verification for the latest MCP-started battle.",
+        "Read the status, result, progress or pending lineup verification for the latest MCP-started battle, even after starting a desktop battle. The result is retained for the Mash app session.",
     stop_battle_run(RunQuery, false, true) =>
-        "Request cancellation of the specified MCP-started battle. Poll get_battle_run for the final status.",
+        "Request cancellation of the current MCP-started battle by run ID. Poll get_battle_run for the final status.",
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runner::TeamVerificationControl;
+    use crate::runner::BattleRunHandle;
 
     #[test]
     fn stale_or_desktop_runs_cannot_be_cancelled_from_mcp() {
         let mut runner = RunnerHandle::new_idle();
         let run_id = uuid::Uuid::new_v4();
-        runner.team_verification = Arc::new(Mutex::new(TeamVerificationControl::new(run_id)));
-        *runner.state.lock().unwrap() = RunnerState::Running;
-        assert!(run_snapshot(&runner, &run_id.to_string(), true).is_err());
-        runner.started_by_mcp = true;
-        assert!(run_snapshot(&runner, "another-run", true).is_err());
-        assert!(!runner.cancel.load(Ordering::Relaxed));
+        let run = Arc::new(BattleRunHandle::new(run_id, RunnerState::Running, None));
+        let run_id = run_id.to_string();
+        runner.replace_current(run.clone(), false);
+        assert!(run_snapshot(&runner, &run_id, true).is_err());
 
-        let stopping = run_snapshot(&runner, &run_id.to_string(), true).unwrap();
+        runner.replace_current(run.clone(), true);
+        assert!(run_snapshot(&runner, "another-run", true).is_err());
+        assert!(!run.cancel.load(Ordering::Relaxed));
+
+        let stopping = run_snapshot(&runner, &run_id, true).unwrap();
         assert_eq!(stopping["status"], "running");
         assert_eq!(stopping["stopRequested"], true);
-        *runner.state.lock().unwrap() = RunnerState::Idle;
-        let stopped = run_snapshot(&runner, &run_id.to_string(), false).unwrap();
+        *run.state.lock().unwrap() = RunnerState::Idle;
+        let stopped = run_snapshot(&runner, &run_id, false).unwrap();
         assert_eq!(stopped["status"], "stopped");
         assert_eq!(stopped["stopRequested"], false);
+    }
+
+    #[test]
+    fn desktop_runs_preserve_the_latest_mcp_result_until_another_mcp_start() {
+        let mut runner = RunnerHandle::new_idle();
+        let mcp_id = uuid::Uuid::new_v4();
+        let mcp_run = Arc::new(BattleRunHandle::new(mcp_id, RunnerState::Starting, Some(3)));
+        runner.replace_current(mcp_run.clone(), true);
+
+        *mcp_run.state.lock().unwrap() = RunnerState::Error {
+            message: "任务中止".into(),
+        };
+        mcp_run.progress.lock().unwrap().completed_runs = 2;
+        let expected = run_snapshot(&runner, &mcp_id.to_string(), false).unwrap();
+        assert_eq!(expected["status"], "error");
+        assert_eq!(expected["error"], "任务中止");
+        assert_eq!(expected["progress"]["completedRuns"], 2);
+        assert_eq!(expected["progress"]["maxRuns"], 3);
+
+        let desktop_id = uuid::Uuid::new_v4();
+        let desktop = Arc::new(BattleRunHandle::new(desktop_id, RunnerState::Running, None));
+        runner.replace_current(desktop.clone(), false);
+        assert_eq!(
+            run_snapshot(&runner, &mcp_id.to_string(), false).unwrap(),
+            expected
+        );
+        assert!(run_snapshot(&runner, &mcp_id.to_string(), true).is_err());
+        assert!(run_snapshot(&runner, &desktop_id.to_string(), false).is_err());
+        assert!(run_snapshot(&runner, &desktop_id.to_string(), true).is_err());
+        assert!(!desktop.cancel.load(Ordering::Relaxed));
+
+        let next_id = uuid::Uuid::new_v4();
+        runner.replace_current(
+            Arc::new(BattleRunHandle::new(next_id, RunnerState::Starting, None)),
+            true,
+        );
+        assert!(run_snapshot(&runner, &mcp_id.to_string(), false).is_err());
+        assert_eq!(
+            run_snapshot(&runner, &next_id.to_string(), false).unwrap()["status"],
+            "starting"
+        );
     }
 }

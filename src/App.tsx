@@ -165,6 +165,8 @@ function App({
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("basic");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const activeProjectIdRef = useRef<string | null>(null);
+  const projectRefreshIdRef = useRef(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectCatalog, setProjectCatalog] = useState<ProjectCatalog>({
     schemaVersion: 1,
@@ -260,6 +262,12 @@ function App({
     },
     [battleStartPanel]
   );
+
+  const handleStopBattle = useCallback(() => {
+    void invoke("stop_automation")
+      .then(() => appendOperationLog("已请求停止自动化"))
+      .catch((error) => appendOperationLog(`停止失败: ${String(error)}`, "warn"));
+  }, [appendOperationLog]);
 
   const handleBattleAutomationStartFailed = useCallback(() => {
     setBattleRunStatus((current) =>
@@ -639,7 +647,8 @@ function App({
   }, []);
 
   const handleProjectSelect = useCallback(
-    (id: string) => {
+    (id: string | null) => {
+      activeProjectIdRef.current = id;
       setActiveProjectId(id);
       persistActiveProjectId(id);
     },
@@ -647,12 +656,14 @@ function App({
   );
 
   const refreshProjects = useCallback(async () => {
+    const refreshId = ++projectRefreshIdRef.current;
     const [list, catalog, savedActiveProjectId, definitions] = await Promise.all([
       invoke<Project[]>("list_projects"),
       invoke<ProjectCatalog>("get_project_catalog"),
       invoke<string | null>("get_active_project_id"),
       invoke<GrandClassDefinition[]>("get_grand_class_definitions"),
     ]);
+    if (refreshId !== projectRefreshIdRef.current) return;
     setProjects(list);
     setProjectCatalog(
       catalog ?? {
@@ -662,18 +673,14 @@ function App({
       },
     );
     setGrandClassDefinitions(definitions ?? []);
-    if (list.length > 0) {
-      const savedProject = list.find((project) => project.id === savedActiveProjectId);
-      const nextActiveProjectId = savedProject?.id ?? list[0].id;
-      setActiveProjectId(nextActiveProjectId);
-      if (nextActiveProjectId !== savedActiveProjectId) {
-        persistActiveProjectId(nextActiveProjectId);
-      }
-    } else {
-      setActiveProjectId(null);
-      if (savedActiveProjectId != null) {
-        persistActiveProjectId(null);
-      }
+    const currentId = activeProjectIdRef.current;
+    if (currentId != null && list.some((project) => project.id === currentId)) return;
+    const savedProject = list.find((project) => project.id === savedActiveProjectId);
+    const nextId = savedProject?.id ?? list[0]?.id ?? null;
+    activeProjectIdRef.current = nextId;
+    setActiveProjectId(nextId);
+    if (nextId !== savedActiveProjectId) {
+      persistActiveProjectId(nextId);
     }
   }, [persistActiveProjectId]);
 
@@ -890,12 +897,11 @@ function App({
     invoke<Project>("create_project", { name, advancedMode, grandClass, groupId })
       .then((p) => {
         setProjects((prev) => [...prev, p]);
-        setActiveProjectId(p.id);
-        persistActiveProjectId(p.id);
+        handleProjectSelect(p.id);
         void refreshProjectCatalog();
       })
       .catch(console.error);
-  }, [persistActiveProjectId, refreshProjectCatalog]);
+  }, [handleProjectSelect, refreshProjectCatalog]);
 
   const handleRenameProject = useCallback(
     (id: string, name: string) => {
@@ -910,12 +916,11 @@ function App({
     invoke<Project>("duplicate_project", { sourceId: id, name })
       .then((p) => {
         setProjects((prev) => [...prev, p]);
-        setActiveProjectId(p.id);
-        persistActiveProjectId(p.id);
+        handleProjectSelect(p.id);
         void refreshProjectCatalog();
       })
       .catch(console.error);
-  }, [persistActiveProjectId, refreshProjectCatalog]);
+  }, [handleProjectSelect, refreshProjectCatalog]);
 
   const handleDeleteProject = useCallback(
     (id: string) => {
@@ -925,8 +930,7 @@ function App({
             const next = prev.filter((p) => p.id !== id);
             if (activeProjectId === id) {
               const nextActiveProjectId = next.length > 0 ? next[0].id : null;
-              setActiveProjectId(nextActiveProjectId);
-              persistActiveProjectId(nextActiveProjectId);
+              handleProjectSelect(nextActiveProjectId);
             }
             return next;
           });
@@ -934,7 +938,7 @@ function App({
         })
         .catch(console.error);
     },
-    [activeProjectId, persistActiveProjectId, refreshProjectCatalog]
+    [activeProjectId, handleProjectSelect, refreshProjectCatalog]
   );
 
   const handleCreateProjectGroup = useCallback(async (name: string) => {
@@ -989,21 +993,19 @@ function App({
       .then(() => {
         const firstImported = importedProjects[0];
         if (firstImported) {
-          setActiveProjectId(firstImported.id);
-          persistActiveProjectId(firstImported.id);
+          handleProjectSelect(firstImported.id);
         }
       })
       .catch(console.error);
-  }, [persistActiveProjectId, refreshProjects]);
+  }, [handleProjectSelect, refreshProjects]);
 
   const handleFormationImported = useCallback((project: Project) => {
     setProjects((previous) => [...previous.filter((item) => item.id !== project.id), project]);
-    setActiveProjectId(project.id);
-    persistActiveProjectId(project.id);
+    handleProjectSelect(project.id);
     setSettingsOpen(false);
     setView("team");
     void refreshProjectCatalog().catch(console.error);
-  }, [persistActiveProjectId, refreshProjectCatalog]);
+  }, [handleProjectSelect, refreshProjectCatalog]);
 
   const handleOpenDebug = useCallback(() => {
     if (!featureToggles.cvDebug || isNavigationLocked()) return;
@@ -1364,6 +1366,7 @@ function App({
         battleDailyStatistics={battleDailyStatistics}
         battleRunStatusOpen={battleRunStatusOpen}
         onBattleRunStatusOpenChange={handleBattleRunStatusOpenChange}
+        onStopBattle={handleStopBattle}
         updateAvailable={availableUpdate != null}
         updateChecking={updateChecking}
         updateInstalling={updateInstalling}
