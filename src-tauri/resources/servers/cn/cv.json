@@ -1,6 +1,342 @@
 {
   "$comment": "Screen + variant + element template mapping. All coordinates are normalized (0.0..1.0). 'template' refers to a PNG filename (without extension) in resources/templates/. Detection is template matching: for each screen, find its 'detect' template within its region at >= threshold; the highest-scoring screen wins. Every screen has at least variants.main. Variants describe alternate views of the same screen; elements are used for interactions and status probes.",
   "screens": {
+    "InterludeCompletion": {
+      "detect": {
+        "templateOptions": [
+          {
+            "template": "interlude/rank-up-unlock-title",
+            "region": {
+              "x": 0.16,
+              "y": 0.32,
+              "w": 0.47,
+              "h": 0.12
+            },
+            "threshold": 0.82,
+            "templateReferenceWidth": 1920,
+            "masked": true
+          },
+          {
+            "template": "interlude/profile-update",
+            "region": {
+              "x": 0.31,
+              "y": 0.42,
+              "w": 0.38,
+              "h": 0.115
+            },
+            "threshold": 0.82,
+            "templateReferenceWidth": 1920,
+            "masked": true
+          },
+          {
+            "template": "interlude/reward-title",
+            "region": {
+              "x": 0.52,
+              "y": 0.08,
+              "w": 0.43,
+              "h": 0.21
+            },
+            "threshold": 0.82,
+            "templateReferenceWidth": 1920
+          },
+          {
+            "template": "interlude/power-up-title",
+            "region": {
+              "x": 0.43,
+              "y": 0.16,
+              "w": 0.46,
+              "h": 0.2
+            },
+            "threshold": 0.82,
+            "templateReferenceWidth": 1920,
+            "masked": true
+          }
+        ]
+      },
+      "variants": {
+        "main": {
+          "elements": {
+            "reward_title": {
+              "template": "interlude/reward-title",
+              "region": {
+                "x": 0.52,
+                "y": 0.08,
+                "w": 0.43,
+                "h": 0.21
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920
+            },
+            "power_up_title": {
+              "template": "interlude/power-up-title",
+              "region": {
+                "x": 0.43,
+                "y": 0.16,
+                "w": 0.46,
+                "h": 0.2
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "reward_continue": {
+              "template": "interlude/reward-continue",
+              "region": {
+                "x": 0.32,
+                "y": 0.85,
+                "w": 0.36,
+                "h": 0.138
+              },
+              "threshold": 0.78,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "profile_update": {
+              "template": "interlude/profile-update",
+              "region": {
+                "x": 0.31,
+                "y": 0.42,
+                "w": 0.38,
+                "h": 0.115
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "profile_close": {
+              "template": "interlude/profile-close",
+              "region": {
+                "x": 0.25,
+                "y": 0.73,
+                "w": 0.2,
+                "h": 0.105
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920
+            },
+            "unlock_notice": {
+              "textPattern": "(?:幕间物语)?(?:现已|已经|已)开放(?:了)?[。！!]*",
+              "region": {
+                "x": 0.28,
+                "y": 0.62,
+                "w": 0.44,
+                "h": 0.105
+              }
+            },
+            "unlock_return": {
+              "textPattern": "前往幕间物语",
+              "region": {
+                "x": 0.55,
+                "y": 0.73,
+                "w": 0.22,
+                "h": 0.105
+              }
+            },
+            "rank_up_unlock_title": {
+              "template": "interlude/rank-up-unlock-title",
+              "region": {
+                "x": 0.16,
+                "y": 0.32,
+                "w": 0.47,
+                "h": 0.12
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "rank_up_unlock_open": {
+              "template": "interlude/rank-up-unlock-open",
+              "region": {
+                "x": 0.4,
+                "y": 0.43,
+                "w": 0.2,
+                "h": 0.11
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "rank_up_unlock_close": {
+              "template": "interlude/profile-close",
+              "region": {
+                "x": 0.42,
+                "y": 0.73,
+                "w": 0.16,
+                "h": 0.105
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920
+            }
+          }
+        }
+      }
+    },
+    "InterludeStory": {
+      "detect": {
+        "templateOptions": [
+          {
+            "template": "interlude/story-confirm",
+            "region": {
+              "x": 0.22,
+              "y": 0.39,
+              "w": 0.56,
+              "h": 0.1
+            },
+            "threshold": 0.8,
+            "templateReferenceWidth": 1920,
+            "masked": true
+          },
+          {
+            "template": "interlude/story-skip",
+            "region": {
+              "x": 0.865,
+              "y": 0,
+              "w": 0.135,
+              "h": 0.113
+            },
+            "threshold": 0.72,
+            "templateReferenceWidth": 1920,
+            "masked": true
+          }
+        ]
+      },
+      "variants": {
+        "main": {
+          "elements": {
+            "skip": {
+              "template": "interlude/story-skip",
+              "region": {
+                "x": 0.865,
+                "y": 0,
+                "w": 0.135,
+                "h": 0.113
+              },
+              "threshold": 0.72,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "skip_confirm": {
+              "template": "interlude/story-confirm",
+              "region": {
+                "x": 0.22,
+                "y": 0.39,
+                "w": 0.56,
+                "h": 0.1
+              },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "skip_yes": {
+              "template": "interlude/story-yes",
+              "region": {
+                "x": 0.6,
+                "y": 0.73,
+                "w": 0.11,
+                "h": 0.11
+              },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            }
+          }
+        }
+      }
+    },
+    "InterludeList": {
+      "detect": {
+        "template": "interlude/list-title",
+        "region": {
+          "x": 0.74,
+          "y": 0,
+          "w": 0.26,
+          "h": 0.108
+        },
+        "threshold": 0.82,
+        "templateReferenceWidth": 1920
+      },
+      "variants": {
+        "main": {
+          "elements": {
+            "start_confirm": {
+              "template": "interlude/start-confirm",
+              "region": {
+                "x": 0.24,
+                "y": 0.36,
+                "w": 0.52,
+                "h": 0.1
+              },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "start_button": {
+              "template": "interlude/start-button",
+              "region": {
+                "x": 0.55,
+                "y": 0.73,
+                "w": 0.21,
+                "h": 0.105
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920
+            }
+          }
+        }
+      }
+    },
+    "InterludeMap": {
+      "detect": {
+        "template": "interlude/return-to-list",
+        "region": {
+          "x": 0.008,
+          "y": 0.135,
+          "w": 0.13,
+          "h": 0.1
+        },
+        "threshold": 0.82,
+        "templateReferenceWidth": 1920
+      },
+      "variants": {
+        "main": {
+          "elements": {
+            "start_confirm": {
+              "template": "interlude/start-confirm",
+              "region": {
+                "x": 0.24,
+                "y": 0.36,
+                "w": 0.52,
+                "h": 0.1
+              },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920,
+              "masked": true
+            },
+            "start_button": {
+              "template": "interlude/start-button",
+              "region": {
+                "x": 0.55,
+                "y": 0.73,
+                "w": 0.21,
+                "h": 0.105
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920
+            },
+            "return_to_list": {
+              "template": "interlude/return-to-list",
+              "region": {
+                "x": 0.008,
+                "y": 0.135,
+                "w": 0.13,
+                "h": 0.1
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920
+            }
+          }
+        }
+      }
+    },
     "RankUpQuest": {
       "detect": {
         "template": "rank-up-quest/text_rank_up_quest_page",

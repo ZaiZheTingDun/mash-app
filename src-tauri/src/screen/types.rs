@@ -243,6 +243,42 @@ pub struct FindFreeQuestRowsResult {
     pub list_fingerprint: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum InterludeRowKind {
+    QuickLink,
+    Quest,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterludeIdentity {
+    pub portrait: [u32; 4],
+    pub title: [u32; 4],
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterludeRow {
+    pub candidate_id: String,
+    pub region: NormRect,
+    pub kind: InterludeRowKind,
+    #[serde(skip_serializing)]
+    pub identity: InterludeIdentity,
+    pub restricted: bool,
+    pub actionable: bool,
+    #[serde(skip_serializing)]
+    pub progress: Option<u8>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterludeRows {
+    pub rows: Vec<InterludeRow>,
+    pub at_top: bool,
+    pub at_bottom: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OrderChangeSelectionProbe {
@@ -851,6 +887,10 @@ pub struct FindSupportsResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum Screen {
     RankUpQuest,
+    InterludeList,
+    InterludeMap,
+    InterludeStory,
+    InterludeCompletion,
     TeamConfirm,
     TeamChange,
     SupportSelect,
@@ -897,6 +937,10 @@ impl std::fmt::Display for Screen {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::RankUpQuest => write!(f, "RankUpQuest"),
+            Self::InterludeList => write!(f, "InterludeList"),
+            Self::InterludeMap => write!(f, "InterludeMap"),
+            Self::InterludeStory => write!(f, "InterludeStory"),
+            Self::InterludeCompletion => write!(f, "InterludeCompletion"),
             Self::TeamConfirm => write!(f, "TeamConfirm"),
             Self::TeamChange => write!(f, "TeamChange"),
             Self::SupportSelect => write!(f, "SupportSelect"),
@@ -920,6 +964,10 @@ impl FromStr for Screen {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let screen = match s {
             "RankUpQuest" => Self::RankUpQuest,
+            "InterludeList" => Self::InterludeList,
+            "InterludeMap" => Self::InterludeMap,
+            "InterludeStory" => Self::InterludeStory,
+            "InterludeCompletion" => Self::InterludeCompletion,
             "TeamConfirm" => Self::TeamConfirm,
             "TeamChange" => Self::TeamChange,
             "SupportSelect" => Self::SupportSelect,

@@ -1,7 +1,7 @@
 import { PageHeader } from "../../components/common/PageHeader";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import { StopAfterRoundButton } from "../../components/common/StopAfterRoundButton";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
   Box,
@@ -11,7 +11,7 @@ import {
   Text,
   TextField,
 } from "@radix-ui/themes";
-import { invoke, listen } from "../../tauri";
+import { invoke } from "../../tauri";
 import {
   MinusIcon,
   PlusIcon,
@@ -39,8 +39,7 @@ import {
   grandClassDefinition,
   validateGrandServants as grandServantsAreValid,
 } from "../advanced/grandClassModel";
-import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
-import type { BattleRunStatus } from "../../types/battleRunStatus";
+import { isBattleRunActive, type BattleRunStatus } from "../../types/battleRunStatus";
 import type { Server } from "../../types/server";
 import { buildProjectRunConfig } from "./projectRunConfig";
 import {
@@ -49,13 +48,6 @@ import {
 } from "../rank-up-quest/RankUpQuestPage";
 
 type BattleQuestSource = "current" | "mapFreeQuest" | "rankUpQuest";
-
-interface AutomationEvent {
-  state: string;
-  status: AutomationStatus;
-  currentScreen: string;
-  message: string;
-}
 
 const AP_RECOVERY_OPTIONS: {
   value: BattleApRecoveryItem;
@@ -226,27 +218,17 @@ export function BattlePage({
   onLogEntry,
   battleRunStatus = null,
 }: BattlePageProps) {
-  const [running, setRunning] = useState(false);
+  const running = isBattleRunActive(battleRunStatus);
   const [rainbowConfirmOpen, setRainbowConfirmOpen] = useState(false);
-  const [stopAfterCurrentRequested, setStopAfterCurrentRequested] = useState(false);
+  const [stopAfterCurrentRun, setStopAfterCurrentRun] = useState<number | null>(null);
+  const activeRunStartedAt = battleRunStatus?.startedAtMs;
+  const stopAfterCurrentRequested = running && stopAfterCurrentRun === activeRunStartedAt;
   const [draft, setDraft] = useState<BattleProjectDraft | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [selectedSource, setQuestSource] = useState<BattleQuestSource>("current");
   const questSource = server === "CN" ? selectedSource : "current";
   const [rankUpWorkflow, setRankUpWorkflow] = useState<RankUpQuestWorkflowDraft | null>(null);
   const draftRef = useRef<BattleProjectDraft | null>(null);
-
-  useEffect(() => {
-    const unlisten = listen<AutomationEvent>("automation-status", (event) => {
-      if (isAutomationTerminal(event.payload)) {
-        setRunning(false);
-        setStopAfterCurrentRequested(false);
-      }
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
 
   const selectedProject = projects.find((project) => project.id === activeProjectId) ?? null;
   const projectDraft = useMemo(
@@ -299,11 +281,8 @@ export function BattlePage({
       draftRef.current?.projectId === selectedProject.id
         ? draftRef.current
         : projectDraftFromProject(selectedProject);
-    const maxMissionRuns = questSource === "current" && latestDraft.repeatMode === "count"
-      ? latestDraft.repeatCount
-      : null;
-    setRunning(true);
-    setStopAfterCurrentRequested(false);
+    const maxMissionRuns =
+      questSource === "current" && latestDraft.repeatMode === "count" ? latestDraft.repeatCount : null;
     onAutomationStart?.(maxMissionRuns);
 
     const config = buildProjectRunConfig(selectedProject, {
@@ -322,8 +301,6 @@ export function BattlePage({
     request.catch((err) => {
       onLogEntry?.(`启动失败: ${String(err)}`);
       onAutomationStartFailed?.();
-      setRunning(false);
-      setStopAfterCurrentRequested(false);
     });
   }, [
     onAutomationStart,
@@ -349,21 +326,20 @@ export function BattlePage({
   const handleStop = useCallback(() => {
     invoke("stop_automation")
       .then(() => {
-        setRunning(false);
-        setStopAfterCurrentRequested(false);
         onLogEntry?.("已请求停止自动化");
       })
       .catch(console.error);
   }, [onLogEntry]);
 
   const handleStopAfterCurrent = useCallback(() => {
+    if (activeRunStartedAt == null) return;
     invoke("stop_automation_after_current")
       .then(() => {
-        setStopAfterCurrentRequested(true);
+        setStopAfterCurrentRun(activeRunStartedAt);
         onLogEntry?.("已设置：运行完当前轮次后停止");
       })
       .catch(console.error);
-  }, [onLogEntry]);
+  }, [activeRunStartedAt, onLogEntry]);
 
   const handleRepeatModeChange = useCallback(
     (nextMode: BattleRepeatMode) => {

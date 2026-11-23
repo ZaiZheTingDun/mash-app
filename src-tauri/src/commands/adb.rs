@@ -12,6 +12,7 @@ use crate::paths::app_data_dir;
 use crate::platform;
 use std::collections::HashSet;
 use std::fs;
+use std::net::Ipv6Addr;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -230,30 +231,98 @@ pub(crate) fn select_adb_device(
     })
 }
 
+fn manual_adb_endpoint(host: &str, port: &str) -> Result<String, String> {
+    let port = port
+        .trim()
+        .parse::<u16>()
+        .ok()
+        .filter(|&port| port != 0)
+        .ok_or("请输入 1-65535 之间的端口号")?;
+    let host = host.trim();
+    let address = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host);
+    let invalid_host = "请输入设备的 IP 地址或主机名，端口号请单独填写";
+    if address.is_empty()
+        || address.contains(['[', ']', '/', '\\', '@', '?', '#'])
+        || address.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
+        return Err(invalid_host.into());
+    }
+    if address.contains(':') {
+        let ip = address.split_once('%').map_or(address, |(ip, _)| ip);
+        ip.parse::<Ipv6Addr>().map_err(|_| invalid_host)?;
+        return Ok(format!("[{address}]:{port}"));
+    }
+    if host != address {
+        return Err(invalid_host.into());
+    }
+    Ok(format!("{host}:{port}"))
+}
+
+fn check_adb_connect_response(
+    serial: &str,
+    exit_success: bool,
+    stdout: &str,
+    stderr: &str,
+) -> Result<(), String> {
+    let response = stdout.trim();
+    // ADB can print a connection error to stdout and still exit successfully.
+    if exit_success
+        && ["connected to ", "already connected to "]
+            .iter()
+            .any(|prefix| response.starts_with(prefix))
+    {
+        return Ok(());
+    }
+
+    let (message, diagnostics) = if exit_success {
+        (
+            format!("无法确认 ADB 已连接 {serial}，可重新扫描设备或重试"),
+            [response, stderr.trim()],
+        )
+    } else {
+        (
+            format!("adb connect {serial} 失败"),
+            [stderr.trim(), response],
+        )
+    };
+    match diagnostics.into_iter().find(|detail| !detail.is_empty()) {
+        Some(detail) => Err(format!("{message}: {detail}")),
+        None => Err(message),
+    }
+}
+
 #[tauri::command]
-pub(crate) fn connect_adb_port(app: tauri::AppHandle, port: u16) -> Result<String, String> {
-    if port == 0 {
-        return Err("端口号无效".into());
-    }
-    let serial = format!("127.0.0.1:{port}");
+pub(crate) async fn connect_adb_device(
+    app: tauri::AppHandle,
+    host: String,
+    port: String,
+) -> Result<String, String> {
+    let serial = manual_adb_endpoint(&host, &port)?;
     let adb_path = adb::resolve_adb_path(&app);
-    let output = adb::adb_command(&adb_path)
-        .args(["connect", serial.as_str()])
-        .output()
-        .map_err(|e| format!("failed to run adb connect: {e}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
-            format!("adb connect {serial} 失败")
-        } else {
-            format!("adb connect {serial} 失败: {stderr}")
-        });
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if stdout.contains("failed") || stdout.contains("unable") || stdout.contains("refused") {
-        return Err(format!("adb connect {serial} 失败: {stdout}"));
-    }
-    Ok(serial)
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = platform::output_with_timeout(
+            adb::adb_command(&adb_path).args(["connect", serial.as_str()]),
+            Duration::from_secs(10),
+        )
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::TimedOut => {
+                format!("等待 ADB 连接 {serial} 超时，可重新扫描设备或重试")
+            }
+            _ => format!("无法运行 adb connect: {error}"),
+        })?;
+        check_adb_connect_response(
+            &serial,
+            output.status.success(),
+            &String::from_utf8_lossy(&output.stdout),
+            &String::from_utf8_lossy(&output.stderr),
+        )?;
+        Ok(serial)
+    })
+    .await
+    .map_err(|e| format!("ADB 连接任务失败: {e}"))?
 }
 
 #[tauri::command]
@@ -577,6 +646,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn manual_connections_accept_local_and_remote_adb_endpoints() {
+        for (host, port, serial) in [
+            ("127.0.0.1", "5555", "127.0.0.1:5555"),
+            (" 192.168.1.42 ", " 37123 ", "192.168.1.42:37123"),
+            ("android.local", "5555", "android.local:5555"),
+            ("2001:db8::42", "5555", "[2001:db8::42]:5555"),
+            ("[fe80::1%en0]", "65535", "[fe80::1%en0]:65535"),
+        ] {
+            assert_eq!(manual_adb_endpoint(host, port).unwrap(), serial);
+            assert!(adb::Adb::is_tcp_serial(serial));
+        }
+    }
+
+    #[test]
+    fn manual_connections_require_a_host_and_valid_port() {
+        for host in [
+            " ",
+            "bad host",
+            "http://android.local",
+            "android.local:5555",
+            "[::1",
+        ] {
+            assert!(manual_adb_endpoint(host, "5555").is_err(), "{host}");
+        }
+        for port in ["", "0", "65536", "5555abc"] {
+            assert!(manual_adb_endpoint("192.168.1.42", port).is_err(), "{port}");
+        }
+    }
+
+    #[test]
+    fn manual_connection_requires_an_adb_success_response() {
+        let serial = "localhost:5555";
+        for response in [
+            "connected to localhost:5555\r\n",
+            "already connected to localhost:5555\n",
+        ] {
+            assert!(check_adb_connect_response(serial, true, response, "").is_ok());
+        }
+        assert_eq!(
+            check_adb_connect_response(serial, true, "Connection refused\n", "daemon started"),
+            Err(
+                "无法确认 ADB 已连接 localhost:5555，可重新扫描设备或重试: Connection refused"
+                    .into()
+            )
+        );
+        assert_eq!(
+            check_adb_connect_response(serial, false, "", "error: server unavailable\n"),
+            Err("adb connect localhost:5555 失败: error: server unavailable".into())
+        );
+        assert!(check_adb_connect_response(serial, true, "", "").is_err());
+    }
+
+    #[test]
     fn device_preview_serializes_selected_mumu_marker_in_camel_case() {
         let preview = AdbDevicePreview {
             serial: "emulator-5554".into(),
@@ -708,7 +830,7 @@ mod tests {
                 "List of devices attached\n",
             ),
             (
-                Some("127.0.0.1:5565".to_string()),
+                Some("192.168.1.42:37123".to_string()),
                 "List of devices attached\n",
             ),
             // A missing saved TCP endpoint is tried before selecting another

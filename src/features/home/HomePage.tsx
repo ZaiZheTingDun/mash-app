@@ -18,6 +18,7 @@ interface HomePageProps {
   onOpenSummon: () => void;
   onOpenCraftEssenceEnhancement: () => void;
   onOpenRankUpQuest: () => void;
+  onOpenInterlude?: () => void;
 }
 
 export function HomePage({
@@ -32,6 +33,7 @@ export function HomePage({
   onOpenSummon,
   onOpenCraftEssenceEnhancement,
   onOpenRankUpQuest,
+  onOpenInterlude,
 }: HomePageProps) {
   const [battleMenuOpen, setBattleMenuOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -167,6 +169,9 @@ export function HomePage({
               <TaskCard appearance="battle" number="01" caption="PARTY" title="编队/开始" description="选择队伍并开始战斗" onClick={onOpenTeam} />
               {showRankUpQuest && (
                 <TaskCard appearance="enhance" number="02" caption="RANK UP" title="强化任务" description="进入强化任务" onClick={onOpenRankUpQuest} />
+              )}
+              {onOpenInterlude && (
+                <TaskCard appearance="enhance" number="03" caption="INTERLUDE" title="幕间物语" description="完成幕间物语关卡" onClick={onOpenInterlude} />
               )}
             </>
           ) : (

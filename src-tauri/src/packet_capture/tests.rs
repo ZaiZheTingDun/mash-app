@@ -67,7 +67,12 @@ fn fake_install(
     certificate: &[u8],
     outcome: &str,
 ) -> (Result<CertificateInstallation, String>, Vec<String>) {
-    fake_install_at_path(sdk, certificate, outcome, CERT_PATHS[0])
+    fake_install_at_path(
+        sdk,
+        certificate,
+        outcome,
+        "/data/user/0/com.reqable.android/files/certificate/reqable-root.crt",
+    )
 }
 
 fn fake_install_at_path(
@@ -126,7 +131,23 @@ fn fake_install_at_path(
 
 #[test]
 fn legacy_external_certificate_location_is_supported() {
-    let (result, _) = fake_install_at_path("33", CA, "MASH_CA_INSTALLED", CERT_PATHS[1]);
+    let (result, _) = fake_install_at_path(
+        "33",
+        CA,
+        "MASH_CA_INSTALLED",
+        "/sdcard/Android/data/com.reqable.android/files/certificate/reqable-root.crt",
+    );
+    assert!(!result.unwrap().already_installed);
+}
+
+#[test]
+fn installs_reqable_ca_from_its_current_private_filename() {
+    let (result, _) = fake_install_at_path(
+        "33",
+        CA,
+        "MASH_CA_INSTALLED",
+        "/data/user/0/com.reqable.android/files/certificate/reqable-ca.crt",
+    );
     assert!(!result.unwrap().already_installed);
 }
 

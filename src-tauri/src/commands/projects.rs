@@ -342,6 +342,8 @@ pub(crate) use config_transfer::*;
 
 mod formation_share;
 mod import_commit;
+mod snapshots;
+pub(crate) use snapshots::{read_config_snapshot, save_new_config};
 pub(crate) use formation_share::*;
 
 // ---------------------------------------------------------------------------

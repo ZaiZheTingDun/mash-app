@@ -11,6 +11,7 @@ mod diagnostics;
 mod engine;
 mod fault_injection;
 mod grand;
+mod interlude;
 mod map_free_quest;
 mod party;
 mod prebattle;
@@ -29,6 +30,7 @@ use config::GrandServantRuntimeConfig;
 pub use config::*;
 pub(crate) use coords::*;
 pub(crate) use grand::*;
+use interlude::InterludeRuntime;
 pub(crate) use map_free_quest::*;
 pub(crate) use party::*;
 pub(crate) use rank_up_quest::*;
@@ -119,6 +121,7 @@ pub struct Runner {
     config: RunConfig,
     rank_up_quest: Option<RankUpQuestRuntime>,
     map_free_quest: Option<MapFreeQuestRuntime>,
+    interlude: Option<InterludeRuntime>,
     scenes: Vec<BattleScene>,
     advanced_mode: bool,
     advanced_scenes: Vec<AdvancedBattleScene>,
@@ -191,6 +194,7 @@ pub struct Runner {
     last_attack_plan: Option<AttackRetryPlan>,
     completed_mission_runs: u32,
     ap_recovery_usage: BattleRunApRecoveryUsage,
+    progress: Arc<Mutex<BattleRunProgressEvent>>,
     pending_ap_recovery_item: Option<ApRecoveryItem>,
     run_recorder: Option<BattleRunRecorder>,
     last_run_statistics_checkpoint: Instant,
@@ -230,6 +234,7 @@ impl Runner {
         server: Server,
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
         run_recorder: Option<BattleRunRecorder>,
+        progress: Arc<Mutex<BattleRunProgressEvent>>,
         team_verification: Arc<Mutex<TeamVerificationControl>>,
         team_check_targets: Vec<TeamCheckTarget>,
         mystic_code_name: Option<String>,
@@ -246,6 +251,7 @@ impl Runner {
             Some(QuestWorkflowConfig::MapFreeQuest)
         )
         .then(MapFreeQuestRuntime::new);
+        let interlude = config.interlude.map(InterludeRuntime::new);
         Self {
             diagnostic_adb: adb,
             touch,
@@ -254,6 +260,7 @@ impl Runner {
             config,
             rank_up_quest,
             map_free_quest,
+            interlude,
             scenes,
             advanced_mode,
             advanced_scenes,
@@ -285,6 +292,7 @@ impl Runner {
             last_attack_plan: None,
             completed_mission_runs: 0,
             ap_recovery_usage: BattleRunApRecoveryUsage::default(),
+            progress,
             pending_ap_recovery_item: None,
             run_recorder,
             last_run_statistics_checkpoint: Instant::now(),

@@ -258,8 +258,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return [];
       case "select_adb_device":
         return { connected: true, deviceName: args?.serial };
-      case "connect_adb_port":
-        return `127.0.0.1:${args?.port}`;
+      case "connect_adb_device":
+        return `${args?.host}:${args?.port}`;
       case "reset_bluestacks_adb_connection":
         return { ok: true, steps: [] };
       case "get_use_bluestack":

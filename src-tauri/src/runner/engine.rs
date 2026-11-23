@@ -43,7 +43,11 @@ impl Runner {
     }
 
     fn run_loop(&mut self) -> AutomationResult<()> {
-        self.sidecar().use_battle_detection();
+        if self.interlude.is_some() {
+            self.sidecar().use_interlude_detection();
+        } else {
+            self.sidecar().use_battle_detection();
+        }
         let timeout = self.config.unknown_screen_timeout_count;
         if let Err(error) = self.sidecar().configure_recognition_diagnostics(timeout) {
             self.emit_debug("CV", &error);
@@ -93,6 +97,21 @@ impl Runner {
             }
 
             self.resolve_pending_ap_recovery(screen);
+
+            if self.handle_interlude_screen(screen)? {
+                let finished = matches!(*self.state.lock().unwrap(), RunnerState::Finished);
+                if finished {
+                    self.emit("", "自动化已完成");
+                    return Ok(());
+                }
+                if matches!(*self.state.lock().unwrap(), RunnerState::Error { .. }) {
+                    return Ok(());
+                }
+                unknown_count = 0;
+                last_detected_screen = screen;
+                thread::sleep(POLL_INTERVAL);
+                continue;
+            }
 
             if !self.observe_rank_up_quest_screen(screen) {
                 return Ok(());
@@ -215,15 +234,19 @@ impl Runner {
                 Screen::BattleResultContinue => {
                     unknown_count = 0;
                     last_detected_screen = screen;
-                    self.handle_battle_result_continue();
+                    self.handle_battle_result_continue()?;
                 }
                 Screen::APRecovery => {
                     unknown_count = 0;
                     last_detected_screen = screen;
                     self.handle_ap_recovery()?;
                 }
-                Screen::Unknown => {
-                    if self.handle_map_free_quest_unknown()? {
+                Screen::Unknown
+                | Screen::InterludeList
+                | Screen::InterludeMap
+                | Screen::InterludeStory
+                | Screen::InterludeCompletion => {
+                    if screen == Screen::Unknown && self.handle_map_free_quest_unknown()? {
                         if matches!(
                             *self.state.lock().unwrap(),
                             RunnerState::Finished | RunnerState::Error { .. }
@@ -239,23 +262,32 @@ impl Runner {
                     let probing_rank_up_notice = is_battle_result_screen(last_detected_screen)
                         && self.rank_up_quest_should_probe_clear_notice();
                     if probing_rank_up_notice && self.dismiss_quest_clear_notice()? {
-                        self.mark_rank_up_quest_clear_notice_dismissed();
+                        self.complete_rank_up_quest_run();
                         unknown_count = 0;
                         thread::sleep(POLL_INTERVAL);
                         continue;
                     }
                     if unknown_count >= timeout {
-                        let message = if probing_rank_up_notice {
-                            "等待强化任务结算页面切换超时"
+                        if screen == Screen::Unknown {
+                            self.save_interlude_settlement_timeout_sample();
+                        }
+                        let message = if let Some(guidance) = self
+                            .interlude
+                            .as_ref()
+                            .and_then(InterludeRuntime::pending_start_guidance)
+                        {
+                            format!("无法识别当前画面。{guidance}")
+                        } else if probing_rank_up_notice {
+                            "等待强化任务结算页面切换超时".into()
                         } else if self.rank_up_quest_transition_message().is_some() {
-                            "等待强化任务页面切换超时"
+                            "等待强化任务页面切换超时".into()
                         } else if self.map_free_quest_transition_message().is_some() {
-                            "等待地图自由关卡页面切换超时"
+                            "等待地图自由关卡页面切换超时".into()
                         } else {
-                            "无法识别当前画面"
+                            "无法识别当前画面".into()
                         };
                         self.transition_lifecycle(RunnerLifecycleEvent::Failed {
-                            message: message.into(),
+                            message: message.clone(),
                         });
                         self.emit(
                             if self.rank_up_quest_transition_message().is_some() {
@@ -267,7 +299,7 @@ impl Runner {
                             },
                             &format!("{message}，已停止"),
                         );
-                        self.save_recognition_failure(message);
+                        self.save_recognition_failure(&message);
                         return Ok(());
                     }
                     if let Some(message) = self
@@ -278,28 +310,33 @@ impl Runner {
                             "RankUpQuest",
                             &format!("{message} ({unknown_count}/{timeout})"),
                         );
+                        thread::sleep(POLL_INTERVAL);
+                        continue;
+                    }
+                    if self.try_continue_interlude_settlement()? {
+                        thread::sleep(ACTION_DELAY);
+                        continue;
+                    }
+                    if let Some(message) = self.map_free_quest_transition_message() {
+                        self.emit(
+                            "MapFreeQuest",
+                            &format!("{message} ({unknown_count}/{timeout})"),
+                        );
                     } else {
-                        if let Some(message) = self.map_free_quest_transition_message() {
-                            self.emit(
-                                "MapFreeQuest",
-                                &format!("{message} ({unknown_count}/{timeout})"),
-                            );
-                        } else {
-                            self.emit(
-                                "Unknown",
-                                &unknown_screen_wait_message(self.server, unknown_count, timeout),
-                            );
-                        }
-                        if is_battle_result_screen(last_detected_screen) {
-                            match settlement_unknown_step(unknown_count) {
-                                SettlementUnknownStep::Finish => {
-                                    self.finish_battle_without_continue_prompt()
-                                }
-                                SettlementUnknownStep::Dismiss => {
-                                    self.dismiss_settlement_unknown(unknown_count)?
-                                }
-                                SettlementUnknownStep::Wait => {}
+                        self.emit(
+                            "Unknown",
+                            &unknown_screen_wait_message(self.server, unknown_count, timeout),
+                        );
+                    }
+                    if self.interlude.is_none() && is_battle_result_screen(last_detected_screen) {
+                        match settlement_unknown_step(unknown_count) {
+                            SettlementUnknownStep::Finish => {
+                                self.finish_battle_without_continue_prompt()
                             }
+                            SettlementUnknownStep::Dismiss => {
+                                self.dismiss_settlement_unknown(unknown_count)?
+                            }
+                            SettlementUnknownStep::Wait => {}
                         }
                     }
                 }

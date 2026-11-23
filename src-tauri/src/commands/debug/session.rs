@@ -213,7 +213,7 @@ pub(super) fn require_automation_idle(
     friend_point_summon_handle_state: &Mutex<FriendPointSummonRunnerHandle>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
-    let state = handle.state.lock().unwrap().clone();
+    let state = handle.current.state.lock().unwrap().clone();
     if matches!(
         state,
         RunnerState::Starting | RunnerState::Running | RunnerState::Paused

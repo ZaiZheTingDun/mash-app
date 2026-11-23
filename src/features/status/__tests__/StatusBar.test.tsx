@@ -930,12 +930,22 @@ describe("StatusBar", () => {
     });
   });
 
-  it("connects a manually entered adb port and rereads the current device list", async () => {
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+  it.each(["127.0.0.1", "192.168.1.42"])("adds %s with a custom port and displays the connected device", async (host) => {
+    const serial = `${host}:5565`;
+    let added = false;
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args) => {
       if (cmd === "get_server") return "JP";
       if (cmd === "check_adb") return { connected: false, deviceName: null };
-      if (cmd === "connect_adb_port") return "127.0.0.1:5565";
-      if (cmd === "refresh_adb_devices_with_previews") return [];
+      if (cmd === "connect_adb_device") {
+        expect(args).toEqual({ host, port: "5565" });
+        added = true;
+        return serial;
+      }
+      if (cmd === "refresh_adb_devices_with_previews") {
+        if (!added) return [];
+        expect(args).toEqual({ refresh: false });
+        return [{ serial, description: "", previewPath: "/tmp/adb-preview.png", selected: false }];
+      }
       return null;
     });
     const user = userEvent.setup();
@@ -946,16 +956,76 @@ describe("StatusBar", () => {
     await screen.findByText("未检测到可用 ADB 设备");
     await user.click(screen.getByRole("button", { name: "手动添加" }));
 
-    expect(await screen.findByRole("dialog", { name: "手动添加 ADB 设备" })).toBeInTheDocument();
-    const input = screen.getByPlaceholderText("5555");
-    await user.clear(input);
-    await user.type(input, "5565");
+    const addressInput = await screen.findByRole("textbox", { name: "地址" });
+    expect(addressInput).toHaveValue("127.0.0.1");
+    if (host !== "127.0.0.1") {
+      await user.clear(addressInput);
+      await user.type(addressInput, host);
+    }
+    const portInput = screen.getByRole("textbox", { name: "端口" });
+    expect(portInput).toHaveValue("5555");
+    await user.clear(portInput);
+    await user.type(portInput, "5565");
     await user.click(screen.getByRole("button", { name: "添加" }));
 
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("connect_adb_port", { port: 5565 });
+    expect(await screen.findByRole("button", { name: new RegExp(serial) })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "手动添加 ADB 设备" })).not.toBeInTheDocument();
+  });
+
+  it("shows a manual ADB connection error and allows retrying", async () => {
+    const serial = "127.0.0.1:5555";
+    let attempts = 0;
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "connect_adb_device") {
+        attempts += 1;
+        if (attempts === 1) throw new Error("Connection refused");
+        return serial;
+      }
+      if (cmd === "refresh_adb_devices_with_previews") {
+        return attempts < 2 ? [] : [{ serial, description: "", previewPath: "/tmp/adb-preview.png", selected: false }];
+      }
+      return null;
     });
-    expect(invoke).toHaveBeenCalledWith("refresh_adb_devices_with_previews", { refresh: false });
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    await user.click(screen.getByRole("button", { name: "选择设备" }));
+    await user.click(await screen.findByRole("button", { name: "手动添加" }));
+    await user.click(screen.getByRole("button", { name: "添加" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Connection refused");
+    expect(screen.getByRole("textbox", { name: "端口" })).toHaveValue("5555");
+    await user.click(screen.getByRole("button", { name: "添加" }));
+    expect(await screen.findByRole("button", { name: /127\.0\.0\.1:5555/ })).toBeInTheDocument();
+  });
+
+  it("keeps the device chooser closed after a dismissed connection succeeds", async () => {
+    let resolveConnection: (serial: string) => void = () => {};
+    const connection = new Promise<string>((resolve) => { resolveConnection = resolve; });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "connect_adb_device") return connection;
+      if (cmd === "refresh_adb_devices_with_previews") return [];
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    await user.click(screen.getByRole("button", { name: "选择设备" }));
+    await user.click(await screen.findByRole("button", { name: "手动添加" }));
+    await user.click(screen.getByRole("button", { name: "添加" }));
+    await user.click(screen.getByRole("button", { name: "关闭" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "选择 ADB 设备" })).not.toBeInTheDocument();
+
+    await act(async () => { resolveConnection("127.0.0.1:5555"); });
+    expect(screen.queryByRole("dialog", { name: "选择 ADB 设备" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "手动添加 ADB 设备" })).not.toBeInTheDocument();
   });
 
   it("hides debug-level entries by default and reveals them via the toggle", async () => {

@@ -10,7 +10,9 @@ use crate::adb;
 use crate::battle_statistics::BattleRunRecorder;
 use crate::commands::catalog::load_enhancement_target;
 use crate::commands::debug;
-use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes, read_projects};
+use crate::commands::projects::{
+    load_advanced_battle_scenes, load_battle_scenes, read_config_snapshot, read_projects,
+};
 use crate::commands::rank_up_quest::{apply_rank_up_quest_workflow, RankUpQuestCaptureState};
 use crate::commands::runtime::{
     resolve_ce_assets_dir, resolve_mystic_code_assets_dir, resolve_scrcpy_jar,
@@ -42,8 +44,8 @@ use crate::operation_log::{self, DebugSource};
 use crate::paths::{AppUiSettings, MysticCodeGender};
 use crate::runner::{
     build_team_check_targets, grand_strategy, runner_lifecycle_transition, AutomationEvent,
-    LogLevel, RankUpQuestStartRequest, RunConfig, Runner, RunnerHandle, RunnerLifecycleEvent,
-    RunnerState, TeamVerificationControl, TeamVerificationDecision, TeamVerificationReport,
+    BattleRunHandle, LogLevel, RankUpQuestStartRequest, RunConfig, Runner, RunnerHandle,
+    RunnerLifecycleEvent, RunnerState, TeamVerificationDecision, TeamVerificationReport,
 };
 use crate::screen;
 use crate::server::{Server, STREAM_BIT_RATE, STREAM_MAX_FPS, STREAM_MAX_SIZE};
@@ -253,14 +255,8 @@ pub(crate) fn effective_recognition_settings(
 }
 
 #[tauri::command]
-pub(crate) fn start_automation(
-    app: tauri::AppHandle,
-    config: RunConfig,
-    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
-    debug_state: tauri::State<'_, debug::DebugSidecar>,
-) -> Result<(), String> {
-    start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
+pub(crate) fn start_automation(app: tauri::AppHandle, config: RunConfig) -> Result<(), String> {
+    start_battle(&app, BattleStart::Desktop(config)).map(|_| ())
 }
 
 #[tauri::command]
@@ -268,75 +264,98 @@ pub(crate) fn start_rank_up_quest_automation(
     app: tauri::AppHandle,
     mut config: RunConfig,
     workflow: RankUpQuestStartRequest,
-    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
-    debug_state: tauri::State<'_, debug::DebugSidecar>,
     capture_state: tauri::State<'_, RankUpQuestCaptureState>,
 ) -> Result<(), String> {
     let server = *app.state::<Mutex<Server>>().lock().unwrap();
     apply_rank_up_quest_workflow(&mut config, workflow, &capture_state, server)?;
-    start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
+    start_battle(&app, BattleStart::Desktop(config)).map(|_| ())
 }
 
 #[tauri::command]
 pub(crate) fn start_map_free_quest_automation(
     app: tauri::AppHandle,
     mut config: RunConfig,
-    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
-    debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
     config.repeat_mission = false;
     config.max_mission_runs = None;
     config.quest_workflow = Some(crate::runner::QuestWorkflowConfig::MapFreeQuest);
-    start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
+    start_battle(&app, BattleStart::Desktop(config)).map(|_| ())
 }
 
-fn start_automation_with_config(
-    app: &tauri::AppHandle,
+#[tauri::command]
+pub(crate) fn start_interlude_automation(
+    app: tauri::AppHandle,
     mut config: RunConfig,
-    handle_state: &Mutex<RunnerHandle>,
-    coordinator: &DeviceOperationCoordinator,
-    debug_state: &debug::DebugSidecar,
+    workflow: RankUpQuestStartRequest,
+    capture_state: tauri::State<'_, super::interlude::InterludeCaptureState>,
 ) -> Result<(), String> {
-    let automation_lease =
-        coordinator.reserve(DeviceOperation::Automation(AutomationKind::Battle))?;
+    let server = *app.state::<Mutex<Server>>().lock().unwrap();
+    super::interlude::apply_interlude_workflow(&mut config, workflow, &capture_state, server)?;
+    start_battle(&app, BattleStart::Desktop(config)).map(|_| ())
+}
 
-    let project = read_projects(app)?
-        .into_iter()
-        .find(|project| project.id == config.project_id);
-    let advanced_mode = project
-        .as_ref()
-        .map(|project| project.advanced_mode)
-        .unwrap_or(false);
-    if advanced_mode {
-        let strategy = grand_strategy(config.grand_class);
-        strategy.normalize_servants(&mut config.grand_servants);
-        strategy.validate_servants(&config.grand_servants)?;
-    }
-    let scenes = if advanced_mode {
-        Vec::new()
-    } else {
-        load_battle_scenes(app.clone(), config.project_id.clone())?
-    };
-    let advanced_scenes = if advanced_mode {
-        load_advanced_battle_scenes(app.clone(), config.project_id.clone())?
-    } else {
-        Vec::new()
-    };
+pub(crate) enum BattleStart {
+    Desktop(RunConfig),
+    Mcp { project_id: String },
+}
 
+fn validate_grand_lineup(config: &mut RunConfig) -> Result<(), String> {
+    let strategy = grand_strategy(config.grand_class);
+    strategy.normalize_servants(&mut config.grand_servants);
+    strategy.validate_servants(&config.grand_servants)
+}
+
+pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result<String, String> {
+    let automation_lease = app
+        .state::<DeviceOperationCoordinator>()
+        .reserve(DeviceOperation::Automation(AutomationKind::Battle))?;
+
+    let started_by_mcp = matches!(start, BattleStart::Mcp { .. });
+    let (mut config, project, scenes, advanced_scenes) = match start {
+        BattleStart::Desktop(mut config) => {
+            let project = read_projects(app)?
+                .into_iter()
+                .find(|project| project.id == config.project_id)
+                .ok_or("未找到当前编队项目")?;
+            let (scenes, advanced_scenes) = if project.advanced_mode {
+                validate_grand_lineup(&mut config)?;
+                (
+                    Vec::new(),
+                    load_advanced_battle_scenes(app.clone(), config.project_id.clone())?,
+                )
+            } else {
+                (
+                    load_battle_scenes(app.clone(), config.project_id.clone())?,
+                    Vec::new(),
+                )
+            };
+            (config, project, scenes, advanced_scenes)
+        }
+        BattleStart::Mcp { project_id } => {
+            let snapshot = read_config_snapshot(app, &project_id)?;
+            let mut config = RunConfig::from_project(&snapshot.project);
+            if snapshot.project.advanced_mode {
+                validate_grand_lineup(&mut config)?;
+            }
+            (
+                config,
+                snapshot.project,
+                snapshot.battle_scenes,
+                snapshot.advanced_battle_scenes,
+            )
+        }
+    };
     let selected_adb_serial = app
         .state::<Mutex<AdbDeviceSettings>>()
         .lock()
         .unwrap()
         .selected_adb_serial
         .clone();
+    let advanced_mode = project.advanced_mode;
     let server = *app.state::<Mutex<Server>>().lock().unwrap();
     let recognition_settings = effective_recognition_settings(
         *app.state::<Mutex<RecognitionSettings>>().lock().unwrap(),
-        project
-            .as_ref()
-            .and_then(|project| project.recognition_settings),
+        project.recognition_settings,
     );
     config.support_ce_threshold = recognition_settings.support_ce_threshold;
     config.support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
@@ -349,8 +368,7 @@ fn start_automation_with_config(
     config.verify_skill_activation = recognition_settings.verify_skill_activation;
     config.enable_extra_class_filter = recognition_settings.enable_extra_class_filter;
     config.support_class_filter_mode = project
-        .as_ref()
-        .and_then(|project| project.recognition_settings)
+        .recognition_settings
         .and_then(|settings| settings.support_class_filter_mode)
         .unwrap_or_default();
     config.support_full_list_ocr_fallback = recognition_settings.support_full_list_ocr_fallback;
@@ -363,25 +381,20 @@ fn start_automation_with_config(
     config.auto_capture_skill_use_probe = debug_settings.auto_capture_skill_use_probe;
     config.auto_capture_unrecognized_critical_chance =
         debug_settings.auto_capture_unrecognized_critical_chance;
-    config.prefer_higher_critical_chance = project
-        .as_ref()
-        .is_some_and(|project| project.prefer_higher_critical_chance);
+    config.prefer_higher_critical_chance = project.prefer_higher_critical_chance;
     let mystic_code_gender = app
         .state::<Mutex<AppUiSettings>>()
         .lock()
         .unwrap()
         .mystic_code_gender;
     let mystic_code_item_template =
-        resolve_mystic_code_item_template(&app, &config, mystic_code_gender);
+        resolve_mystic_code_item_template(app, &config, mystic_code_gender);
 
-    let team_check_targets = match project.as_ref() {
-        Some(project) => build_team_check_targets(
-            project,
-            resolve_servant_assets_dir(app).as_deref(),
-            resolve_ce_assets_dir(app).as_deref(),
-        )?,
-        None => return Err("未找到当前编队项目".into()),
-    };
+    let team_check_targets = build_team_check_targets(
+        &project,
+        resolve_servant_assets_dir(app).as_deref(),
+        resolve_ce_assets_dir(app).as_deref(),
+    )?;
     let mystic_code_name = config.mystic_code_id.and_then(|id| {
         crate::commands::catalog::get_mystic_codes(app.clone())
             .ok()?
@@ -389,12 +402,14 @@ fn start_automation_with_config(
             .find(|code| code.id == id)
             .map(|code| code.name)
     });
-    let team_verification = Arc::new(Mutex::new(TeamVerificationControl::default()));
+    let run_id = uuid::Uuid::new_v4();
+    let run = Arc::new(BattleRunHandle::new(
+        run_id,
+        RunnerState::Starting,
+        config.max_mission_runs,
+    ));
     let app = app.clone();
-    let state = Arc::new(Mutex::new(RunnerState::Starting));
-    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let stop_after_current = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let run_recorder = match BattleRunRecorder::start(&app, config.max_mission_runs) {
+    let run_recorder = match BattleRunRecorder::start(&app, config.max_mission_runs, run_id) {
         Ok(recorder) => Some(recorder),
         Err(err) => {
             eprintln!("[battle-statistics] {err}");
@@ -402,20 +417,20 @@ fn start_automation_with_config(
         }
     };
 
-    {
-        let mut handle = handle_state.lock().unwrap();
-        handle.team_verification = team_verification.clone();
-        handle.state = state.clone();
-        handle.cancel = cancel.clone();
-        handle.stop_after_current = stop_after_current.clone();
-    }
+    app.state::<Mutex<RunnerHandle>>()
+        .lock()
+        .unwrap()
+        .replace_current(run.clone(), started_by_mcp);
 
-    let debug_sidecar = debug_state.0.clone();
+    if started_by_mcp {
+        let _ = app.emit("mcp-battle-started", config.max_mission_runs);
+    }
+    let debug_sidecar = app.state::<debug::DebugSidecar>().0.clone();
     std::thread::spawn(move || {
         let _automation_lease = automation_lease;
         let _run_finish_guard = BattleRunFinishGuard {
             recorder: run_recorder.clone(),
-            state: state.clone(),
+            state: run.state.clone(),
         };
         let Some(AutomationSession {
             adb: adb_dev,
@@ -427,12 +442,12 @@ fn start_automation_with_config(
             server,
             selected_adb_serial,
             &debug::DebugSidecar(debug_sidecar.clone()),
-            &cancel,
+            &run.cancel,
             StartupFeedback {
                 scope: "runner",
-                progress: &|message| emit_automation_status(&app, &state, "", message),
-                failed: &|message| fail_automation_start(&app, &state, message),
-                cancelled: &|| stop_automation_start(&app, &state),
+                progress: &|message| emit_automation_status(&app, &run.state, "", message),
+                failed: &|message| fail_automation_start(&app, &run.state, message),
+                cancelled: &|| stop_automation_start(&app, &run.state),
             },
             |sidecar| {
                 sidecar
@@ -466,9 +481,9 @@ fn start_automation_with_config(
             advanced_mode,
             advanced_scenes,
             app,
-            state,
-            cancel,
-            stop_after_current,
+            run.state.clone(),
+            run.cancel.clone(),
+            run.stop_after_current.clone(),
             screen_size,
             frame_size,
             assets_dir,
@@ -477,14 +492,15 @@ fn start_automation_with_config(
             server,
             Some(debug_sidecar),
             run_recorder,
-            team_verification,
+            run.progress.clone(),
+            run.team_verification.clone(),
             team_check_targets,
             mystic_code_name,
         );
         runner.run();
     });
 
-    Ok(())
+    Ok(run_id.to_string())
 }
 
 #[tauri::command]
@@ -492,7 +508,8 @@ pub(crate) fn get_team_verification(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<Option<TeamVerificationReport>, String> {
     let handle = handle_state.lock().unwrap();
-    let report = handle.team_verification.lock().unwrap().report.clone();
+    let run = &handle.current;
+    let report = run.team_verification.lock().unwrap().report.clone();
     Ok(report)
 }
 
@@ -504,11 +521,11 @@ pub(crate) fn resolve_team_verification(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
-    if handle.cancel.load(Ordering::Relaxed) || *handle.state.lock().unwrap() != RunnerState::Paused
-    {
+    let run = &handle.current;
+    if run.cancel.load(Ordering::Relaxed) || *run.state.lock().unwrap() != RunnerState::Paused {
         return Err("当前没有待处理的编队检查".into());
     }
-    let result = handle
+    let result = run
         .team_verification
         .lock()
         .unwrap()
@@ -521,7 +538,8 @@ pub(crate) fn stop_automation(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
-    handle.cancel.store(true, Ordering::Relaxed);
+    let run = &handle.current;
+    run.cancel.store(true, Ordering::Relaxed);
     Ok(())
 }
 
@@ -530,7 +548,8 @@ pub(crate) fn stop_automation_after_current(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
-    handle.stop_after_current.store(true, Ordering::Relaxed);
+    let run = &handle.current;
+    run.stop_after_current.store(true, Ordering::Relaxed);
     Ok(())
 }
 
@@ -539,7 +558,8 @@ pub(crate) fn get_automation_status(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> RunnerState {
     let handle = handle_state.lock().unwrap();
-    let state = handle.state.lock().unwrap().clone();
+    let run = &handle.current;
+    let state = run.state.lock().unwrap().clone();
     state
 }
 

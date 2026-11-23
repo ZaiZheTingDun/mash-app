@@ -76,9 +76,10 @@ fn delayed_route_request_typed(
         // Timeout cases intentionally close the connection before the reply.
         let _ = stream.write_all(response.as_bytes());
     });
+    let route = format!("/capture/live/{route}");
     let result = match timeout {
-        Some(timeout) => client.request_with_timeout_typed(port, route, None, 4096, timeout),
-        None => client.request_typed(port, route, None, 4096),
+        Some(timeout) => client.request_with_timeout_typed(port, &route, None, 4096, timeout),
+        None => client.request_typed(port, &route, None, 4096),
     };
     server.join().unwrap();
     result

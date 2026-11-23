@@ -6,6 +6,7 @@ mod craft_essence_enhancement_runner;
 mod device_operation;
 mod enhancement_runner;
 mod formation_share;
+mod mcp;
 mod friend_point_summon_runner;
 mod models;
 mod operation_log;
@@ -97,6 +98,7 @@ pub fn run() {
             app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(FriendPointSummonRunnerHandle::new_idle()));
             app.manage(DeviceOperationCoordinator::default());
+            app.manage(mcp::McpServerState::default());
             app.manage(packet_capture::ResponseStore::default());
             app.manage(packet_capture::AuthorizationStore::default());
             app.manage(packet_capture::CaptureTargetStore::new(
@@ -112,9 +114,15 @@ pub fn run() {
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(commands::debug::DebugSidecar::new());
             app.manage(commands::rank_up_quest::RankUpQuestCaptureState::default());
+            app.manage(commands::interlude::InterludeCaptureState::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            mcp::get_mcp_server_status,
+            mcp::start_mcp_server,
+            mcp::set_mcp_battle_permission,
+            mcp::stop_mcp_server,
+            mcp::copy_mcp_client_config,
             commands::packet_capture::install_capture_certificate,
             commands::packet_capture::configure_packet_capture,
             commands::packet_capture::start_packet_capture,
@@ -208,7 +216,7 @@ pub fn run() {
             commands::projects::delete_project,
             commands::projects::delete_slot_servant,
             commands::adb::check_adb,
-            commands::adb::connect_adb_port,
+            commands::adb::connect_adb_device,
             commands::adb::get_selected_adb_device,
             commands::adb::refresh_adb_devices_with_previews,
             commands::adb::reset_bluestacks_adb_connection,
@@ -258,6 +266,8 @@ pub fn run() {
             commands::rank_up_quest::capture_rank_up_quest_page,
             commands::automation::start_rank_up_quest_automation,
             commands::automation::start_map_free_quest_automation,
+            commands::interlude::capture_interlude_page,
+            commands::automation::start_interlude_automation,
             commands::automation::stop_automation,
             commands::automation::stop_automation_after_current,
             commands::automation::get_automation_status,

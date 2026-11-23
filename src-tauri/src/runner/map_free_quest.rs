@@ -301,7 +301,7 @@ impl Runner {
     }
 
     pub(crate) fn complete_map_free_quest_run(&mut self) {
-        self.complete_quest_workflow_run();
+        self.record_quest_battle_completion();
         if let Some(runtime) = self.map_free_quest.as_mut() {
             if runtime.target_floor.is_some() {
                 runtime.rescan_floors = true;

@@ -601,6 +601,7 @@ interface StatusBarProps {
   battleDailyStatistics?: BattleDailyStatistics | null;
   battleRunStatusOpen?: boolean;
   onBattleRunStatusOpenChange?: (open: boolean) => void;
+  onStopBattle?: () => void;
   updateAvailable?: boolean;
   updateChecking?: boolean;
   updateInstalling?: boolean;
@@ -625,6 +626,7 @@ export function StatusBar({
   battleDailyStatistics = null,
   battleRunStatusOpen = false,
   onBattleRunStatusOpenChange,
+  onStopBattle,
   updateAvailable = false,
   updateChecking = false,
   updateInstalling = false,
@@ -642,10 +644,12 @@ export function StatusBar({
   const [deviceScanError, setDeviceScanError] = useState<string | null>(null);
   const [devicePreviews, setDevicePreviews] = useState<AdbDevicePreview[]>([]);
   const [selectingSerial, setSelectingSerial] = useState<string | null>(null);
-  const [manualPortOpen, setManualPortOpen] = useState(false);
+  const [manualDeviceOpen, setManualDeviceOpen] = useState(false);
+  const [manualHost, setManualHost] = useState("127.0.0.1");
   const [manualPort, setManualPort] = useState("5555");
-  const [manualPortBusy, setManualPortBusy] = useState(false);
-  const [manualPortError, setManualPortError] = useState<string | null>(null);
+  const [manualDeviceBusy, setManualDeviceBusy] = useState(false);
+  const [manualDeviceError, setManualDeviceError] = useState<string | null>(null);
+  const manualDeviceDismissedRef = useRef(false);
   const [server, setServer] = useState<Server>("JP");
   // The server selector must be locked while the runner is mid-run: the
   // sidecar already pinned templates / OCR for the previous server when
@@ -785,7 +789,6 @@ export function StatusBar({
   }, [pollAdb]);
 
   const refreshDevicePreviews = useCallback((refresh = false) => {
-    setDeviceDialogOpen(true);
     setDeviceScanState("loading");
     setDeviceScanError(null);
     setDevicePreviews([]);
@@ -822,22 +825,27 @@ export function StatusBar({
       .finally(() => setSelectingSerial(null));
   }, []);
 
+  const handleManualDeviceOpenChange = useCallback((open: boolean) => {
+    if (!open) manualDeviceDismissedRef.current = true;
+    setManualDeviceOpen(open);
+  }, []);
+
   const handleManualAddDevice = useCallback(() => {
-    const port = Number.parseInt(manualPort.trim(), 10);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      setManualPortError("请输入 1-65535 之间的端口号");
-      return;
-    }
-    setManualPortBusy(true);
-    setManualPortError(null);
-    invoke<string>("connect_adb_port", { port })
+    if (manualDeviceBusy) return;
+    manualDeviceDismissedRef.current = false;
+    setManualDeviceBusy(true);
+    setManualDeviceError(null);
+    invoke<string>("connect_adb_device", { host: manualHost, port: manualPort })
       .then(() => {
-        setManualPortOpen(false);
-        refreshDevicePreviews(false);
+        if (manualDeviceDismissedRef.current) return;
+        setManualDeviceOpen(false);
+        refreshDevicePreviews();
       })
-      .catch((err) => setManualPortError(String(err)))
-      .finally(() => setManualPortBusy(false));
-  }, [manualPort, refreshDevicePreviews]);
+      .catch((err) => {
+        if (!manualDeviceDismissedRef.current) setManualDeviceError(String(err));
+      })
+      .finally(() => setManualDeviceBusy(false));
+  }, [manualDeviceBusy, manualHost, manualPort, refreshDevicePreviews]);
 
   const handleResetAdb = useCallback(() => {
     setResettingAdb(true);
@@ -919,10 +927,10 @@ export function StatusBar({
                 size="1"
                 variant="soft"
                 color="gray"
-                disabled={deviceScanState === "loading" || selectingSerial != null || manualPortBusy}
+                disabled={deviceScanState === "loading" || selectingSerial != null || manualDeviceBusy}
                 onClick={() => {
-                  setManualPortOpen(true);
-                  setManualPortError(null);
+                  setManualDeviceOpen(true);
+                  setManualDeviceError(null);
                 }}
               >
                 <Link2Icon width={14} height={14} />
@@ -1001,42 +1009,56 @@ export function StatusBar({
         </Dialog.Content>
       </Dialog.Root>
 
-      <Dialog.Root open={manualPortOpen} onOpenChange={setManualPortOpen}>
-        <Dialog.Content maxWidth="360px" className="adb-manual-port-dialog">
+      <Dialog.Root open={manualDeviceOpen} onOpenChange={handleManualDeviceOpenChange}>
+        <Dialog.Content maxWidth="360px">
           <Dialog.Title>手动添加 ADB 设备</Dialog.Title>
           <Dialog.Description size="2" color="gray">
-            输入 127.0.0.1 的 ADB 端口号。
+            输入设备的 IP 地址或主机名及 ADB 端口。
           </Dialog.Description>
-          <Flex align="center" gap="2" mt="3">
-            <Text size="2" color="gray">127.0.0.1:</Text>
-            <TextField.Root
-              size="2"
-              value={manualPort}
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="5555"
-              disabled={manualPortBusy}
-              autoFocus
-              onChange={(event) => setManualPort(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") handleManualAddDevice();
-              }}
-            />
-          </Flex>
-          {manualPortError && (
-            <Text size="1" color="red" as="p" mt="2">{manualPortError}</Text>
-          )}
-          <Flex justify="end" gap="2" mt="4">
-            <Dialog.Close>
-              <Button size="2" variant="soft" color="gray" disabled={manualPortBusy}>
-                取消
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            handleManualAddDevice();
+          }}>
+            <Flex gap="2" mt="3">
+              <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
+                <Text as="label" htmlFor="manual-adb-host" size="2">地址</Text>
+                <TextField.Root
+                  id="manual-adb-host"
+                  size="2"
+                  value={manualHost}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  disabled={manualDeviceBusy}
+                  onChange={(event) => setManualHost(event.target.value)}
+                />
+              </Flex>
+              <Flex direction="column" gap="1" width="88px" flexShrink="0">
+                <Text as="label" htmlFor="manual-adb-port" size="2">端口</Text>
+                <TextField.Root
+                  id="manual-adb-port"
+                  size="2"
+                  value={manualPort}
+                  inputMode="numeric"
+                  disabled={manualDeviceBusy}
+                  onChange={(event) => setManualPort(event.target.value)}
+                />
+              </Flex>
+            </Flex>
+            {manualDeviceError && (
+              <Text size="1" color="red" as="p" mt="2" role="alert">{manualDeviceError}</Text>
+            )}
+            <Flex justify="end" gap="2" mt="4">
+              <Dialog.Close>
+                <Button type="button" size="2" variant="soft" color="gray">
+                  {manualDeviceBusy ? "关闭" : "取消"}
+                </Button>
+              </Dialog.Close>
+              <Button type="submit" size="2" disabled={manualDeviceBusy}>
+                {manualDeviceBusy ? <Spinner size="1" /> : null}
+                添加
               </Button>
-            </Dialog.Close>
-            <Button size="2" disabled={manualPortBusy} onClick={handleManualAddDevice}>
-              {manualPortBusy ? <Spinner size="1" /> : null}
-              添加
-            </Button>
-          </Flex>
+            </Flex>
+          </form>
         </Dialog.Content>
       </Dialog.Root>
 
@@ -1100,6 +1122,7 @@ export function StatusBar({
         <BattleRunStatusPanel
           status={battleRunStatus}
           dailyStatistics={battleDailyStatistics}
+          onStop={onStopBattle}
           onClose={() => onBattleRunStatusOpenChange?.(false)}
         />
       )}
@@ -1247,7 +1270,10 @@ export function StatusBar({
                   size="1"
                   variant="soft"
                   disabled={deviceScanState === "loading"}
-                  onClick={() => refreshDevicePreviews(false)}
+                  onClick={() => {
+                    setDeviceDialogOpen(true);
+                    refreshDevicePreviews();
+                  }}
                 >
                   {deviceScanState === "loading" ? <Spinner size="1" /> : <DesktopIcon width={14} height={14} />}
                   选择设备

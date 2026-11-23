@@ -4,6 +4,7 @@ use super::*;
 
 const AP_RECOVERY_CLOSE_POLL: Duration = Duration::from_millis(300);
 const AP_RECOVERY_CLOSE_TIMEOUT: Duration = Duration::from_secs(6);
+const AP_RECOVERY_SCROLL_SETTLE: Duration = Duration::from_millis(500);
 pub(crate) const AP_RECOVERY_TAP_SETTLE: Duration = Duration::from_millis(500);
 
 pub(crate) fn ap_recovery_confirm_wait_duration(wait_ms: u32) -> Duration {
@@ -348,7 +349,7 @@ impl Runner {
         ) {
             return Ok(());
         }
-        thread::sleep(ACTION_DELAY);
+        thread::sleep(AP_RECOVERY_SCROLL_SETTLE);
 
         for item in bottom_items {
             match self.find_ap_recovery_item(item).recoverable()? {

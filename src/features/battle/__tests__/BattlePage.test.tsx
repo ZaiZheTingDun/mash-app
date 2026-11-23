@@ -2,13 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type Event } from "@tauri-apps/api/event";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { BattlePage } from "../BattlePage";
 import type { Project } from "../../../types/project";
 import type { GrandClassDefinition } from "../../../types/project";
-import type { BattleRunStatus } from "../../../types/battleRunStatus";
+import { EMPTY_AP_RECOVERY_USAGE, type BattleRunStatus } from "../../../types/battleRunStatus";
 
 const GRAND_CLASS_DEFINITIONS: GrandClassDefinition[] = [
   {
@@ -110,7 +109,14 @@ function renderBattlePage(
     onLogEntry: vi.fn(),
   };
 
+  let finishRun: (phase?: "stopped" | "finished" | "error") => void;
   function Harness({ server }: { server: "CN" | "JP" }) {
+    const [runStatus, setRunStatus] = useState(battleRunStatus);
+    useEffect(() => {
+      finishRun = (phase = "stopped") => {
+        setRunStatus((status) => status && { ...status, phase, endedAtMs: Date.now() });
+      };
+    }, []);
     const [projects, setProjects] = useState<Project[]>([initialProject]);
     const [activeProjectId, setActiveProjectId] = useState<string | null>(initialProject.id);
     const handleUpdateProject = async (project: Project) => {
@@ -145,15 +151,30 @@ function renderBattlePage(
         onOpenProjectSettings={callbacks.onOpenProjectSettings}
         onUpdateProject={handleUpdateProject}
         onBack={callbacks.onBack}
-        onAutomationStart={callbacks.onAutomationStart}
+        onAutomationStart={(maxRuns) => {
+          callbacks.onAutomationStart(maxRuns);
+          setRunStatus({
+            phase: "starting",
+            startedAtMs: Date.now(),
+            endedAtMs: null,
+            lastCompletedAtMs: null,
+            completedRuns: 0,
+            maxRuns,
+            apRecoveryUsage: EMPTY_AP_RECOVERY_USAGE,
+          });
+        }}
         onLogEntry={callbacks.onLogEntry}
-        battleRunStatus={battleRunStatus}
+        battleRunStatus={runStatus}
       />
     );
   }
 
   const view = renderWithTheme(<Harness server="CN" />);
-  return { ...callbacks, switchToJp: () => view.rerender(<Harness server="JP" />) };
+  return {
+    ...callbacks,
+    switchToJp: () => view.rerender(<Harness server="JP" />),
+    finishRun: (phase?: "stopped" | "finished" | "error") => finishRun(phase),
+  };
 }
 
 describe("BattlePage", () => {
@@ -270,32 +291,17 @@ describe("BattlePage", () => {
     expect(callbacks.onAutomationStart).toHaveBeenCalledTimes(1);
   });
 
-  it("recovers the start button when startup fails through the status event", async () => {
-    let automationHandler: ((event: Event<{ status: "error" }>) => void) | null = null;
-    vi.mocked(listen).mockImplementationOnce(async (event, handler) => {
-      if (event === "automation-status") {
-        automationHandler = handler as (event: Event<{ status: "error" }>) => void;
-      }
-      return () => {};
-    });
+  it("recovers the start button when shared status reports a startup error", async () => {
     const user = userEvent.setup();
     mockProjectCommands();
-    renderBattlePage(PROJECT);
+    const { finishRun } = renderBattlePage(PROJECT);
 
     await user.click(await screen.findByRole("button", { name: "开始任务" }));
     expect(screen.getByRole("button", { name: "停止任务" })).toBeEnabled();
 
-    act(() => {
-      automationHandler?.({
-        event: "automation-status",
-        id: 0,
-        payload: { status: "error" },
-      } as Event<{ status: "error" }>);
-    });
+    act(() => finishRun("error"));
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "开始任务" })).toBeEnabled();
-    });
+    expect(screen.getByRole("button", { name: "开始任务" })).toBeEnabled();
   });
 
   it("passes support score, skill, and NP requirements to automation", async () => {
@@ -537,8 +543,7 @@ describe("BattlePage", () => {
     });
   });
 
-  it("shows run progress in the count control and footer while running", async () => {
-    const user = userEvent.setup();
+  it("shows run progress in the count control and footer while running", () => {
     mockProjectCommands();
     renderBattlePage(
       {
@@ -558,8 +563,6 @@ describe("BattlePage", () => {
         apRecoveryUsage: { gold: 0, silver: 0, bronze: 0, copper: 0, rainbow: 0 },
       },
     );
-
-    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     expect(screen.queryByRole("spinbutton", { name: "重复次数" })).not.toBeInTheDocument();
     expect(screen.getByText("1/10")).toBeInTheDocument();
@@ -756,7 +759,7 @@ describe("BattlePage", () => {
       }
       return null;
     });
-    renderBattlePage(PROJECT);
+    const { finishRun } = renderBattlePage(PROJECT);
 
     expect(screen.queryByRole("button", { name: "运行完当前轮次后停止" })).not.toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "开始任务" }));
@@ -774,6 +777,7 @@ describe("BattlePage", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "停止任务" }));
+    act(() => finishRun());
     await screen.findByRole("button", { name: "开始任务" });
     expect(screen.queryByRole("button", { name: "本轮结束后将停止" })).not.toBeInTheDocument();
 
@@ -782,29 +786,20 @@ describe("BattlePage", () => {
   });
 
   it("hides the selected stop-after-current action when the task completes", async () => {
-    let automationHandler: ((event: Event<{ status: "finished" }>) => void) | null = null;
-    vi.mocked(listen).mockImplementationOnce(async (event, handler) => {
-      if (event === "automation-status") {
-        automationHandler = handler as (event: Event<{ status: "finished" }>) => void;
-      }
-      return () => {};
-    });
     mockProjectCommands();
     const user = userEvent.setup();
-    renderBattlePage(PROJECT);
+    const { finishRun } = renderBattlePage(PROJECT);
     await user.click(screen.getByRole("button", { name: "开始任务" }));
     await user.click(screen.getByRole("button", { name: "运行完当前轮次后停止" }));
     await screen.findByRole("button", { name: "本轮结束后将停止" });
 
-    act(() => {
-      automationHandler?.({ event: "automation-status", id: 0, payload: { status: "finished" } });
-    });
+    act(() => finishRun("finished"));
 
     expect(screen.getByRole("button", { name: "开始任务" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "本轮结束后将停止" })).not.toBeInTheDocument();
   });
 
-  it("marks automation stopped immediately when stop is requested", async () => {
+  it("keeps the task active until the backend confirms the stop", async () => {
     const user = userEvent.setup();
     mockProjectCommands();
     const callbacks = renderBattlePage(PROJECT);
@@ -815,7 +810,7 @@ describe("BattlePage", () => {
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("stop_automation");
       expect(callbacks.onLogEntry).toHaveBeenCalledWith("已请求停止自动化");
-      expect(screen.getByRole("button", { name: "返回" })).not.toBeDisabled();
+      expect(screen.getByRole("button", { name: "返回" })).toBeDisabled();
     });
   });
 });

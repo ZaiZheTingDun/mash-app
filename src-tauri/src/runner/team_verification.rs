@@ -49,17 +49,24 @@ pub struct TeamVerificationControl {
 
 impl Default for TeamVerificationControl {
     fn default() -> Self {
+        Self::new(uuid::Uuid::new_v4())
+    }
+}
+
+impl TeamVerificationControl {
+    pub(crate) fn new(run_id: uuid::Uuid) -> Self {
         Self {
-            run_id: uuid::Uuid::new_v4().to_string(),
+            run_id: run_id.to_string(),
             check_id: 0,
             report: None,
             decision: None,
             skipped: false,
         }
     }
-}
+    pub(crate) fn run_id(&self) -> &str {
+        &self.run_id
+    }
 
-impl TeamVerificationControl {
     fn block(&mut self, issues: Vec<TeamCheckIssue>) -> TeamVerificationReport {
         self.check_id += 1;
         self.decision = None;

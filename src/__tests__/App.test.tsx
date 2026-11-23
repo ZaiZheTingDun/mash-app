@@ -512,6 +512,11 @@ describe("App active project restore", () => {
   });
 
   it("preserves running controls and stop-after-round when returning from settings", async () => {
+    const handlers = new Set<Parameters<typeof listen>[1]>();
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "automation-status") handlers.add(handler);
+      return () => { handlers.delete(handler); };
+    });
     installAppMock("project-1", { battleStartPanel: "none" });
     const user = userEvent.setup();
     renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
@@ -533,6 +538,13 @@ describe("App active project restore", () => {
     await user.click(stopButton);
     expect(invoke).toHaveBeenCalledWith("stop_automation");
     expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "start_automation")).toHaveLength(1);
+    expect(stopButton).toBeEnabled();
+    await act(async () => {
+      for (const handler of handlers) handler({
+        event: "automation-status", id: 0,
+        payload: { status: "idle", state: "Idle", currentScreen: "Unknown", message: "任务结束" },
+      });
+    });
     expect(screen.getByRole("button", { name: "开始任务" })).toBeEnabled();
   });
 
@@ -603,6 +615,76 @@ describe("App active project restore", () => {
     expect(
       screen.queryByRole("button", { name: "关闭操作日志" })
     ).not.toBeInTheDocument();
+  });
+
+  it.each([[12, "0 次 / 12 次"], [null, "0 次"]] as const)("shows the MCP battle run count for %s", async (maxRuns, text) => {
+    let onMcpBattleStart: Parameters<typeof listen>[1] | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "mcp-battle-started") onMcpBattleStart = handler;
+      return () => {};
+    });
+    installAppMock("project-1", { battleStartPanel: "runStatus" });
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+
+    expect(onMcpBattleStart).toBeDefined();
+    await act(async () => onMcpBattleStart?.({ event: "mcp-battle-started", id: 0, payload: maxRuns }));
+
+    expect(screen.getByRole("button", { name: "关闭运行状态" })).toBeVisible();
+    expect(screen.getByText(text)).toBeVisible();
+  });
+
+  it("stops an MCP battle from the shared status panel", async () => {
+    let onMcpBattleStart: Parameters<typeof listen>[1] | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "mcp-battle-started") onMcpBattleStart = handler;
+      return () => {};
+    });
+    installAppMock("project-1", { battleStartPanel: "runStatus" });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+
+    await act(async () => onMcpBattleStart?.({ event: "mcp-battle-started", id: 0, payload: null }));
+    await user.click(screen.getByRole("button", { name: "停止战斗" }));
+
+    expect(invoke).toHaveBeenCalledWith("stop_automation");
+    expect(invoke).not.toHaveBeenCalledWith("start_automation", expect.anything());
+  });
+
+  it("keeps the project selected while an external project refresh is pending", async () => {
+    let onExternalProjectsUpdated: Parameters<typeof listen>[1] | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "external-projects-updated") onExternalProjectsUpdated = handler;
+      return () => {};
+    });
+    installAppMock("project-1");
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+
+    const mock = vi.mocked(invoke).getMockImplementation()!;
+    let finishRefresh: (list: Project[]) => void = () => {};
+    const refreshedProjects = new Promise<Project[]>((resolve) => { finishRefresh = resolve; });
+    vi.mocked(invoke).mockImplementation(((command, args) =>
+      command === "list_projects" ? refreshedProjects : mock(command, args)
+    ) as typeof invoke);
+    await act(async () => onExternalProjectsUpdated?.({
+      event: "external-projects-updated", id: 0, payload: null,
+    }));
+    await user.click(screen.getByRole("button", { name: "第一套" }));
+    await user.type(screen.getByRole("textbox", { name: "搜索队伍" }), "第二");
+    await user.click(screen.getByRole("button", { name: /第二套/ }));
+
+    await act(async () => finishRefresh([
+      ...projects,
+      { id: "project-3", name: "MCP 编队", slots: createInitialProjectSlots() },
+    ]));
+
+    expect(screen.getByRole("button", { name: "第二套" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "第二套" }));
+    await user.clear(screen.getByRole("textbox", { name: "搜索队伍" }));
+    expect(screen.getByRole("button", { name: /MCP 编队/ })).toBeVisible();
   });
 
   it("keeps both bottom panels collapsed when battle automation starts with no popup", async () => {
@@ -757,6 +839,26 @@ describe("App active project restore", () => {
     await screen.findByRole("button", { name: "日服" });
     expect(screen.getByRole("button", { name: "开始强化任务" })).toBeEnabled();
     expect(screen.getByRole("radio", { name: "按顺序完成所有强化任务" })).toBeChecked();
+  });
+
+  it.each(["日服", "国服"])("opens Interlude automation from the %s battle menu", async (server) => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+    if (server === "国服") {
+      await user.click(screen.getByRole("button", { name: "日服" }));
+      await screen.findByRole("button", { name: "国服" });
+    }
+    await user.click(screen.getByRole("button", { name: "主页" }));
+    await user.click(screen.getByRole("button", { name: "战斗" }));
+    await user.click(screen.getByRole("button", { name: "幕间物语" }));
+    expect(screen.getByRole("heading", { name: "幕间物语" })).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "按顺序完成所有幕间物语" }));
+    await user.click(screen.getByRole("button", { name: "开始幕间物语" }));
+    expect(invoke).toHaveBeenCalledWith("start_interlude_automation", expect.objectContaining({
+      workflow: { mode: "all", captureId: null, candidateId: null },
+    }));
   });
 
   it("keeps the current server and rank-up workflow when the server switch is rejected", async () => {

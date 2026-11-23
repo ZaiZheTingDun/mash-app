@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::commands::settings::NoblePhantasmDetectionMode;
-use crate::SupportClassFilterMode;
+use crate::{ProjectRepeatMode, SupportClassFilterMode};
 
 // ---------------------------------------------------------------------------
 // Configuration (received from frontend)
@@ -67,6 +67,12 @@ impl RankUpQuestWorkflowConfig {
             target: Some(target),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum InterludeWorkflowConfig {
+    All,
+    Single(crate::screen::InterludeIdentity),
 }
 
 #[derive(Debug, Clone)]
@@ -144,7 +150,7 @@ impl BattleRunApRecoveryUsage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BattleRunProgressEvent {
     pub completed_runs: u32,
@@ -158,6 +164,8 @@ pub struct RunConfig {
     pub project_id: String,
     #[serde(skip)]
     pub quest_workflow: Option<QuestWorkflowConfig>,
+    #[serde(skip)]
+    pub interlude: Option<InterludeWorkflowConfig>,
     /// Mystic Code selected for this team. When present, TeamConfirm checks
     /// the outfit icon in the lower-left corner before starting the quest.
     #[serde(default)]
@@ -331,6 +339,122 @@ pub struct RunConfig {
     /// Maximum uses per recovery item for this run. `None` means unlimited.
     #[serde(default)]
     pub ap_recovery_limits: ApRecoveryLimits,
+}
+
+impl RunConfig {
+    pub(crate) fn from_project(project: &crate::Project) -> Self {
+        let support = project
+            .slots
+            .iter()
+            .enumerate()
+            .find(|(_, slot)| slot.kind == "support");
+        let support_slot = support.map(|(_, slot)| slot);
+        let recognition = project.recognition_settings.unwrap_or_default();
+        let stop_on_five_star_ce_drop = recognition.stop_on_five_star_ce_drop == Some(true);
+        let (repeat_mission, max_mission_runs) = match project.repeat_mode.as_ref() {
+            Some(ProjectRepeatMode::Infinite) => (true, None),
+            Some(ProjectRepeatMode::Count) => {
+                (false, project.repeat_count.filter(|count| *count > 0))
+            }
+            _ => (false, None),
+        };
+        let limits = project.ap_recovery_limits;
+        let positive = |limit: Option<u32>| limit.filter(|value| *value > 0);
+        Self {
+            project_id: project.id.clone(),
+            quest_workflow: None,
+            interlude: None,
+            mystic_code_id: project.mystic_code_id,
+            party_order: None,
+            support_class_filter: None,
+            support_class_filter_mode: Default::default(),
+            support_servant_name: None,
+            support_servant_id: project.support_servant_id,
+            support_servant_variant_key: project.support_servant_variant_key.clone(),
+            support_slot_index: support.map(|(index, _)| index as u32),
+            support_member_id: support_slot.map(|slot| slot.id.clone()),
+            support_craft_essence_id: support_slot.and_then(|slot| slot.craft_essence_id),
+            support_craft_essence_ids: support_slot
+                .map(|slot| slot.craft_essence_ids.clone())
+                .unwrap_or_default(),
+            support_craft_essence_mlb_required: support_slot
+                .is_none_or(|slot| slot.craft_essence_mlb_required),
+            support_grand_mode: project.support_grand_mode,
+            support_grand_craft_essence_ids: project.support_grand_craft_essence_ids,
+            support_grand_craft_essence_id_lists: project
+                .support_grand_craft_essence_id_lists
+                .clone(),
+            support_grand_craft_essence_mlb_required: project
+                .support_grand_craft_essence_mlb_required,
+            support_grand_bond_ce_mode: match project.support_grand_bond_ce_mode {
+                crate::SupportGrandBondCeMode::Any => SupportGrandBondCeMode::Any,
+                crate::SupportGrandBondCeMode::Bond => SupportGrandBondCeMode::Bond,
+                crate::SupportGrandBondCeMode::BondNp => SupportGrandBondCeMode::BondNp,
+            },
+            grand_servants: project.grand_servants.clone(),
+            grand_class: project.grand_class,
+            grand_card_strategy: project.grand_card_strategy.clone(),
+            support_servant_level_min: project.support_servant_level_min,
+            support_noble_phantasm_level_min: project.support_noble_phantasm_level_min,
+            support_star_map_score_min: project.support_star_map_score_min,
+            support_grand_star_map_score_min: project.support_grand_star_map_score_min,
+            support_skill_level_mins: project.support_skill_level_mins,
+            support_append_skill_level_mins: project.support_append_skill_level_mins,
+            servant_selections: project
+                .slots
+                .iter()
+                .enumerate()
+                .filter(|(_, slot)| slot.kind == "servant")
+                .filter_map(|(index, slot)| {
+                    Some(ServantSlotConfig {
+                        member_id: Some(slot.id.clone()),
+                        slot_index: index as u32,
+                        servant_id: slot.servant_id?,
+                    })
+                })
+                .collect(),
+            max_support_scrolls: 3,
+            repeat_mission,
+            max_mission_runs,
+            ap_recovery_items: project.ap_recovery_items.clone(),
+            ap_recovery_limits: ApRecoveryLimits {
+                rainbow: positive(limits.rainbow),
+                gold: positive(limits.gold),
+                silver: positive(limits.silver),
+                bronze: positive(limits.bronze),
+                copper: positive(limits.copper),
+            },
+            stop_on_five_star_ce_drop,
+            five_star_ce_drop_target_count: if stop_on_five_star_ce_drop {
+                recognition
+                    .five_star_ce_drop_target_count
+                    .unwrap_or(1)
+                    .max(1)
+            } else {
+                1
+            },
+            prefer_higher_critical_chance: false,
+            // App and project recognition settings are applied at runner startup.
+            enable_extra_class_filter: true,
+            support_full_list_ocr_fallback: false,
+            support_ce_threshold: default_support_ce_threshold(),
+            support_ce_full_gate_threshold: default_support_ce_full_gate_threshold(),
+            support_mlb_icon_threshold: default_support_icon_threshold(),
+            support_bond_icon_threshold: default_support_icon_threshold(),
+            noble_phantasm_detection_mode: Default::default(),
+            stop_on_bond_level_up: false,
+            stop_on_bond_max_level: false,
+            auto_capture_bond_level_up: false,
+            verify_skill_activation: false,
+            unknown_screen_timeout_count: default_unknown_screen_timeout_count(),
+            ap_recovery_confirm_wait_ms: default_ap_recovery_confirm_wait_ms(),
+            auto_capture_battle_result_loot: false,
+            auto_capture_battle_before_attack: false,
+            auto_friend_request: false,
+            auto_capture_skill_use_probe: false,
+            auto_capture_unrecognized_critical_chance: false,
+        }
+    }
 }
 
 fn default_support_skill_level_mins() -> [Option<u32>; 3] {
@@ -578,21 +702,52 @@ pub enum AttackLogPickKind {
     Card,
 }
 
-/// Handle stored in Tauri managed state to control / observe the runner.
+/// State and controls shared with a single battle worker.
+pub(crate) struct BattleRunHandle {
+    pub(crate) team_verification: Arc<Mutex<TeamVerificationControl>>,
+    pub(crate) state: Arc<Mutex<RunnerState>>,
+    pub(crate) cancel: Arc<AtomicBool>,
+    pub(crate) stop_after_current: Arc<AtomicBool>,
+    pub(crate) progress: Arc<Mutex<BattleRunProgressEvent>>,
+}
+
+impl BattleRunHandle {
+    pub(crate) fn new(run_id: uuid::Uuid, state: RunnerState, max_runs: Option<u32>) -> Self {
+        Self {
+            team_verification: Arc::new(Mutex::new(TeamVerificationControl::new(run_id))),
+            state: Arc::new(Mutex::new(state)),
+            cancel: Arc::new(AtomicBool::new(false)),
+            stop_after_current: Arc::new(AtomicBool::new(false)),
+            progress: Arc::new(Mutex::new(BattleRunProgressEvent {
+                max_runs,
+                ..Default::default()
+            })),
+        }
+    }
+}
+
+/// Battle handles retained in Tauri managed state for the app session.
 pub struct RunnerHandle {
-    pub team_verification: Arc<Mutex<TeamVerificationControl>>,
-    pub state: Arc<Mutex<RunnerState>>,
-    pub cancel: Arc<AtomicBool>,
-    pub stop_after_current: Arc<AtomicBool>,
+    pub(crate) current: Arc<BattleRunHandle>,
+    pub(crate) latest_mcp: Option<Arc<BattleRunHandle>>,
 }
 
 impl RunnerHandle {
     pub fn new_idle() -> Self {
         Self {
-            team_verification: Arc::new(Mutex::new(TeamVerificationControl::default())),
-            state: Arc::new(Mutex::new(RunnerState::Idle)),
-            cancel: Arc::new(AtomicBool::new(false)),
-            stop_after_current: Arc::new(AtomicBool::new(false)),
+            current: Arc::new(BattleRunHandle::new(
+                uuid::Uuid::new_v4(),
+                RunnerState::Idle,
+                None,
+            )),
+            latest_mcp: None,
         }
+    }
+
+    pub(crate) fn replace_current(&mut self, run: Arc<BattleRunHandle>, started_by_mcp: bool) {
+        if started_by_mcp {
+            self.latest_mcp = Some(run.clone());
+        }
+        self.current = run;
     }
 }
