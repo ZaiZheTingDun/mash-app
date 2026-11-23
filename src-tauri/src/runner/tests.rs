@@ -891,6 +891,10 @@ fn settlement_unknown_waits_then_dismisses_then_finishes() {
         quest_clear_notice_message("宝具获得强化"),
         Some("技能或宝具获得强化，前往下一画面")
     );
+    for title in ["技能  解放", "SKILL\nDELIVERANCE"] {
+        assert_eq!(quest_clear_notice_message(title), Some("技能解放，前往下一画面"));
+    }
+    assert_eq!(quest_clear_notice_message("解放"), None);
     assert_eq!(quest_clear_notice_message("获得强化"), None);
     assert_eq!(quest_clear_notice_message("羁绊点数"), None);
     let (message, point) = quest_clear_notice_action("「强化关卡 阿周那 2」\n已开放!")

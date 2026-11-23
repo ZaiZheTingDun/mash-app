@@ -39,6 +39,31 @@ impl ScrcpyTouchBackend {
 }
 
 impl TouchBackend for ScrcpyTouchBackend {
+    fn pinch_in(&mut self) -> Result<(), String> {
+        let (w, h) = self.control.size;
+        let mut events = gesture_events(
+            (w / 4, 3 * h / 4),
+            (9 * w / 20, 11 * h / 20),
+            (w, h),
+            (w, h),
+            450,
+            80,
+        )?;
+        let second: Vec<_> = events
+            .iter()
+            .cloned()
+            .map(|mut event| {
+                event.pointer_id = 1;
+                event.x = w - 1 - event.x;
+                event.y = h - 1 - event.y;
+                event
+            })
+            .collect();
+        events.extend(second);
+        events.sort_by_key(|event| event.at_ms);
+        self.control.send(&events)
+    }
+
     fn timing(&self) -> TouchTiming {
         TouchTiming::Streamed
     }
@@ -102,6 +127,7 @@ fn gesture_events(
     let from = project(from);
     let to = project(to);
     let event = |action, point: (u32, u32), at_ms| ScrcpyTouchEvent {
+        pointer_id: 0,
         action,
         x: point.0,
         y: point.1,

@@ -195,6 +195,9 @@ MAP_BADGE_ORANGE_HSV = ((0, 105, 145), (24, 255, 255))
 MAP_BADGE_RED_HSV = ((170, 105, 145), (179, 255, 255))
 MAP_BADGE_CLOSE_KERNEL = (3, 3)  # Join small gaps in badge contours.
 MAP_BADGE_MIN_AREA_RATIO, MAP_BADGE_MAX_AREA_RATIO = 0.00018, 0.0035
+MAP_BADGE_CORE_INSET = 0.2  # Exclude the white outline when looking for a digit.
+MAP_BADGE_DIGIT_MIN_CHANNEL = 180  # White strokes inside the orange circle.
+MAP_BADGE_DIGIT_MIN_FRACTION = 0.015
 MAP_BADGE_MIN_CIRCULARITY = 0.42
 MAP_BADGE_MIN_ASPECT, MAP_BADGE_MAX_ASPECT = 0.55, 1.45
 MAP_NODE_TAP_DX, MAP_NODE_TAP_DY = -0.45, 1.75  # Badge widths/heights from its top-left to the node.
@@ -2028,6 +2031,29 @@ def _map_frame_fingerprint(img: np.ndarray) -> str:
     return _binary_fingerprint(_crop_template(img, MAP_FINGERPRINT_REGION))
 
 
+# Centers of the nine Mictlan tabs, sampled on their text-free left edge.
+MICTLAN_TAB_X = 0.91
+MICTLAN_TOP_Y, MICTLAN_TAB_STEP = 0.18, 0.075
+MICTLAN_TAB_COUNT = 9
+MICTLAN_SIDEBAR_X = 0.88
+MICTLAN_BADGE_MIN_AREA_RATIO = 0.00012  # Distant badges shrink in perspective.
+QUEST_TITLE_X_RANGE = (0.59, 0.64)
+QUEST_TITLE_LABEL_GAP = (0.02, 0.075)  # Title sits immediately above the subtitle.
+
+
+def _mictlan_floor(img):
+    h, w = img.shape[:2]
+    tabs = [img[int(h * (MICTLAN_TOP_Y + i * MICTLAN_TAB_STEP)), int(w * MICTLAN_TAB_X)]
+            for i in range(MICTLAN_TAB_COUNT)]
+    hsv = cv2.cvtColor(np.uint8([tabs]), cv2.COLOR_BGR2HSV)[0]
+    active = [i for i, (hue, sat, val) in enumerate(hsv)
+              if hue <= 30 and sat >= 120 and val >= 140]
+    blue = sum(90 <= hue <= 115 and sat >= 120 and val >= 140 for hue, sat, val in hsv)
+    if len(active) == 1 and blue == MICTLAN_TAB_COUNT - 1:
+        return MICTLAN_TAB_COUNT - active[0]
+    return None
+
+
 def _find_map_red_dot_locations(img: np.ndarray) -> dict:
     """Find map-node notification badges while excluding fixed HUD badges."""
     h, w = img.shape[:2]
@@ -2035,6 +2061,9 @@ def _find_map_red_dot_locations(img: np.ndarray) -> dict:
     y0 = int(MAP_SAFE_REGION["y"] * h)
     x1 = int((MAP_SAFE_REGION["x"] + MAP_SAFE_REGION["w"]) * w)
     y1 = int((MAP_SAFE_REGION["y"] + MAP_SAFE_REGION["h"]) * h)
+    floor = _mictlan_floor(img)
+    if floor:
+        x1 = int(w * MICTLAN_SIDEBAR_X)
     crop = img[y0:y1, x0:x1]
     if crop.size == 0:
         return {"locations": [], "fingerprint": ""}
@@ -2053,7 +2082,7 @@ def _find_map_red_dot_locations(img: np.ndarray) -> dict:
     for contour in contours:
         area = float(cv2.contourArea(contour))
         area_ratio = area / frame_area
-        if not (MAP_BADGE_MIN_AREA_RATIO <= area_ratio <= MAP_BADGE_MAX_AREA_RATIO):
+        if not ((MICTLAN_BADGE_MIN_AREA_RATIO if floor else MAP_BADGE_MIN_AREA_RATIO) <= area_ratio <= MAP_BADGE_MAX_AREA_RATIO):
             continue
         perimeter = float(cv2.arcLength(contour, True))
         if perimeter <= 0:
@@ -2064,6 +2093,10 @@ def _find_map_red_dot_locations(img: np.ndarray) -> dict:
         bx, by, bw, bh = cv2.boundingRect(contour)
         aspect = bw / max(1.0, float(bh))
         if not MAP_BADGE_MIN_ASPECT <= aspect <= MAP_BADGE_MAX_ASPECT:
+            continue
+        dx, dy = int(bw * MAP_BADGE_CORE_INSET), int(bh * MAP_BADGE_CORE_INSET)
+        core = crop[by + dy:by + bh - dy, bx + dx:bx + bw - dx]
+        if (core.min(axis=2) > MAP_BADGE_DIGIT_MIN_CHANNEL).mean() < MAP_BADGE_DIGIT_MIN_FRACTION:
             continue
         abs_x, abs_y = x0 + bx, y0 + by
         badge = {
@@ -2081,11 +2114,13 @@ def _find_map_red_dot_locations(img: np.ndarray) -> dict:
         locations.append({
             "badgeRegion": badge,
             "tap": {"x": tap_x, "y": tap_y},
-            "signature": _binary_fingerprint(img[sy0:sy1, sx0:sx1]),
+            # Floor tabs always return to the same camera position.
+            "signature": (f"{floor}:{tap_x:.2f}:{tap_y:.2f}" if floor else
+                          _binary_fingerprint(img[sy0:sy1, sx0:sx1])),
             "score": min(1.0, circularity),
         })
     locations.sort(key=lambda item: (item["tap"]["y"], item["tap"]["x"]))
-    return {"locations": locations, "fingerprint": _map_frame_fingerprint(img)}
+    return {"floor": floor, "locations": locations, "fingerprint": _map_frame_fingerprint(img)}
 
 
 def _normalize_quest_label(text: str) -> str:
@@ -2180,6 +2215,9 @@ def _find_free_quest_rows(img: np.ndarray) -> dict:
             if glyph.size:
                 mean_luma = float(glyph.mean())
                 bright_fraction = float((glyph >= QUEST_PROGRESS_BRIGHT_LUMA).mean())
+        titles = [f["text"] for f in ocr.get("fragments", []) if
+                  QUEST_TITLE_X_RANGE[0] <= f["region"]["x"] <= QUEST_TITLE_X_RANGE[1]
+                  and QUEST_TITLE_LABEL_GAP[0] <= label_y - f["region"]["y"] <= QUEST_TITLE_LABEL_GAP[1]]
         unlit = _has_gray_infinity(sample, w)
         row_y = max(QUEST_ROW_VISIBLE_TOP, label_y - label_h * QUEST_ROW_TOP_OFFSET)
         row_h = min(QUEST_ROW_MAX_HEIGHT, max(QUEST_ROW_MIN_HEIGHT, label_h * QUEST_ROW_HEIGHT_SCALE))
@@ -2188,6 +2226,7 @@ def _find_free_quest_rows(img: np.ndarray) -> dict:
             "region": row,
             "tap": {"x": QUEST_ROW_TAP_X, "y": row["y"] + row["h"] * 0.5},
             "labelText": text,
+            "questTitle": titles[0] if len(titles) == 1 else "",
             "progressRegion": progress,
             "progressMeanLuma": mean_luma,
             "progressBrightFraction": bright_fraction,
@@ -2202,7 +2241,7 @@ def _find_free_quest_rows(img: np.ndarray) -> dict:
         distinct_rows.append(row)
     navigation = _quest_navigation_label(img)
     close = navigation in {"关闭", "關閉", "閉じる", "close"}
-    back = navigation in {"返回", "戻る", "back"}
+    back = navigation in {"管理室", "返回", "戻る", "back"}
     # Inside the confirmed detail panel the white scroll thumb spans the
     # track when all entries fit. Ignore the pointed caps at either end.
     track = _crop_template(img, QUEST_SCROLL_TRACK_REGION)

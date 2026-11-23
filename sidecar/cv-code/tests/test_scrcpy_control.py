@@ -224,3 +224,19 @@ def test_repl_reports_unavailable_control_and_preserves_request_id():
     assert result.returncode == 0
     response = json.loads(result.stdout.splitlines()[0])
     assert response == {"ok": False, "error": "stream not started", "id": 41}
+
+
+def test_pinch_tracks_both_contacts_on_the_wire(monkeypatch):
+    packets = []
+
+    class Socket:
+        def sendall(self, data):
+            packets.append(struct.unpack(">BBQiiHHHII", data))
+
+    monkeypatch.setattr(scrcpy_control.time, "sleep", lambda _: None)
+    events = [dict(event, pointerId=pointer, x=100-event["x"] if pointer else event["x"])
+              for event in gesture() for pointer in (0, 1)]
+    ScrcpyControl(Socket()).send(events, 100, 100)
+    assert [(p[1], p[2]) for p in packets] == [
+        (action, pointer) for action in (0, 2, 2, 1) for pointer in (0, 1)
+    ]

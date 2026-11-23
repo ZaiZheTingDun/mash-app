@@ -56,6 +56,11 @@ pub(crate) struct MapFreeQuestRuntime {
     pub(crate) phase: MapFreeQuestPhase,
     stage: MapScanStage,
     initial_view: bool,
+    target_floor: Option<u8>,
+    floor_polls: u8,
+    completed_titles: HashSet<String>,
+    active_title: Option<String>,
+    rescan_floors: bool,
     pending_move: Option<MapMove>,
     previous_fingerprint: Option<String>,
     recent_fingerprints: VecDeque<String>,
@@ -77,6 +82,11 @@ impl MapFreeQuestRuntime {
             phase: MapFreeQuestPhase::Scanning,
             stage: MapScanStage::SeekTop,
             initial_view: true,
+            target_floor: None,
+            floor_polls: 0,
+            completed_titles: HashSet::new(),
+            active_title: None,
+            rescan_floors: false,
             pending_move: None,
             previous_fingerprint: None,
             recent_fingerprints: VecDeque::new(),
@@ -195,6 +205,16 @@ impl MapFreeQuestRuntime {
         }
     }
 
+    fn next_floor(&mut self, floor: u8) -> Option<u8> {
+        if floor < 9 {
+            Some(floor + 1)
+        } else if std::mem::take(&mut self.rescan_floors) {
+            Some(1)
+        } else {
+            None
+        }
+    }
+
     fn can_open_location(&self, signature: &str) -> bool {
         (self.initial_view
             || matches!(self.stage, MapScanStage::Row(_) | MapScanStage::StepDown(_)))
@@ -213,7 +233,7 @@ impl MapFreeQuestRuntime {
         let moved = self
             .quest_list_previous_fingerprint
             .as_deref()
-            .is_some_and(|previous| previous != fingerprint);
+            .is_some_and(|previous| !map_fingerprints_match(previous, fingerprint));
         if let Some(pending) = self.quest_list_pending_move.take() {
             self.quest_list_swipes = self.quest_list_swipes.saturating_add(1);
             let boundary = !moved || self.quest_list_swipes >= MAX_MAP_SWIPES_PER_AXIS;
@@ -283,6 +303,12 @@ impl Runner {
     pub(crate) fn complete_map_free_quest_run(&mut self) {
         self.complete_quest_workflow_run();
         if let Some(runtime) = self.map_free_quest.as_mut() {
+            if runtime.target_floor.is_some() {
+                runtime.rescan_floors = true;
+            }
+            if let Some(title) = runtime.active_title.take() {
+                runtime.completed_titles.insert(title);
+            }
             if let Some(signature) = runtime.current_location_signature.take() {
                 // The same red-dot location may contain another uncompleted
                 // Free Quest. Let the scanner reopen it after returning.
@@ -345,7 +371,9 @@ impl Runner {
                     runtime.quest_list_seeking_top = false;
                     runtime.quest_list_at_bottom = true;
                 }
-                let eligible = result.rows.iter().find(|row| row.eligible);
+                let eligible = result.rows.iter().find(|row| {
+                    row.eligible && !runtime.completed_titles.contains(&row.quest_title)
+                });
                 if eligible.is_none() && runtime.quest_list_seeking_top {
                     runtime.quest_list_pending_move = Some(QuestListMove::SeekTop);
                     self.emit_debug("MapFreeQuest", "向地点关卡列表顶部滚动");
@@ -366,6 +394,9 @@ impl Runner {
                         &format!("进入未首通自由关卡：{}", row.label_text),
                     );
                     if self.tap_at("MapFreeQuest", row.tap) {
+                        if runtime.target_floor.is_some() && !row.quest_title.is_empty() {
+                            runtime.active_title = Some(row.quest_title.clone());
+                        }
                         runtime.phase = MapFreeQuestPhase::AwaitingDeparture;
                         self.map_free_quest = Some(runtime);
                         thread::sleep(ACTION_DELAY);
@@ -430,6 +461,20 @@ impl Runner {
                 return Ok(true);
             }
         };
+        let mut jump = None;
+        if runtime.target_floor.is_none() && map.floor.is_some() {
+            jump = Some(1);
+        } else if runtime.target_floor != map.floor {
+            runtime.floor_polls += 1;
+            if runtime.floor_polls >= LOCATION_OPEN_MAX_POLLS {
+                return Err("未能确认米克特兰目标楼层".into());
+            }
+            self.map_free_quest = Some(runtime);
+            thread::sleep(ACTION_DELAY);
+            return Ok(true);
+        } else {
+            runtime.floor_polls = 0;
+        }
         runtime.observe_motion(&map.fingerprint, map.stationary);
         if runtime.move_count >= MAX_MAP_SWIPES_PER_AXIS {
             return Err("地图拖动后持续无法确认位移或边界".into());
@@ -438,7 +483,7 @@ impl Runner {
         if let Some(location) = map
             .locations
             .iter()
-            .find(|location| runtime.can_open_location(&location.signature))
+            .find(|location| jump.is_none() && runtime.can_open_location(&location.signature))
         {
             runtime.visited_locations.insert(location.signature.clone());
             runtime.current_location_signature = Some(location.signature.clone());
@@ -454,6 +499,38 @@ impl Runner {
             }
         }
 
+        if let Some(floor) = map.floor {
+            if jump.is_none() {
+                jump = runtime.next_floor(floor);
+                if jump.is_none() {
+                    runtime.stage = MapScanStage::Finished;
+                    runtime.initial_view = false;
+                }
+            }
+        }
+        if let Some(floor) = jump {
+            runtime.target_floor = Some(floor);
+            runtime.visited_locations.clear();
+            self.emit("MapFreeQuest", &format!("定位米克特兰第 {floor} 层"));
+            self.tap_at(
+                "MapFreeQuest",
+                Point::new(0.93, 0.18 + f64::from(9 - floor) * 0.075),
+            );
+            self.map_free_quest = Some(runtime);
+            thread::sleep(ACTION_DELAY + Duration::from_secs(1));
+            return Ok(true);
+        }
+        if runtime.initial_view {
+            runtime.initial_view = false;
+            match self.touch.pinch_in() {
+                Ok(()) => self.emit("MapFreeQuest", "双指缩小地图"),
+                Err(error) => self.emit("MapFreeQuest", &format!("跳过地图缩放：{error}")),
+            }
+            self.map_free_quest = Some(runtime);
+            thread::sleep(ACTION_DELAY);
+            return Ok(true);
+        }
+
         let Some((movement, from, to)) = runtime.next_move() else {
             self.emit(
                 "MapFreeQuest",
@@ -467,7 +544,6 @@ impl Runner {
             return Ok(true);
         };
         runtime.pending_move = Some(movement);
-        runtime.initial_view = false;
         self.emit(
             "MapFreeQuest",
             match movement {
@@ -602,14 +678,23 @@ mod tests {
     }
 
     #[test]
+    fn floor_scan_revisits_unlocked_quests_after_a_clear() {
+        let mut runtime = MapFreeQuestRuntime::new();
+        assert_eq!(runtime.next_floor(8), Some(9));
+        runtime.rescan_floors = true;
+        assert_eq!(runtime.next_floor(9), Some(1));
+        assert_eq!(runtime.next_floor(9), None);
+    }
+
+    #[test]
     fn quest_list_seeks_top_then_stops_at_bottom() {
         let mut runtime = MapFreeQuestRuntime::new();
-        runtime.observe_quest_list("top");
+        runtime.observe_quest_list("0000000000000000");
         runtime.quest_list_pending_move = Some(QuestListMove::SeekTop);
-        runtime.observe_quest_list("top");
+        runtime.observe_quest_list("0000000000000001");
         assert!(!runtime.quest_list_seeking_top);
         runtime.quest_list_pending_move = Some(QuestListMove::Forward);
-        runtime.observe_quest_list("top");
+        runtime.observe_quest_list("0000000000000003");
         assert!(runtime.quest_list_at_bottom);
     }
 }

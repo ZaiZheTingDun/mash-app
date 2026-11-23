@@ -10,11 +10,11 @@ import struct
 import time
 
 
-def touch_packet(action: int, x: int, y: int, width: int, height: int) -> bytes:
+def touch_packet(action: int, x: int, y: int, width: int, height: int, pointer_id: int = 0) -> bytes:
     # type, action, pointer id, x/y, video width/height, pressure, buttons.
     # A nonnegative pointer id represents a finger (not scrcpy's mouse id -1).
     return struct.pack(
-        ">BBQiiHHHII", 2, action, 0, x, y, width, height,
+        ">BBQiiHHHII", 2, action, pointer_id, x, y, width, height,
         0 if action == 1 else 0xFFFF, 0, 0,
     )
 
@@ -24,6 +24,7 @@ def validate_events(events: list, width: int, height: int) -> None:
         raise ValueError("invalid scrcpy video dimensions")
     if not isinstance(events, list) or not 2 <= len(events) <= 604:
         raise ValueError("expected a complete scrcpy gesture")
+    active = set()
     previous = 0
     for index, event in enumerate(events):
         if not isinstance(event, dict):
@@ -31,18 +32,28 @@ def validate_events(events: list, width: int, height: int) -> None:
         action, x, y, at_ms = (event.get(key) for key in ("action", "x", "y", "atMs"))
         if any(type(value) is not int for value in (action, x, y, at_ms)):
             raise ValueError("touch event fields must be integers")
-        expected = 0 if index == 0 else 1 if index == len(events) - 1 else 2
-        if action != expected or not (0 <= x < width and 0 <= y < height):
+        pointer = event.get("pointerId", 0)
+        if type(pointer) is not int or pointer not in (0, 1):
+            raise ValueError("invalid scrcpy pointer")
+        if (action not in (0, 1, 2) or (action == 0) == (pointer in active)) or not (0 <= x < width and 0 <= y < height):
             raise ValueError("invalid scrcpy contact sequence or coordinates")
         if not previous <= at_ms <= 60_000 or (index == 0 and at_ms != 0):
             raise ValueError("invalid scrcpy touch schedule")
+        if action == 0:
+            active.add(pointer)
+        elif action == 1:
+            active.remove(pointer)
+            if not active and index != len(events) - 1:
+                raise ValueError("unexpected end of gesture")
         previous = at_ms
+    if active:
+        raise ValueError("incomplete gesture")
 
 
 class ScrcpyControl:
     def __init__(self, sock: socket.socket):
         self._sock = sock
-        self._pressed = None
+        self._pressed = {}
         self._failed = False
 
     def send(self, events: list, width: int, height: int) -> None:
@@ -57,13 +68,13 @@ class ScrcpyControl:
                 remaining = deadline - time.monotonic()
                 if remaining > 0:
                     time.sleep(remaining)
-                point = (event["x"], event["y"], width, height)
+                point = (event["x"], event["y"], width, height, event.get("pointerId", 0))
                 # Record before writing: a failing sendall may have sent DOWN.
                 if event["action"] != 1:
-                    self._pressed = point
+                    self._pressed[point[-1]] = point
                 self._sock.sendall(touch_packet(event["action"], *point))
                 if event["action"] == 1:
-                    self._pressed = None
+                    self._pressed.pop(point[-1])
                 # scrcpy timestamps events on receipt. Never burst overdue
                 # MOVE events or shorten the stationary tail after a host
                 # scheduling stall / slow write; let the gesture run longer.
@@ -76,12 +87,12 @@ class ScrcpyControl:
             self.release()
 
     def release(self) -> None:
-        if self._pressed is not None:
+        for point in list(self._pressed.values()):
             try:
-                self._sock.sendall(touch_packet(1, *self._pressed))
+                self._sock.sendall(touch_packet(1, *point))
             except OSError:
                 pass
-            self._pressed = None
+        self._pressed.clear()
 
     def close(self) -> None:
         self.release()

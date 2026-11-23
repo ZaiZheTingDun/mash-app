@@ -9,6 +9,15 @@ import pytest
 from mash_cv import cv
 
 
+def test_mictlan_detects_small_plain_badge_and_excludes_floor_tabs():
+    frame = cv2.imread(str(Path(__file__).parent / "test_data/screenshots/mictlan_floor_three.jpg"))
+    result = cv._find_map_red_dot_locations(frame)
+    assert result["floor"] == 3
+    assert all(node["badgeRegion"]["x"] < .88 for node in result["locations"])
+    assert any(.44 < node["tap"]["x"] < .46 and .39 < node["tap"]["y"] < .42
+               for node in result["locations"])
+
+
 def test_bright_map_routes_to_badges_and_detail_has_close_button(monkeypatch, request):
     monkeypatch.setattr(cv, "_current_server", "CN")
     monkeypatch.setattr(cv, "_ocr_engine", None)
@@ -44,6 +53,10 @@ def _map_frame(width=1920, height=1080):
     orange = (20, 120, 245)
     cv2.circle(image, (round(width * 0.35), round(height * 0.31)), round(height * 0.027), orange, -1)
     cv2.circle(image, (round(width * 0.70), round(height * 0.55)), round(height * 0.027), orange, -1)
+    for x, y in [(0.35, 0.31), (0.70, 0.55)]:
+        cv2.putText(image, "1", (round(width*x)-6, round(height*y)+8), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    # An orange patch without a digit is map scenery.
+    cv2.circle(image, (width//2, height//2), round(height*0.027), orange, -1)
     # Fixed-HUD notifications must not become map locations.
     cv2.circle(image, (round(width * 0.07), round(height * 0.15)), round(height * 0.027), orange, -1)
     cv2.circle(image, (round(width * 0.35), round(height * 0.91)), round(height * 0.027), orange, -1)

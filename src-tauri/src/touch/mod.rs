@@ -29,6 +29,10 @@ pub enum TouchTiming {
 /// motivation; implementors live in this module's submodules.
 pub trait TouchBackend: Send {
     /// Unknown backends retain conservative command-based waiting policies.
+    fn pinch_in(&mut self) -> Result<(), String> {
+        Err("当前触控后端不支持双指缩放".into())
+    }
+
     fn timing(&self) -> TouchTiming {
         TouchTiming::CommandBased
     }
@@ -115,6 +119,10 @@ impl HumanizedTouch {
 }
 
 impl TouchBackend for HumanizedTouch {
+    fn pinch_in(&mut self) -> Result<(), String> {
+        self.inner.pinch_in()
+    }
+
     fn timing(&self) -> TouchTiming {
         self.inner.timing()
     }

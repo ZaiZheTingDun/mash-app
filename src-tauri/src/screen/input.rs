@@ -8,6 +8,7 @@ use std::time::Duration;
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ScrcpyTouchEvent {
+    pub pointer_id: u8,
     pub action: u8,
     pub x: u32,
     pub y: u32,
@@ -98,6 +99,7 @@ mod tests {
     #[test]
     fn touch_event_fields_match_python_protocol() {
         let event = serde_json::to_value(ScrcpyTouchEvent {
+            pointer_id: 0,
             action: 2,
             x: 40,
             y: 80,
@@ -106,7 +108,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             event,
-            serde_json::json!({"action":2,"x":40,"y":80,"atMs":20})
+            serde_json::json!({"pointerId":0,"action":2,"x":40,"y":80,"atMs":20})
         );
     }
 }

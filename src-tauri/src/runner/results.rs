@@ -268,6 +268,9 @@ pub(crate) fn quest_clear_notice_action(text: &str) -> Option<(&'static str, Poi
     {
         return Some(("获得奖励，前往下一画面", BATTLE_RESULT_BOND_NEXT));
     }
+    if compact.contains("技能解放") || compact.to_ascii_uppercase().contains("SKILLDELIVERANCE") {
+        return Some(("技能解放，前往下一画面", BATTLE_RESULT_BOND_NEXT));
+    }
     if compact.contains("技能获得强化")
         || compact.contains("宝具获得强化")
         || compact.contains("技能强化")

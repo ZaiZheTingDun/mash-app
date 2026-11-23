@@ -200,6 +200,7 @@ pub struct MapRedDotLocation {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FindMapRedDotLocationsResult {
+    pub floor: Option<u8>,
     #[serde(default)]
     pub stationary: Option<bool>,
     #[serde(default)]
@@ -211,6 +212,8 @@ pub struct FindMapRedDotLocationsResult {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FreeQuestRow {
+    #[serde(default)]
+    pub quest_title: String,
     pub candidate_id: String,
     pub region: NormRect,
     pub tap: Point,
