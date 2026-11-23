@@ -10,6 +10,7 @@ use crate::commands::emulator;
 use crate::commands::settings::{save_adb_device_settings, AdbDeviceSettings};
 use crate::paths::app_data_dir;
 use crate::platform;
+use crate::Server;
 use std::collections::HashSet;
 use std::fs;
 use std::net::Ipv6Addr;
@@ -330,9 +331,12 @@ pub(crate) async fn refresh_adb_devices_with_previews(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     debug_state: tauri::State<'_, DebugSidecar>,
+    server_state: tauri::State<'_, Mutex<Server>>,
     refresh: Option<bool>,
 ) -> Result<Vec<AdbDevicePreview>, String> {
     let app_for_task = app.clone();
+    let debug_handle = debug_state.0.clone();
+    let server = *server_state.lock().unwrap();
     let snapshot = state.lock().unwrap().clone();
     let selected_serial = snapshot.selected_adb_serial;
     let selected_mumu_root = emulator::selected_mumu_installation(&app);
@@ -366,19 +370,19 @@ pub(crate) async fn refresh_adb_devices_with_previews(
         let selected = adb::Adb::select_ready_serial(&devices, selected_serial.as_deref())
             .ok()
             .flatten();
+        let debug_state = DebugSidecar(debug_handle);
         let mut previews = Vec::new();
         for device in devices {
-            let Some(preview_path) =
-                capture_device_preview(&app_for_task, &adb_path, &device.serial)
-            else {
-                continue;
-            };
+            let preview_path =
+                capture_device_preview(&app_for_task, &debug_state, server, &adb_path, &device.serial);
             previews.push(AdbDevicePreview {
                 selected: selected.as_deref() == Some(device.serial.as_str()),
                 selected_mumu: matching_mumu_serials.contains(&device.serial),
                 serial: device.serial,
                 description: device.description,
-                preview_path: preview_path.to_string_lossy().into_owned(),
+                preview_path: preview_path
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
             });
         }
         Ok::<_, String>((previews, selected))
@@ -530,6 +534,8 @@ fn stop_debug_stream(debug_state: &DebugSidecar) {
 
 fn capture_device_preview(
     app: &tauri::AppHandle,
+    debug_state: &DebugSidecar,
+    server: Server,
     adb_path: &Path,
     serial: &str,
 ) -> Option<PathBuf> {
@@ -539,7 +545,20 @@ fn capture_device_preview(
     if let Err(error) = device.bind_game_display_preview() {
         eprintln!("[adb] game preview unavailable, showing device screen: {error}");
     }
-    let png = device.screenshot_png().ok()?;
+    // `screencap` reads SurfaceFlinger, which hands back a black frame while a
+    // FLAG_SECURE layer (FGO) owns the screen. Falling back to the same capture
+    // path the battle loop uses keeps the picker usable with the game open.
+    let png = match device.screenshot_png() {
+        Ok(png) if !png_is_blank(&png) => png,
+        Ok(_) => {
+            eprintln!("[adb] screencap returned a blank frame, switching to the CV capture path");
+            capture_preview_via_sidecar(app, debug_state, server, &device)?
+        }
+        Err(error) => {
+            eprintln!("[adb] screencap failed ({error}), switching to the CV capture path");
+            capture_preview_via_sidecar(app, debug_state, server, &device)?
+        }
+    };
     let app_data = app_data_dir(app);
     let _ = app.asset_protocol_scope().allow_directory(&app_data, true);
     let dir = app_data.join("adb-device-previews");
@@ -553,6 +572,86 @@ fn capture_device_preview(
     let path = dir.join(filename);
     fs::write(&path, &png).ok()?;
     Some(path)
+}
+
+/// Grab one frame through the CV sidecar, i.e. the exact capture path the
+/// battle loop uses (MuMu renderer IPC, with window capture as the fallback).
+/// Used when `screencap` is blocked by a FLAG_SECURE layer.
+fn capture_preview_via_sidecar(
+    app: &tauri::AppHandle,
+    debug_state: &DebugSidecar,
+    server: Server,
+    device: &adb::Adb,
+) -> Option<Vec<u8>> {
+    if let Err(error) = crate::commands::debug::ensure_debug_sidecar(app, debug_state, server) {
+        eprintln!("[adb] preview sidecar unavailable: {error}");
+        return None;
+    }
+    let jar = crate::resolve_scrcpy_jar(app)?;
+    let mut guard = match debug_state.0.lock() {
+        Ok(guard) => guard,
+        Err(_) => return None,
+    };
+    let client = guard.as_mut()?;
+    let display_id = device.display_id();
+    if !client.stream_matches_device(device.serial(), display_id) {
+        if client.stream_size().is_some() {
+            let _ = client.stop_stream();
+        }
+        if let Err(error) = client.start_stream(
+            device,
+            &jar,
+            crate::STREAM_MAX_SIZE,
+            crate::STREAM_BIT_RATE,
+            crate::STREAM_MAX_FPS,
+        ) {
+            eprintln!("[adb] preview stream failed: {error}");
+            return None;
+        }
+    }
+    match client.get_frame_png(10.0) {
+        Ok(png) if !png_is_blank(&png) => Some(png),
+        Ok(_) => {
+            eprintln!("[adb] CV capture also returned a blank frame");
+            None
+        }
+        Err(error) => {
+            eprintln!("[adb] preview frame failed: {error}");
+            None
+        }
+    }
+}
+
+/// A secure layer shows up as an all-black screenshot, which the picker would
+/// display as a valid but useless preview. Alpha channels are ignored so a
+/// transparent-but-opaque-to-the-eye frame still counts as blank.
+fn png_is_blank(bytes: &[u8]) -> bool {
+    let decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+    let Ok(mut reader) = decoder.read_info() else {
+        return false;
+    };
+    let mut buf = vec![0u8; reader.output_buffer_size()];
+    let Ok(info) = reader.next_frame(&mut buf) else {
+        return false;
+    };
+    let data = &buf[..info.buffer_size()];
+    let channels = match info.color_type {
+        png::ColorType::Rgba => 4,
+        png::ColorType::Rgb => 3,
+        png::ColorType::GrayscaleAlpha => 2,
+        png::ColorType::Grayscale => 1,
+        png::ColorType::Indexed => 1,
+    };
+    let color_channels = match info.color_type {
+        png::ColorType::Rgba => 3,
+        png::ColorType::GrayscaleAlpha => 1,
+        _ => channels,
+    };
+    if data.is_empty() {
+        return true;
+    }
+    data.chunks_exact(channels)
+        .all(|pixel| pixel[..color_channels].iter().all(|value| *value < 6))
 }
 
 fn clear_device_previews(app: &tauri::AppHandle) {
