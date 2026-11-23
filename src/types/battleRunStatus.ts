@@ -95,14 +95,16 @@ export function localBattleDayBounds(nowMs = Date.now()): {
   return { dayStartMs, dayEndMs };
 }
 
+export function isBattleRunActive(status: BattleRunStatus | null): boolean {
+  return status?.phase === "starting" || status?.phase === "running" || status?.phase === "paused";
+}
+
 export function displayedDailyBattleDurationMs(
   statistics: BattleDailyStatistics,
   status: BattleRunStatus | null,
   nowMs: number,
 ): number {
-  const active =
-    status?.phase === "starting" || status?.phase === "running" || status?.phase === "paused";
-  if (!active || nowMs <= statistics.calculatedAtMs) {
+  if (!isBattleRunActive(status) || nowMs <= statistics.calculatedAtMs) {
     return statistics.durationMs;
   }
   return statistics.durationMs + nowMs - statistics.calculatedAtMs;

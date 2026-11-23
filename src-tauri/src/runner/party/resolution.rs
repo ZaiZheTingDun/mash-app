@@ -52,7 +52,19 @@ pub(crate) fn resolve_available_member_action(
 ) -> Option<Action> {
     let resolved = resolve_action_to_current_member_positions(members, original_members, action)?;
     let ids = party_member_ids(members);
-    action_frontline_available(&ids, &resolved).then_some(resolved)
+    let available = if let Action::Equipment {
+        target,
+        order_change: Some(_),
+        ..
+    } = &resolved
+    {
+        // Resolution already required two occupied positions in the correct rows.
+        // An unpinned support can swap positions without a known servant ID.
+        optional_front_target_available(&ids, target.as_deref())
+    } else {
+        action_frontline_available(&ids, &resolved)
+    };
+    available.then_some(resolved)
 }
 
 #[cfg(test)]
@@ -126,7 +138,7 @@ fn current_slot_for_member_ref(
     if let Some(servant_id) = servant_id {
         if let Some(current_index) = members.iter().position(|member| {
             member.as_ref().is_some_and(|member| {
-                member.servant_id == servant_id && member.is_support == is_support
+                member.servant_id == Some(servant_id) && member.is_support == is_support
             })
         }) {
             if !allowed.contains(&current_index) {
@@ -375,7 +387,7 @@ pub(crate) fn resolve_action_to_current_member_positions(
             target_servant_id: *target_servant_id,
             target_is_support: *target_is_support,
             order_change: Some(crate::OrderChangeSelection {
-                front: current_slot_for_member_ref(
+                front: Some(current_slot_for_member_ref(
                     members,
                     original_members,
                     order_change.front.as_deref(),
@@ -383,11 +395,11 @@ pub(crate) fn resolve_action_to_current_member_positions(
                     order_change.front_servant_id,
                     order_change.front_is_support,
                     0..3,
-                )?,
+                )??),
                 front_member_id: order_change.front_member_id.clone(),
                 front_servant_id: order_change.front_servant_id,
                 front_is_support: order_change.front_is_support,
-                back: current_slot_for_member_ref(
+                back: Some(current_slot_for_member_ref(
                     members,
                     original_members,
                     order_change.back.as_deref(),
@@ -395,7 +407,7 @@ pub(crate) fn resolve_action_to_current_member_positions(
                     order_change.back_servant_id,
                     order_change.back_is_support,
                     3..6,
-                )?,
+                )??),
                 back_member_id: order_change.back_member_id.clone(),
                 back_servant_id: order_change.back_servant_id,
                 back_is_support: order_change.back_is_support,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
+import { Box, Button, Flex, IconButton, Text } from "@radix-ui/themes";
 import { Cross1Icon } from "@radix-ui/react-icons";
 import goldFruitImage from "../../../src-tauri/resources/images/item_fruit_golden.png";
 import silverFruitImage from "../../../src-tauri/resources/images/item_fruit_silver.png";
@@ -11,6 +11,7 @@ import {
   battleRunRemainingMs,
   displayedDailyBattleDurationMs,
   formatBattleRunDuration,
+  isBattleRunActive,
   type BattleDailyStatistics,
   type BattleRunApRecoveryUsage,
   type BattleRunStatus,
@@ -32,10 +33,7 @@ interface BattleRunStatusPanelProps {
   status: BattleRunStatus | null;
   dailyStatistics: BattleDailyStatistics | null;
   onClose: () => void;
-}
-
-function isActive(status: BattleRunStatus): boolean {
-  return status.phase === "starting" || status.phase === "running" || status.phase === "paused";
+  onStop?: () => void;
 }
 
 function consumedRecoveryItems(usage: BattleRunApRecoveryUsage) {
@@ -65,9 +63,10 @@ export function BattleRunStatusPanel({
   status,
   dailyStatistics,
   onClose,
+  onStop,
 }: BattleRunStatusPanelProps) {
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const active = status != null && isActive(status);
+  const active = isBattleRunActive(status);
 
   useEffect(() => {
     if (!active) return;
@@ -86,7 +85,7 @@ export function BattleRunStatusPanel({
       estimateText = "已完成";
     } else if (status.phase === "paused") {
       estimateText = "已暂停";
-    } else if (isActive(status)) {
+    } else if (active) {
       const remainingMs = battleRunRemainingMs(status, displayNowMs);
       estimateText =
         remainingMs == null
@@ -110,14 +109,21 @@ export function BattleRunStatusPanel({
     <Box className="operation-log-panel battle-run-status-panel">
       <Flex align="center" justify="between" className="operation-log-header">
         <Text size="1" weight="bold">{status?.phase === "paused" ? "运行状态 · 已暂停" : "运行状态"}</Text>
-        <IconButton
-          variant="ghost"
-          color="gray"
-          aria-label="关闭运行状态"
-          onClick={onClose}
-        >
-          <Cross1Icon width={15} height={15} />
-        </IconButton>
+        <Flex gap="2" align="center">
+          {active && onStop && (
+            <Button size="1" variant="soft" color="red" onClick={onStop}>
+              停止战斗
+            </Button>
+          )}
+          <IconButton
+            variant="ghost"
+            color="gray"
+            aria-label="关闭运行状态"
+            onClick={onClose}
+          >
+            <Cross1Icon width={15} height={15} />
+          </IconButton>
+        </Flex>
       </Flex>
       <Box className="operation-log-list">
         {status == null && !hasDailyRecord ? (

@@ -859,7 +859,7 @@ fn frontline_member(
     Some(PartyMemberRuntime {
         member_id: Some(member_id.into()),
         slot_index,
-        servant_id,
+        servant_id: Some(servant_id),
         is_support,
     })
 }
@@ -3907,13 +3907,13 @@ fn startup_action_member_id_resolves_after_team_reorder() {
         Some(PartyMemberRuntime {
             member_id: Some("slot-a".into()),
             slot_index: 0,
-            servant_id: 10,
+            servant_id: Some(10),
             is_support: false,
         }),
         Some(PartyMemberRuntime {
             member_id: Some("slot-b".into()),
             slot_index: 1,
-            servant_id: 20,
+            servant_id: Some(20),
             is_support: false,
         }),
         None,
@@ -3925,13 +3925,13 @@ fn startup_action_member_id_resolves_after_team_reorder() {
         Some(PartyMemberRuntime {
             member_id: Some("slot-b".into()),
             slot_index: 1,
-            servant_id: 20,
+            servant_id: Some(20),
             is_support: false,
         }),
         Some(PartyMemberRuntime {
             member_id: Some("slot-a".into()),
             slot_index: 0,
-            servant_id: 10,
+            servant_id: Some(10),
             is_support: false,
         }),
         None,
@@ -3992,7 +3992,7 @@ fn runtime_member(
     PartyMemberRuntime {
         member_id: Some(member_id.into()),
         slot_index,
-        servant_id,
+        servant_id: Some(servant_id),
         is_support,
     }
 }
@@ -7971,4 +7971,69 @@ fn grand_exhaustion_debug_message_explains_mixed_and_unconfirmed_rows() {
         support_grand_section_probe_message(&grand_page_probe(&[0.33], &[None])),
         "冠位区域: 冠位行=0 普通行=0 未确认行=1 逐行=[#1 未确认=未知] 判定=尚未确认普通助战，继续查找"
     );
+}
+#[test]
+fn project_run_uses_saved_lineup_repeat_ap_and_stop_settings() {
+    let mut project =
+        crate::commands::projects::new_project("周回".into(), false, Default::default());
+    project.slots.swap(0, 2);
+    project.slots[1].servant_id = Some(9);
+    project.support_servant_id = Some(9);
+    project.slots[0].craft_essence_ids = vec![14, 15];
+    project.slots[0].craft_essence_mlb_required = false;
+    project.repeat_mode = Some(crate::ProjectRepeatMode::Count);
+    project.repeat_count = Some(12);
+    project.ap_recovery_items = vec![ApRecoveryItem::Gold, ApRecoveryItem::Rainbow];
+    project.ap_recovery_limits.gold = Some(3);
+    project.ap_recovery_limits.rainbow = Some(0);
+    project.recognition_settings = Some(crate::ProjectRecognitionSettings {
+        stop_on_five_star_ce_drop: Some(true),
+        five_star_ce_drop_target_count: Some(2),
+        ..Default::default()
+    });
+
+    let run = RunConfig::from_project(&project);
+    assert_eq!(run.support_slot_index, Some(0));
+    assert_eq!(run.support_servant_id, Some(9));
+    assert_eq!(
+        run.support_member_id.as_deref(),
+        Some(project.slots[0].id.as_str())
+    );
+    assert_eq!(run.support_craft_essence_ids, vec![14, 15]);
+    assert!(!run.support_craft_essence_mlb_required);
+    assert_eq!(run.servant_selections.len(), 1);
+    assert_eq!(
+        run.servant_selections[0].member_id.as_deref(),
+        Some(project.slots[1].id.as_str())
+    );
+    assert!(!run.repeat_mission);
+    assert_eq!(run.max_mission_runs, Some(12));
+    assert_eq!(run.ap_recovery_items, project.ap_recovery_items);
+    assert_eq!(run.ap_recovery_limits.gold, Some(3));
+    assert_eq!(run.ap_recovery_limits.rainbow, None);
+    assert!(run.stop_on_five_star_ce_drop);
+    assert_eq!(run.five_star_ce_drop_target_count, 2);
+}
+
+#[test]
+fn project_run_respects_repeat_modes_and_legacy_repeat_flag() {
+    use crate::ProjectRepeatMode::{Count, Infinite, Single};
+
+    let mut project =
+        crate::commands::projects::new_project("编队".into(), false, Default::default());
+    for (mode, count, legacy_repeat, expected_repeat) in [
+        (Some(Single), Some(12), true, false),
+        (Some(Infinite), Some(12), false, true),
+        (Some(Count), Some(0), true, false),
+        (None, None, true, true),
+        (None, None, false, false),
+    ] {
+        project.repeat_mode = mode;
+        project.repeat_count = count;
+        project.repeat_mission = legacy_repeat;
+        let normalized = crate::commands::projects::normalize_project(project.clone());
+        let run = RunConfig::from_project(&normalized);
+        assert_eq!(run.repeat_mission, expected_repeat);
+        assert_eq!(run.max_mission_runs, None);
+    }
 }

@@ -6,6 +6,7 @@ mod craft_essence_enhancement_runner;
 mod device_operation;
 mod enhancement_runner;
 mod formation_share;
+mod mcp;
 mod friend_point_summon_runner;
 mod models;
 mod operation_log;
@@ -97,6 +98,7 @@ pub fn run() {
             app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(FriendPointSummonRunnerHandle::new_idle()));
             app.manage(DeviceOperationCoordinator::default());
+            app.manage(mcp::McpServerState::default());
             app.manage(packet_capture::ResponseStore::default());
             app.manage(packet_capture::AuthorizationStore::default());
             app.manage(packet_capture::CaptureTargetStore::new(
@@ -116,6 +118,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            mcp::get_mcp_server_status,
+            mcp::start_mcp_server,
+            mcp::set_mcp_battle_permission,
+            mcp::stop_mcp_server,
+            mcp::copy_mcp_client_config,
             commands::packet_capture::install_capture_certificate,
             commands::packet_capture::configure_packet_capture,
             commands::packet_capture::start_packet_capture,

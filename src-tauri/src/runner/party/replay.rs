@@ -82,7 +82,7 @@ pub(crate) fn normal_current_party_ids_from(
         members[slot_index] = servant_id.map(|servant_id| PartyMemberRuntime {
             member_id: None,
             slot_index,
-            servant_id,
+            servant_id: Some(servant_id),
             is_support: false,
         });
     }
@@ -95,6 +95,22 @@ pub(crate) fn normal_current_party_ids_from(
     );
     let ids = party_member_ids(&full);
     [ids[0], ids[1], ids[2]]
+}
+
+pub(crate) fn apply_completed_turn_lineup_changes(
+    members: &mut [Option<PartyMemberRuntime>; 6],
+    original_members: &[Option<PartyMemberRuntime>; 6],
+    turn: &BattleTurn,
+    np_use_counts: &mut HashMap<PartyMemberRuntime, u32>,
+) {
+    for card in &turn.attack_priority {
+        apply_attack_card_member_lineup_change(members, card, np_use_counts);
+    }
+    for action in turn_preparation_actions(turn) {
+        if let Some(resolved) = resolve_available_member_action(members, original_members, action) {
+            apply_party_member_lineup_change_at(members, &resolved, ChangeOrderTiming::EndOfTurn);
+        }
+    }
 }
 
 pub(crate) fn normal_current_party_members_from(
@@ -134,20 +150,12 @@ pub(crate) fn normal_current_party_members_from(
             }
 
             if before_current_scene || before_current_turn {
-                for card in &turn.attack_priority {
-                    apply_attack_card_member_lineup_change(&mut members, card, &mut np_use_counts);
-                }
-                for action in turn_preparation_actions(turn) {
-                    if let Some(resolved) =
-                        resolve_available_member_action(&members, &original_members, action)
-                    {
-                        apply_party_member_lineup_change_at(
-                            &mut members,
-                            &resolved,
-                            ChangeOrderTiming::EndOfTurn,
-                        );
-                    }
-                }
+                apply_completed_turn_lineup_changes(
+                    &mut members,
+                    &original_members,
+                    turn,
+                    &mut np_use_counts,
+                );
             }
         }
         if scene_index == current_scene_index {

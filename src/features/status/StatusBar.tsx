@@ -601,6 +601,7 @@ interface StatusBarProps {
   battleDailyStatistics?: BattleDailyStatistics | null;
   battleRunStatusOpen?: boolean;
   onBattleRunStatusOpenChange?: (open: boolean) => void;
+  onStopBattle?: () => void;
   updateAvailable?: boolean;
   updateChecking?: boolean;
   updateInstalling?: boolean;
@@ -625,6 +626,7 @@ export function StatusBar({
   battleDailyStatistics = null,
   battleRunStatusOpen = false,
   onBattleRunStatusOpenChange,
+  onStopBattle,
   updateAvailable = false,
   updateChecking = false,
   updateInstalling = false,
@@ -1120,6 +1122,7 @@ export function StatusBar({
         <BattleRunStatusPanel
           status={battleRunStatus}
           dailyStatistics={battleDailyStatistics}
+          onStop={onStopBattle}
           onClose={() => onBattleRunStatusOpenChange?.(false)}
         />
       )}

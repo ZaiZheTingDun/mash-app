@@ -13,6 +13,7 @@ import { SettingsRecognitionPage } from "./SettingsRecognitionPage";
 import { SettingsResourcesPage } from "./SettingsResourcesPage";
 import { SettingsSelfCheckPage } from "./SettingsSelfCheckPage";
 import { SettingsDebugPage } from "./SettingsDebugPage";
+import { SettingsMcpPage } from "./SettingsMcpPage";
 
 export type SettingsSection =
   | "basic"
@@ -21,6 +22,7 @@ export type SettingsSection =
   | "resources"
   | "dataManagement"
   | "recognition"
+  | "mcp"
   | "debug";
 
 interface SettingsPageProps {
@@ -96,6 +98,12 @@ const navItems: Array<{
     section: "debug",
     label: "调试",
     render: (active) => <SettingsDebugPage active={active} />,
+  },
+  {
+    group: "application",
+    section: "mcp",
+    label: "MCP 服务",
+    render: () => <SettingsMcpPage />,
   },
   {
     group: "application",

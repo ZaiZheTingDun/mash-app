@@ -788,7 +788,8 @@ pub(crate) fn ordinary_advanced_rules(
                                 && slot
                                     .slot_index
                                     .is_some_and(|index| index as usize == member.slot_index)
-                                && slot.servant_id == Some(member.servant_id)
+                                && member.servant_id.is_some()
+                                && slot.servant_id == member.servant_id
                                 && slot.is_support == member.is_support)
                     })
                 });

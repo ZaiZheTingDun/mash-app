@@ -258,7 +258,7 @@ impl Runner {
         let party_ids = std::array::from_fn(|index| {
             party_members[index]
                 .as_ref()
-                .map(|member| member.servant_id)
+                .and_then(|member| member.servant_id)
         });
         let party_supports = std::array::from_fn(|index| {
             party_members[index]
