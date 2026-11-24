@@ -85,6 +85,7 @@ import re
 import sys
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from functools import partial
 from typing import TYPE_CHECKING, Any, Optional
@@ -247,6 +248,9 @@ COMMAND_CARD_SUITS = ("a", "b", "q")
 # when sampling subregions.
 COMMAND_CARD_Y_WOBBLE_SCREEN = 0.012
 COMMAND_CARD_SUBREGION_X_OFFSETS: tuple[float, ...] = (0.0, 0.0, 0.0, 0.001, 0.005)
+NP_CARD_REVEAL_GRACE_MS = 100
+CARD_PRESENTATION_TIMEOUT = 1.0
+NP_REVEAL_MAX_MS = 400
 # The crit percentage is rendered right-aligned with each digit pinned to a
 # fixed slot-relative x position. Reading each digit inside its own tight
 # ROI is much more robust than scanning the whole strip — neighbouring
@@ -4022,6 +4026,7 @@ def _find_command_cards(
     servant_ids: list[int],
     assets_dir: Optional[str],
     face_threshold: float = 0.5,
+    include_critical_chance: bool = True,
 ) -> dict:
     """Identify the suit and (optionally) servant occupying each fixed
     command-card slot.
@@ -4049,6 +4054,7 @@ def _find_command_cards(
     can_identify = bool(servant_ids) and bool(assets_dir) and os.path.isdir(assets_dir)
 
     cards: list[dict] = []
+    pending_faces: list[tuple[dict, tuple[int, int, int, int]]] = []
     for slot, region in enumerate(card_regions):
         slot_px = _slot_to_pixels(region, w, h)
         sx, sy, sw, sh = slot_px
@@ -4099,26 +4105,27 @@ def _find_command_cards(
         face_bbox = _command_card_face_region_bbox(slot_px, w, h, subregion_x_offset)
         record["faceRegion"] = _norm_rect_from_pixels(face_bbox, w, h)
 
-        crit_digit_regions = [
-            _norm_rect_from_pixels(
-                _relative_region_bbox(
-                    slot_px,
-                    digit_rel,
-                    img_w=w,
-                    img_h=h,
-                    pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
-                    offset_x_screen=subregion_x_offset,
-                ),
-                w,
-                h,
-            )
-            for digit_rel in COMMAND_CARD_CRIT_DIGIT_REGIONS
-        ]
-        record["critDigitRegions"] = crit_digit_regions
-        crit_value, crit_reads = _read_crit_digits(img, crit_digit_regions)
-        record["critDigitReads"] = crit_reads
-        if crit_value is not None:
-            record["critChance"] = int(crit_value)
+        if include_critical_chance:
+            crit_digit_regions = [
+                _norm_rect_from_pixels(
+                    _relative_region_bbox(
+                        slot_px,
+                        digit_rel,
+                        img_w=w,
+                        img_h=h,
+                        pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
+                        offset_x_screen=subregion_x_offset,
+                    ),
+                    w,
+                    h,
+                )
+                for digit_rel in COMMAND_CARD_CRIT_DIGIT_REGIONS
+            ]
+            record["critDigitRegions"] = crit_digit_regions
+            crit_value, crit_reads = _read_crit_digits(img, crit_digit_regions)
+            record["critDigitReads"] = crit_reads
+            if crit_value is not None:
+                record["critChance"] = int(crit_value)
 
         support_tmpl = _get_template(COMMAND_CARD_SUPPORT_ICON_TEMPLATE)
         if support_tmpl is not None:
@@ -4145,17 +4152,66 @@ def _find_command_cards(
         # fallback only needs the slot coordinates. Do not let an unreliable
         # face match block the runner's owner-detection retry loop.
         if can_identify and not record["isStunned"]:
-            ident = _identify_servant_in_slot(
-                gray, slot_px, servant_ids, assets_dir, face_threshold
-            )
-            if ident is not None:
-                record["servantId"] = ident["servantId"]
-                record["ascension"] = ident["ascension"]
-                record["faceScore"] = ident["faceScore"]
-
+            pending_faces.append((record, slot_px))
         cards.append(record)
 
+    def match_slot(slot_px):
+        return _identify_servant_in_slot(gray, slot_px, servant_ids, assets_dir, face_threshold)
+
+    worker_count = min(3, len(pending_faces), os.cpu_count() or 1)
+    slots = [slot_px for _, slot_px in pending_faces]
+    if worker_count > 1:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            matches = list(executor.map(match_slot, slots))
+    else:
+        matches = [match_slot(slot_px) for slot_px in slots]
+    for (record, _), ident in zip(pending_faces, matches):
+        if ident is not None:
+            record["servantId"] = ident["servantId"]
+            record["ascension"] = ident["ascension"]
+            record["faceScore"] = ident["faceScore"]
+
     return {"cards": cards}
+
+
+def _command_cards_upright(img: np.ndarray, regions: list[dict]) -> bool:
+    """Detect the long vertical left border of every flipped command card."""
+    gray = cv2.cvtColor(cv2.resize(img, (960, 540), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+    for region in regions:
+        # The left border remains visible under support, seal and stun overlays.
+        # Include slightly inset borders in the upper portrait, away from
+        # the moving suit text.
+        x, y, width, height = _relative_region_bbox(
+            _slot_to_pixels(region, 960, 540),
+            {"x": 30 / 192, "y": 0.27, "w": 24 / 192, "h": 0.27},
+            img_w=960,
+            img_h=540,
+        )
+        strip = gray[y:y + height, x:x + width]
+        if min(strip.shape) < 2:
+            return False
+        edges = (np.abs(cv2.Sobel(strip, cv2.CV_16S, 1, 0)) >= 55).astype(np.uint8)
+        # Give the compressed/antialiased edge a one-pixel horizontal tolerance.
+        edges = cv2.dilate(edges, np.ones((1, 3), dtype=np.uint8))
+        if edges.sum(axis=0).max() < 0.68 * height:
+            return False
+    return bool(regions)
+
+
+def _np_cards_revealing(img: np.ndarray) -> bool:
+    """The bright reveal fills an NP slot before the card gains visible detail."""
+    h, w = img.shape[:2]
+    for region in DEFAULT_NP_CARD_SLOTS:
+        x, y, width, height = _slot_to_pixels(region, w, h)
+        roi = img[y:y + height, x:x + width]
+        if not roi.size or roi.std() < NP_READY_STD_BGR:
+            continue
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        if (gray > 200).mean() >= NP_READY_BRIGHT_MIN:
+            edges = cv2.Canny(gray, NP_CANNY_LOW, NP_CANNY_HIGH)
+            if (edges > 0).mean() < 0.06:
+                return True
+    return False
 
 
 def _child_norm_rect(parent: dict, child: dict) -> dict:
@@ -7069,6 +7125,39 @@ def _load_frame(cmd: dict) -> tuple[Optional[np.ndarray], Optional[str]]:
     return frame, None
 
 
+def _load_command_card_frame(cmd: dict, regions: list[dict]) -> tuple[Optional[np.ndarray], Optional[str]]:
+    if cmd.get("imagePath") or not cmd.get("awaitCardPresentation") or stream is None:
+        return _load_frame(cmd)
+    frame, info = stream.get_latest_snapshot()
+    if frame is None or info is None:
+        return _load_frame(cmd)
+
+    deadline = time.monotonic() + CARD_PRESENTATION_TIMEOUT
+    upright_ms = None
+    while True:
+        if _command_cards_upright(frame, regions):
+            decoded_ms = info["decodedAtMs"]
+            if upright_ms is None:
+                upright_ms = decoded_ms
+            after_upright_ms = decoded_ms - upright_ms
+            if after_upright_ms >= NP_CARD_REVEAL_GRACE_MS and (
+                after_upright_ms >= NP_REVEAL_MAX_MS or not _np_cards_revealing(frame)
+            ):
+                return frame, None
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        newer, new_info = stream.wait_for_new_snapshot(info["frameId"], remaining)
+        if newer is None or new_info is None:
+            break
+        frame, info = newer, new_info
+
+    # Special overlays or a paused stream can hide a card border. Leave actual
+    # presence/ownership checks and recovery to the existing selection loop.
+    print("[mash-cv] card presentation wait timed out; using latest frame", file=sys.stderr)
+    return frame, None
+
+
 def _start_stream(cmd: dict) -> dict:
     global stream
 
@@ -7475,13 +7564,11 @@ def _main_repl() -> None:
                         ),
                     )
             elif action == "find_command_cards":
-                img, err = _load_frame(cmd)
+                regions = cmd.get("cardRegions") or list(DEFAULT_COMMAND_CARD_SLOTS)
+                img, err = _load_command_card_frame(cmd, regions)
                 if img is None:
                     _reply(req_id, {"cards": [], "error": err})
                 else:
-                    regions = cmd.get("cardRegions")
-                    if not regions:
-                        regions = list(DEFAULT_COMMAND_CARD_SLOTS)
                     _reply(
                         req_id,
                         _find_command_cards(
@@ -7490,6 +7577,7 @@ def _main_repl() -> None:
                             [int(s) for s in cmd.get("servantIds", []) if s is not None],
                             cmd.get("assetsDir"),
                             float(cmd.get("faceThreshold", 0.5)),
+                            bool(cmd.get("includeCriticalChance", True)),
                         ),
                     )
             elif action == "find_noble_phantasms":

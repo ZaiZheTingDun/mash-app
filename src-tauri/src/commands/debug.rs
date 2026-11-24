@@ -427,8 +427,14 @@ pub fn debug_find_command_cards(
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let cards =
-        client.find_command_cards(Some(&image_path), None, &servant_ids, assets_dir.as_deref())?;
+    let cards = client.find_command_cards(
+        Some(&image_path),
+        None,
+        &servant_ids,
+        assets_dir.as_deref(),
+        false,
+        true,
+    )?;
     eprintln!("[debug_find_command_cards] {} card(s) found", cards.len());
     Ok(cards)
 }
