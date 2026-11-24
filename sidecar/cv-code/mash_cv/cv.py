@@ -4179,10 +4179,11 @@ def _command_cards_upright(img: np.ndarray, regions: list[dict]) -> bool:
     gray = cv2.cvtColor(cv2.resize(img, (960, 540), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
     for region in regions:
         # The left border remains visible under support, seal and stun overlays.
-        # Check a strip in the upper portrait, away from the moving suit text.
+        # Include slightly inset borders in the upper portrait, away from
+        # the moving suit text.
         x, y, width, height = _relative_region_bbox(
             _slot_to_pixels(region, 960, 540),
-            {"x": 30 / 192, "y": 0.27, "w": 18 / 192, "h": 0.27},
+            {"x": 30 / 192, "y": 0.27, "w": 24 / 192, "h": 0.27},
             img_w=960,
             img_h=540,
         )

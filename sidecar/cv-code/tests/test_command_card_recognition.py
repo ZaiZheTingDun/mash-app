@@ -1,5 +1,7 @@
 """Regression coverage for ready frames and optional command-card work."""
 
+from pathlib import Path
+
 import cv2
 import numpy as np
 import pytest
@@ -49,6 +51,34 @@ def test_waits_for_upright_cards_and_noble_phantasm_reveal(monkeypatch, size):
     assert error is None
     assert frame is upright
     assert stream.requested_after == [1, 2, 3]
+
+
+def test_cn_cards_with_shifted_edge_settle_before_timeout(monkeypatch, capsys):
+    image_path = Path(__file__).parent / "test_data/screenshots/battle_command_cn_100_crit.jpg"
+    ready = cv2.imread(str(image_path))
+    assert ready is not None
+    settled = ready.copy()
+
+    class Frames:
+        def get_latest_snapshot(self):
+            return ready, {"frameId": 1, "decodedAtMs": 1000}
+
+        def wait_for_new_snapshot(self, frame_id, timeout):
+            assert timeout > 0
+            if frame_id == 1:
+                return ready, {"frameId": 2, "decodedAtMs": 1099}
+            if frame_id == 2:
+                return settled, {"frameId": 3, "decodedAtMs": 1100}
+            return None, None
+
+    monkeypatch.setattr(cv, "stream", Frames())
+    frame, error = cv._load_command_card_frame(
+        {"awaitCardPresentation": True}, cv.DEFAULT_COMMAND_CARD_SLOTS
+    )
+
+    assert error is None
+    assert frame is settled
+    assert "card presentation wait timed out" not in capsys.readouterr().err
 
 
 def test_reports_faces_in_slot_order_with_or_without_critical_chance(monkeypatch, tmp_path):
