@@ -33,7 +33,14 @@ impl Runner {
     // -- main loop -----------------------------------------------------------
 
     pub fn run(mut self) {
-        if let Err(message) = self.run_loop() {
+        let mut support_trace = SupportSearchTrace::default();
+        let result = self.run_loop(&mut support_trace);
+        if support_trace.is_active() {
+            let failed =
+                result.is_err() || matches!(*self.state.lock().unwrap(), RunnerState::Error { .. });
+            support_trace.finish(SearchOutcome::on_runner_exit(failed, self.is_cancelled()));
+        }
+        if let Err(message) = result {
             self.transition_lifecycle(RunnerLifecycleEvent::Failed {
                 message: message.to_string(),
             });
@@ -42,7 +49,7 @@ impl Runner {
         }
     }
 
-    fn run_loop(&mut self) -> AutomationResult<()> {
+    fn run_loop(&mut self, support_trace: &mut SupportSearchTrace) -> AutomationResult<()> {
         if self.interlude.is_some() {
             self.sidecar().use_interlude_detection();
         } else {
@@ -70,7 +77,14 @@ impl Runner {
                 return Ok(());
             }
 
-            let screen = match self.sidecar().detect(None).recoverable()? {
+            let detection = if support_trace.is_active() {
+                support_trace.in_scope(|| {
+                    support_phase!("support.detect_screen", self.sidecar().detect(None))
+                })
+            } else {
+                self.sidecar().detect(None)
+            };
+            let screen = match detection.recoverable()? {
                 Ok(s) => s,
                 Err(e) => {
                     self.transition_lifecycle(RunnerLifecycleEvent::Failed {
@@ -83,6 +97,14 @@ impl Runner {
             };
 
             if support_search_screen_exited(last_detected_screen, screen) {
+                if support_trace.is_active() {
+                    let outcome = if self.is_cancelled() {
+                        SearchOutcome::Cancelled
+                    } else {
+                        SearchOutcome::on_screen_exit(screen, self.support_selected)
+                    };
+                    support_trace.finish(outcome);
+                }
                 self.release_support_ocr()?;
             }
 
@@ -99,7 +121,7 @@ impl Runner {
                 }
                 unknown_count = 0;
                 last_detected_screen = screen;
-                thread::sleep(POLL_INTERVAL);
+                support_trace.wait_for_poll(POLL_INTERVAL);
                 continue;
             }
 
@@ -111,7 +133,7 @@ impl Runner {
                 if matches!(*self.state.lock().unwrap(), RunnerState::Error { .. }) {
                     return Ok(());
                 }
-                thread::sleep(POLL_INTERVAL);
+                support_trace.wait_for_poll(POLL_INTERVAL);
                 continue;
             }
 
@@ -155,13 +177,17 @@ impl Runner {
                     let entry_wait = support_select_entry_wait(last_detected_screen, screen);
                     last_detected_screen = screen;
                     if let Some(wait) = entry_wait {
+                        self.support_selected = false;
+                        support_trace.begin();
                         self.emit("SupportSelect", "等待助战页面就绪…");
-                        thread::sleep(wait);
+                        support_trace.in_scope(|| {
+                            support_phase!("support.entry_wait", thread::sleep(wait));
+                        });
                         // Detect again after the entry animation before any
                         // class-filter, CE-only, or first-row selection tap.
                         continue;
                     }
-                    self.handle_support_select()?;
+                    support_trace.in_scope(|| self.handle_support_select())?;
                 }
                 Screen::ServantSelect => {
                     unknown_count = 0;
@@ -276,7 +302,7 @@ impl Runner {
                                 thread::sleep(ACTION_DELAY);
                             }
                         }
-                        thread::sleep(POLL_INTERVAL);
+                        support_trace.wait_for_poll(POLL_INTERVAL);
                         continue;
                     }
                     if self.try_continue_interlude_settlement()? {
@@ -305,7 +331,7 @@ impl Runner {
                 return Ok(());
             }
 
-            thread::sleep(POLL_INTERVAL);
+            support_trace.wait_for_poll(POLL_INTERVAL);
         }
     }
 

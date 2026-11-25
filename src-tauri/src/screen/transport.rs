@@ -18,6 +18,11 @@ impl SidecarTransport {
         request: &serde_json::Value,
         timeout: Duration,
     ) -> Result<serde_json::Value, CvError> {
+        #[cfg(dev)]
+        let span =
+            crate::telemetry::support_sidecar_span(request["cmd"].as_str().unwrap_or("unknown"));
+        #[cfg(dev)]
+        let _entered = span.enter();
         let id = self.next_id;
         self.next_id = self.next_id.wrapping_add(1).max(1);
 
@@ -49,6 +54,10 @@ impl SidecarTransport {
                 .map_err(|e| format!("invalid JSON from sidecar: {e}: {response}"))?;
             match parsed.get("id").and_then(|v| v.as_u64()) {
                 Some(rid) if rid == id => {
+                    #[cfg(dev)]
+                    if let Some(ok) = parsed["ok"].as_bool() {
+                        span.record("response_ok", ok);
+                    }
                     return Ok(parsed);
                 }
                 Some(rid) => {

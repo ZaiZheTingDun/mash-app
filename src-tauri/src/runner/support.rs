@@ -91,6 +91,22 @@ pub(crate) fn support_row_tap_point(row: &SupportRowMatch) -> Point {
         .unwrap_or(row.tap)
 }
 
+// Keep the phase call sites close to the operations they measure. The
+// expression runs directly when building a packaged app.
+macro_rules! support_phase {
+    ($name:literal, $operation:expr) => {{
+        #[cfg(dev)]
+        {
+            tracing::info_span!(target: "mash::support", $name).in_scope(|| $operation)
+        }
+        #[cfg(not(dev))]
+        {
+            $operation
+        }
+    }};
+}
+pub(super) use support_phase;
+
 mod class_filter;
 pub(crate) use class_filter::*;
 
@@ -110,3 +126,6 @@ mod scrolling;
 pub(crate) use scrolling::*;
 
 mod runtime;
+
+mod trace;
+pub(super) use trace::{SearchOutcome, SupportSearchTrace};
