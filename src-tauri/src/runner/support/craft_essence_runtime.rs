@@ -73,6 +73,10 @@ impl Runner {
         grand_ce_search_region(row, slot)
     }
 
+    #[cfg_attr(
+        dev,
+        tracing::instrument(target = "mash::support", name = "support.verify_ce", skip_all)
+    )]
     pub(crate) fn support_row_region_ce_mismatch(
         &mut self,
         region: NormRect,

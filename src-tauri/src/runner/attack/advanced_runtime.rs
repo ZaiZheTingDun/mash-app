@@ -29,16 +29,20 @@ impl Runner {
                     startup_actions: Vec::new(),
                     rules: Vec::new(),
                 };
-                let picks = choose_advanced_auto_picks_with_crit(
-                    &scene,
-                    &cards,
-                    &nps,
-                    &party_ids,
-                    &party_supports,
-                    &grand_servants,
-                    &self.config.grand_card_strategy,
-                    self.config.grand_class,
-                    self.config.prefer_higher_critical_chance,
+                let picks = battle_step!(
+                    self,
+                    "battle.card_decision",
+                    choose_advanced_auto_picks_with_crit(
+                        &scene,
+                        &cards,
+                        &nps,
+                        &party_ids,
+                        &party_supports,
+                        &grand_servants,
+                        &self.config.grand_card_strategy,
+                        self.config.grand_class,
+                        self.config.prefer_higher_critical_chance,
+                    )
                 );
                 self.tap_picks("Attack", &picks, &cards, &party_ids)?;
                 return Ok(());
@@ -224,31 +228,39 @@ impl Runner {
                         else {
                             return Ok(());
                         };
-                        let picks = choose_advanced_auto_picks_with_crit(
+                        let picks = battle_step!(
+                            self,
+                            "battle.card_decision",
+                            choose_advanced_auto_picks_with_crit(
+                                &scene,
+                                &next_cards,
+                                &next_nps,
+                                &startup_party_ids,
+                                &startup_party_supports,
+                                &grand_servants,
+                                card_strategy,
+                                self.config.grand_class,
+                                self.config.prefer_higher_critical_chance,
+                            )
+                        );
+                        self.tap_picks("Attack", &picks, &next_cards, &startup_party_ids)?;
+                        return Ok(());
+                    }
+
+                    let picks = battle_step!(
+                        self,
+                        "battle.card_decision",
+                        choose_advanced_auto_picks_with_crit(
                             &scene,
-                            &next_cards,
-                            &next_nps,
+                            &cards,
+                            &nps,
                             &startup_party_ids,
                             &startup_party_supports,
                             &grand_servants,
                             card_strategy,
                             self.config.grand_class,
                             self.config.prefer_higher_critical_chance,
-                        );
-                        self.tap_picks("Attack", &picks, &next_cards, &startup_party_ids)?;
-                        return Ok(());
-                    }
-
-                    let picks = choose_advanced_auto_picks_with_crit(
-                        &scene,
-                        &cards,
-                        &nps,
-                        &startup_party_ids,
-                        &startup_party_supports,
-                        &grand_servants,
-                        card_strategy,
-                        self.config.grand_class,
-                        self.config.prefer_higher_critical_chance,
+                        )
                     );
                     self.tap_picks("Attack", &picks, &cards, &startup_party_ids)?;
                     return Ok(());
@@ -307,32 +319,40 @@ impl Runner {
                         else {
                             return Ok(());
                         };
-                        let picks = choose_advanced_auto_picks_with_crit(
-                            &scene,
-                            &next_cards,
-                            &[],
-                            &control_party_ids,
-                            &control_party_supports,
-                            &grand_servants,
-                            card_strategy,
-                            self.config.grand_class,
-                            self.config.prefer_higher_critical_chance,
+                        let picks = battle_step!(
+                            self,
+                            "battle.card_decision",
+                            choose_advanced_auto_picks_with_crit(
+                                &scene,
+                                &next_cards,
+                                &[],
+                                &control_party_ids,
+                                &control_party_supports,
+                                &grand_servants,
+                                card_strategy,
+                                self.config.grand_class,
+                                self.config.prefer_higher_critical_chance,
+                            )
                         );
                         self.tap_picks("Attack", &picks, &next_cards, &control_party_ids)?;
                         return Ok(());
                     }
 
                     self.emit("Attack", "启动条件未满足，按自动优先级攻击且不释放宝具");
-                    let picks = choose_advanced_auto_picks_with_crit(
-                        &scene,
-                        &cards,
-                        &[],
-                        &party_ids,
-                        &party_supports,
-                        &grand_servants,
-                        card_strategy,
-                        self.config.grand_class,
-                        self.config.prefer_higher_critical_chance,
+                    let picks = battle_step!(
+                        self,
+                        "battle.card_decision",
+                        choose_advanced_auto_picks_with_crit(
+                            &scene,
+                            &cards,
+                            &[],
+                            &party_ids,
+                            &party_supports,
+                            &grand_servants,
+                            card_strategy,
+                            self.config.grand_class,
+                            self.config.prefer_higher_critical_chance,
+                        )
                     );
                     self.tap_picks("Attack", &picks, &cards, &party_ids)?;
                     return Ok(());
@@ -416,31 +436,39 @@ impl Runner {
                     else {
                         return Ok(());
                     };
-                    let picks = choose_advanced_auto_picks_with_crit(
+                    let picks = battle_step!(
+                        self,
+                        "battle.card_decision",
+                        choose_advanced_auto_picks_with_crit(
+                            &scene,
+                            &next_cards,
+                            &next_nps,
+                            &startup_party_ids,
+                            &startup_party_supports,
+                            &grand_servants,
+                            card_strategy,
+                            self.config.grand_class,
+                            self.config.prefer_higher_critical_chance,
+                        )
+                    );
+                    self.tap_picks("Attack", &picks, &next_cards, &startup_party_ids)?;
+                    return Ok(());
+                }
+
+                let picks = battle_step!(
+                    self,
+                    "battle.card_decision",
+                    choose_advanced_auto_picks_with_crit(
                         &scene,
-                        &next_cards,
-                        &next_nps,
+                        &cards,
+                        &nps,
                         &startup_party_ids,
                         &startup_party_supports,
                         &grand_servants,
                         card_strategy,
                         self.config.grand_class,
                         self.config.prefer_higher_critical_chance,
-                    );
-                    self.tap_picks("Attack", &picks, &next_cards, &startup_party_ids)?;
-                    return Ok(());
-                }
-
-                let picks = choose_advanced_auto_picks_with_crit(
-                    &scene,
-                    &cards,
-                    &nps,
-                    &startup_party_ids,
-                    &startup_party_supports,
-                    &grand_servants,
-                    card_strategy,
-                    self.config.grand_class,
-                    self.config.prefer_higher_critical_chance,
+                    )
                 );
                 self.tap_picks("Attack", &picks, &cards, &startup_party_ids)?;
                 return Ok(());
@@ -530,31 +558,39 @@ impl Runner {
                     else {
                         return Ok(());
                     };
-                    let picks = choose_advanced_auto_picks_with_crit(
+                    let picks = battle_step!(
+                        self,
+                        "battle.card_decision",
+                        choose_advanced_auto_picks_with_crit(
+                            &scene,
+                            &next_cards,
+                            &next_nps,
+                            &control_party_ids,
+                            &control_party_supports,
+                            &grand_servants,
+                            card_strategy,
+                            self.config.grand_class,
+                            self.config.prefer_higher_critical_chance,
+                        )
+                    );
+                    self.tap_picks("Attack", &picks, &next_cards, &control_party_ids)?;
+                    return Ok(());
+                }
+
+                let picks = battle_step!(
+                    self,
+                    "battle.card_decision",
+                    choose_advanced_auto_picks_with_crit(
                         &scene,
-                        &next_cards,
-                        &next_nps,
+                        &cards,
+                        &nps,
                         &control_party_ids,
                         &control_party_supports,
                         &grand_servants,
                         card_strategy,
                         self.config.grand_class,
                         self.config.prefer_higher_critical_chance,
-                    );
-                    self.tap_picks("Attack", &picks, &next_cards, &control_party_ids)?;
-                    return Ok(());
-                }
-
-                let picks = choose_advanced_auto_picks_with_crit(
-                    &scene,
-                    &cards,
-                    &nps,
-                    &control_party_ids,
-                    &control_party_supports,
-                    &grand_servants,
-                    card_strategy,
-                    self.config.grand_class,
-                    self.config.prefer_higher_critical_chance,
+                    )
                 );
                 self.tap_picks("Attack", &picks, &cards, &control_party_ids)?;
                 return Ok(());
@@ -569,16 +605,20 @@ impl Runner {
                 executed_control_count,
                 startup_control_count,
             );
-            let picks = choose_advanced_auto_picks_with_crit(
-                &scene,
-                &cards,
-                &nps,
-                &active_party_ids,
-                &active_party_supports,
-                &grand_servants,
-                card_strategy,
-                self.config.grand_class,
-                self.config.prefer_higher_critical_chance,
+            let picks = battle_step!(
+                self,
+                "battle.card_decision",
+                choose_advanced_auto_picks_with_crit(
+                    &scene,
+                    &cards,
+                    &nps,
+                    &active_party_ids,
+                    &active_party_supports,
+                    &grand_servants,
+                    card_strategy,
+                    self.config.grand_class,
+                    self.config.prefer_higher_critical_chance,
+                )
             );
             self.tap_picks("Attack", &picks, &cards, &active_party_ids)?;
             return Ok(());

@@ -168,11 +168,14 @@ impl Runner {
             return Ok(false);
         }
         self.capture_before_attack_if_enabled()?;
-        if !self.tap_at("Battle", ATTACK_BUTTON) {
+        if !battle_step!(
+            self,
+            "battle.tap_attack",
+            self.tap_at("Battle", ATTACK_BUTTON)
+        ) {
             return Ok(false);
         }
-        self.battle
-            .transition(BattleFlowEvent::AttackButtonTapped { at: Instant::now() });
+        self.transition_battle_flow(BattleFlowEvent::AttackButtonTapped { at: Instant::now() });
         Ok(true)
     }
 
@@ -245,6 +248,8 @@ impl Runner {
         interval: Duration,
         timeout: Duration,
     ) -> AutomationResult<bool> {
+        #[cfg(dev)]
+        let _span = battle_span!(self, "battle.element_wait").entered();
         let start = std::time::Instant::now();
         let mut taps: u32 = 0;
         loop {
@@ -396,7 +401,7 @@ impl Runner {
             if tick % 4 == 1 {
                 self.emit_debug(screen, status_text);
             }
-            thread::sleep(SKILL_POLL_INTERVAL);
+            battle_step!(self, "battle.poll_wait", thread::sleep(SKILL_POLL_INTERVAL));
         }
     }
 
@@ -410,6 +415,8 @@ impl Runner {
         screen: &str,
         timeout: Duration,
     ) -> AutomationResult<bool> {
+        #[cfg(dev)]
+        let _span = battle_span!(self, "battle.actionable_wait").entered();
         let start = Instant::now();
         let mut tick: u32 = 0;
         let mut last_visibility: Option<(bool, bool)> = None;
@@ -456,7 +463,7 @@ impl Runner {
             if tick % 4 == 1 {
                 self.emit_debug(screen, "等待技能动画结束…");
             }
-            thread::sleep(SKILL_POLL_INTERVAL);
+            battle_step!(self, "battle.poll_wait", thread::sleep(SKILL_POLL_INTERVAL));
         }
     }
 }

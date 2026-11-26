@@ -44,6 +44,12 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 schemars = "1"
 subtle = "2"
 tokio = { version = "1", features = ["macros", "net", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
+tracing-opentelemetry = { version = "0.34", default-features = false }
+opentelemetry = { version = "0.33", default-features = false, features = ["trace"] }
+opentelemetry_sdk = { version = "0.33", default-features = false, features = ["trace"] }
+opentelemetry-otlp = { version = "0.33", default-features = false, features = ["http-proto", "reqwest-blocking-client"] }
 rmcp = { version = "3.11.0", default-features = false, features = ["server", "transport-streamable-http-server"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

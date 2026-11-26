@@ -85,8 +85,7 @@ impl Runner {
             match self.sidecar().detect(Some(&image_path)).recoverable()? {
                 Ok(Screen::TeamConfirm) => {}
                 Ok(_) => {
-                    self.battle
-                        .transition(BattleFlowEvent::BattleLoadRetryDeferred);
+                    self.transition_battle_flow(BattleFlowEvent::BattleLoadRetryDeferred);
                     self.emit_debug("TeamConfirm", "当前帧已不在队伍确认页，等待下一次画面识别");
                     return Ok(());
                 }
@@ -124,12 +123,12 @@ impl Runner {
             if !self.tap_at("TeamConfirm", Point::new(0.90, 0.93)) {
                 return Ok(());
             }
-            self.battle.transition(BattleFlowEvent::QuestStartTapped {
+            self.transition_battle_flow(BattleFlowEvent::QuestStartTapped {
                 source: BattleLoadSource::TeamConfirm,
                 at: Instant::now(),
             });
             self.emit("TeamConfirm", "已点击开始任务，等待进入战斗页面");
-            thread::sleep(ACTION_DELAY);
+            battle_step!(self, "battle.poll_wait", thread::sleep(ACTION_DELAY));
             return Ok(());
         }
     }

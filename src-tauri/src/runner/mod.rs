@@ -5,6 +5,8 @@ use crate::automation_error::{AutomationResult, AutomationResultExt};
 mod actions;
 mod ap_recovery;
 mod attack;
+#[cfg(dev)]
+mod battle_trace;
 mod config;
 mod coords;
 mod diagnostics;
@@ -65,6 +67,29 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
+
+#[cfg(dev)]
+macro_rules! battle_span {
+    ($runner:expr, $name:literal $(, $($fields:tt)+)?) => {
+        match $runner.battle_trace.parent_span() {
+            Some(parent) => tracing::info_span!(
+                target: crate::telemetry::BATTLE_TARGET, parent: &parent, $name $(, $($fields)+)?
+            ),
+            None => tracing::Span::none(),
+        }
+    };
+}
+#[cfg(dev)]
+use battle_span;
+
+macro_rules! battle_step {
+    ($runner:expr, $name:literal, $operation:expr) => {{
+        #[cfg(dev)]
+        let _span = battle_span!($runner, $name).entered();
+        $operation
+    }};
+}
+use battle_step;
 
 /// Poll cadence for `wait_for_attack_button` while a skill animation
 /// (cut-in, NP charge effect, etc.) is hiding the attack button.
@@ -185,6 +210,8 @@ pub struct Runner {
     servants_placed: Vec<u32>,
     // Battle progress tracking
     battle: BattleState,
+    #[cfg(dev)]
+    battle_trace: battle_trace::BattleTrace,
     /// Exact three-card chain last submitted on the Attack screen. Kept until
     /// the next submission so a stuck partial selection can return to Battle
     /// and replay the same targets without repeating command-card/NP CV.
@@ -234,6 +261,7 @@ impl Runner {
         team_verification: Arc<Mutex<TeamVerificationControl>>,
         team_check_targets: Vec<TeamCheckTarget>,
         mystic_code_name: Option<String>,
+        #[cfg(dev)] run_id: uuid::Uuid,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
@@ -276,6 +304,8 @@ impl Runner {
             support_level_progress: SupportLevelPanelProgress::default(),
             servants_placed: Vec::new(),
             battle: BattleState::new(),
+            #[cfg(dev)]
+            battle_trace: battle_trace::BattleTrace::new(run_id),
             last_attack_plan: None,
             completed_mission_runs: 0,
             ap_recovery_usage: BattleRunApRecoveryUsage::default(),

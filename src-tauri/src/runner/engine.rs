@@ -33,7 +33,27 @@ impl Runner {
     // -- main loop -----------------------------------------------------------
 
     pub fn run(mut self) {
-        if let Err(message) = self.run_loop() {
+        let mut support_trace = SupportSearchTrace::default();
+        let result = self.run_loop(&mut support_trace);
+        if support_trace.is_active() {
+            let failed =
+                result.is_err() || matches!(*self.state.lock().unwrap(), RunnerState::Error { .. });
+            support_trace.finish(SearchOutcome::on_runner_exit(failed, self.is_cancelled()));
+        }
+        #[cfg(dev)]
+        if self.battle_trace.is_active() {
+            let outcome = if result.is_err()
+                || matches!(*self.state.lock().unwrap(), RunnerState::Error { .. })
+            {
+                "failed"
+            } else if self.is_cancelled() {
+                "cancelled"
+            } else {
+                "interrupted"
+            };
+            self.battle_trace.finish(outcome);
+        }
+        if let Err(message) = result {
             self.transition_lifecycle(RunnerLifecycleEvent::Failed {
                 message: message.to_string(),
             });
@@ -42,7 +62,7 @@ impl Runner {
         }
     }
 
-    fn run_loop(&mut self) -> AutomationResult<()> {
+    fn run_loop(&mut self, support_trace: &mut SupportSearchTrace) -> AutomationResult<()> {
         if self.interlude.is_some() {
             self.sidecar().use_interlude_detection();
         } else {
@@ -70,7 +90,24 @@ impl Runner {
                 return Ok(());
             }
 
-            let screen = match self.sidecar().detect(None).recoverable()? {
+            let detection = if support_trace.is_active() {
+                support_trace.in_scope(|| {
+                    support_phase!("support.detect_screen", self.sidecar().detect(None))
+                })
+            } else {
+                #[cfg(dev)]
+                let span =
+                    battle_span!(self, "battle.detect_screen", screen = tracing::field::Empty);
+                #[cfg(dev)]
+                let _entered = span.enter();
+                let detection = self.sidecar().detect(None);
+                #[cfg(dev)]
+                if let Ok(screen) = &detection {
+                    span.record("screen", tracing::field::display(screen));
+                }
+                detection
+            };
+            let screen = match detection.recoverable()? {
                 Ok(s) => s,
                 Err(e) => {
                     self.transition_lifecycle(RunnerLifecycleEvent::Failed {
@@ -82,7 +119,18 @@ impl Runner {
                 }
             };
 
+            #[cfg(dev)]
+            self.battle_trace.observe_exit(screen, self.is_cancelled());
+
             if support_search_screen_exited(last_detected_screen, screen) {
+                if support_trace.is_active() {
+                    let outcome = if self.is_cancelled() {
+                        SearchOutcome::Cancelled
+                    } else {
+                        SearchOutcome::on_screen_exit(screen, self.support_selected)
+                    };
+                    support_trace.finish(outcome);
+                }
                 self.release_support_ocr()?;
             }
 
@@ -99,7 +147,11 @@ impl Runner {
                 }
                 unknown_count = 0;
                 last_detected_screen = screen;
-                thread::sleep(POLL_INTERVAL);
+                battle_step!(
+                    self,
+                    "battle.poll_wait",
+                    support_trace.wait_for_poll(POLL_INTERVAL)
+                );
                 continue;
             }
 
@@ -111,7 +163,11 @@ impl Runner {
                 if matches!(*self.state.lock().unwrap(), RunnerState::Error { .. }) {
                     return Ok(());
                 }
-                thread::sleep(POLL_INTERVAL);
+                battle_step!(
+                    self,
+                    "battle.poll_wait",
+                    support_trace.wait_for_poll(POLL_INTERVAL)
+                );
                 continue;
             }
 
@@ -155,13 +211,22 @@ impl Runner {
                     let entry_wait = support_select_entry_wait(last_detected_screen, screen);
                     last_detected_screen = screen;
                     if let Some(wait) = entry_wait {
+                        self.support_selected = false;
+                        support_trace.begin();
+                        #[cfg(dev)]
+                        support_trace.record_quest(
+                            self.battle_trace.run_id(),
+                            self.completed_mission_runs.saturating_add(1),
+                        );
                         self.emit("SupportSelect", "等待助战页面就绪…");
-                        thread::sleep(wait);
+                        support_trace.in_scope(|| {
+                            support_phase!("support.entry_wait", thread::sleep(wait));
+                        });
                         // Detect again after the entry animation before any
                         // class-filter, CE-only, or first-row selection tap.
                         continue;
                     }
-                    self.handle_support_select()?;
+                    support_trace.in_scope(|| self.handle_support_select())?;
                 }
                 Screen::ServantSelect => {
                     unknown_count = 0;
@@ -171,11 +236,17 @@ impl Runner {
                 Screen::Battle => {
                     unknown_count = 0;
                     last_detected_screen = screen;
+                    #[cfg(dev)]
+                    self.battle_trace
+                        .begin(self.completed_mission_runs.saturating_add(1), "resumed");
                     self.handle_battle()?;
                 }
                 Screen::Attack => {
                     unknown_count = 0;
                     last_detected_screen = screen;
+                    #[cfg(dev)]
+                    self.battle_trace
+                        .begin(self.completed_mission_runs.saturating_add(1), "resumed");
                     if self.battle.awaiting_attack_resolution() {
                         match attack_submission_wait_gate(
                             self.battle.attack_submission_started_at(),
@@ -191,8 +262,7 @@ impl Runner {
                             }
                         }
                     } else {
-                        self.battle
-                            .transition(BattleFlowEvent::AttackScreenDetected);
+                        self.transition_battle_flow(BattleFlowEvent::AttackScreenDetected);
                         self.handle_attack()?;
                     }
                 }
@@ -234,6 +304,9 @@ impl Runner {
                     unknown_count += 1;
                     let timeout = self.config.unknown_screen_timeout_count;
                     if unknown_count >= timeout {
+                        #[cfg(dev)]
+                        self.battle_trace
+                            .finish_with_reason("timed_out", "screen_detection");
                         if screen == Screen::Unknown {
                             self.save_interlude_settlement_timeout_sample();
                         }
@@ -276,7 +349,11 @@ impl Runner {
                                 thread::sleep(ACTION_DELAY);
                             }
                         }
-                        thread::sleep(POLL_INTERVAL);
+                        battle_step!(
+                            self,
+                            "battle.poll_wait",
+                            support_trace.wait_for_poll(POLL_INTERVAL)
+                        );
                         continue;
                     }
                     if self.try_continue_interlude_settlement()? {
@@ -305,18 +382,37 @@ impl Runner {
                 return Ok(());
             }
 
-            thread::sleep(POLL_INTERVAL);
+            battle_step!(
+                self,
+                "battle.poll_wait",
+                support_trace.wait_for_poll(POLL_INTERVAL)
+            );
         }
     }
 
     // -- battle screen handlers ----------------------------------------------
+
+    pub(super) fn transition_battle_flow(
+        &mut self,
+        event: BattleFlowEvent,
+    ) -> BattleFlowTransition {
+        let transition = self.battle.transition(event);
+        #[cfg(dev)]
+        self.battle_trace
+            .on_transition(transition, self.completed_mission_runs.saturating_add(1));
+        transition
+    }
 
     fn skip_attack_animation_if_due(&mut self, screen: Screen, actionable: bool) -> bool {
         if self
             .battle
             .attack_animation_skip_due(screen, actionable, Instant::now())
         {
-            return self.tap_skip_animation_button("出卡后等待战斗动作");
+            return battle_step!(
+                self,
+                "battle.skip_animation",
+                self.tap_skip_animation_button("出卡后等待战斗动作")
+            );
         }
         true
     }
@@ -325,18 +421,22 @@ impl Runner {
     /// Keep the normal screen router from treating them as fresh setup pages.
     fn handle_battle_load_screen(&mut self, screen: Screen) -> AutomationResult<bool> {
         Ok(
-            match self.battle.observe_battle_load(
-                screen,
-                Instant::now(),
-                self.config.unknown_screen_timeout_count,
-            ) {
+            match self
+                .transition_battle_flow(BattleFlowEvent::BattleLoadObserved {
+                    screen,
+                    at: Instant::now(),
+                    timeout_count: self.config.unknown_screen_timeout_count,
+                })
+                .battle_load_gate
+                .unwrap_or(BattleLoadGate::NotWaiting)
+            {
                 BattleLoadGate::NotWaiting => false,
                 BattleLoadGate::Waiting => {
                     self.emit("TeamConfirm", "等待进入战斗页面…");
                     true
                 }
                 BattleLoadGate::RetryStart { attempt } => {
-                    self.retry_quest_start(attempt)?;
+                    battle_step!(self, "battle.start_retry", self.retry_quest_start(attempt))?;
                     true
                 }
                 gate @ (BattleLoadGate::TimedOut | BattleLoadGate::StartRetriesExhausted) => {
@@ -367,20 +467,22 @@ impl Runner {
                 return Ok(());
             }
             AttackScreenWaitGate::TimedOut => {
-                self.battle
-                    .transition(BattleFlowEvent::AttackScreenWaitTimedOut);
+                self.transition_battle_flow(BattleFlowEvent::AttackScreenWaitTimedOut);
                 self.emit_warn("Battle", "等待指令卡画面超时，恢复 Battle 处理");
             }
             AttackScreenWaitGate::NotWaiting => {}
         }
 
         // Check if the attack button is present (our turn to act)
-        let attack_present = self
-            .sidecar()
-            .find_element_by_name(None, BATTLE_SCREEN, ATTACK_BUTTON_ELEMENT)
-            .recoverable()?
-            .map(|m| m.found)
-            .unwrap_or(false);
+        let attack_present = battle_step!(
+            self,
+            "battle.actionable_probe",
+            self.sidecar()
+                .find_element_by_name(None, BATTLE_SCREEN, ATTACK_BUTTON_ELEMENT)
+        )
+        .recoverable()?
+        .map(|m| m.found)
+        .unwrap_or(false);
 
         if !self.skip_attack_animation_if_due(Screen::Battle, attack_present) {
             return Ok(());
@@ -393,14 +495,20 @@ impl Runner {
 
         let attack_returned_after_submit = self.battle.awaiting_attack_resolution();
         if !attack_returned_after_submit {
-            self.battle.transition(BattleFlowEvent::BattleActionable);
+            self.transition_battle_flow(BattleFlowEvent::BattleActionable);
+        }
+        #[cfg(dev)]
+        if attack_returned_after_submit {
+            self.battle_trace.begin_hud_wait();
         }
 
         // Read the current battle scene (m of n) from the BATTLE label HUD.
-        let screen_scene = match self
-            .sidecar()
-            .read_battle_scene(None, BATTLE_SCENE_REGION)
-            .recoverable()?
+        let screen_scene = match battle_step!(
+            self,
+            "battle.read_hud",
+            self.sidecar().read_battle_scene(None, BATTLE_SCENE_REGION)
+        )
+        .recoverable()?
         {
             Ok(scene) => scene,
             Err(error) => {
@@ -418,22 +526,25 @@ impl Runner {
         ) {
             PostAttackHudReadGate::Ready => {
                 if attack_returned_after_submit {
-                    self.battle
-                        .transition(BattleFlowEvent::PostAttackHudResolved);
+                    self.transition_battle_flow(BattleFlowEvent::PostAttackHudResolved);
                 }
             }
             PostAttackHudReadGate::Waiting { started_at } => {
-                self.battle
-                    .transition(BattleFlowEvent::PostAttackHudWaitStarted { at: started_at });
+                self.transition_battle_flow(BattleFlowEvent::PostAttackHudWaitStarted {
+                    at: started_at,
+                });
                 self.emit("Battle", "等待读取 Battle HUD…");
                 return Ok(());
             }
             PostAttackHudReadGate::TimedOut => {
-                self.battle
-                    .transition(BattleFlowEvent::PostAttackHudResolved);
+                #[cfg(dev)]
+                self.battle_trace.hud_timed_out();
+                self.transition_battle_flow(BattleFlowEvent::PostAttackHudResolved);
                 self.emit("Battle", "Battle HUD 读取超时，沿用当前 Turn 推进逻辑");
             }
         }
+        #[cfg(dev)]
+        self.battle_trace.record_scene(screen_scene);
         let scene_m = screen_scene.map(|(m, _)| m);
 
         // Decide what to do based on (prior scene, fresh read). See
@@ -590,7 +701,7 @@ impl Runner {
         if !self.tap_attack_button()? {
             return Ok(());
         }
-        thread::sleep(ACTION_DELAY);
+        battle_step!(self, "battle.poll_wait", thread::sleep(ACTION_DELAY));
         Ok(())
     }
 }

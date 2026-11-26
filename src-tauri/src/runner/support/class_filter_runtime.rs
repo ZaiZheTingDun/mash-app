@@ -30,16 +30,25 @@ impl Runner {
                 "EXTRA 职阶筛选弹窗未出现，重新长按 EXTRA 页签",
             );
         }
-        thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE);
+        support_phase!(
+            "support.class_filter_wait",
+            thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE)
+        );
 
         if !self.tap_at("SupportSelect", SUPPORT_EXTRA_FILTER_RESET_BUTTON) {
             return Ok(false);
         }
-        thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE);
+        support_phase!(
+            "support.class_filter_wait",
+            thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE)
+        );
         if !self.tap_at("SupportSelect", extra.point) {
             return Ok(false);
         }
-        thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE);
+        support_phase!(
+            "support.class_filter_wait",
+            thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE)
+        );
         // `adb input tap` is effectively a zero-duration press. On this
         // modal it can dismiss on DOWN and leak the UP into the support row
         // underneath, selecting a servant before OCR runs. A 100-ms
@@ -105,7 +114,10 @@ impl Runner {
             if Instant::now() >= deadline {
                 return Ok(SupportExtraFilterDialogWait::TimedOut);
             }
-            thread::sleep(SUPPORT_EXTRA_FILTER_DIALOG_POLL);
+            support_phase!(
+                "support.class_filter_wait",
+                thread::sleep(SUPPORT_EXTRA_FILTER_DIALOG_POLL)
+            );
         }
     }
 }

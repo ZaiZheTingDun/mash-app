@@ -15,6 +15,10 @@ impl Runner {
     ///
     /// Emits a local-only debug log with the detected anchor positions
     /// and the chosen delta for development triage.
+    #[cfg_attr(
+        dev,
+        tracing::instrument(target = "mash::support", name = "support.scroll", skip_all)
+    )]
     pub(crate) fn scroll_support_list(&mut self, confirm_button_anchors: &[NormRect]) -> bool {
         let delta = scroll_support_list_delta(confirm_button_anchors);
         let from_y = SUPPORT_SCROLL_FROM_Y;
@@ -47,6 +51,10 @@ impl Runner {
 
     /// Probe both thumb tips across the complete track on one frozen frame.
     /// The list may already be between its endpoints when automation starts.
+    #[cfg_attr(
+        dev,
+        tracing::instrument(target = "mash::support", name = "support.scrollbar_probe", skip_all)
+    )]
     pub(crate) fn support_scroll_bar_at_end(&mut self) -> AutomationResult<bool> {
         let snapshot = tempfile::tempdir().context("创建助战滚动条截图目录失败")?;
         let image_path = snapshot.path().join("support-scrollbar.png");
@@ -103,6 +111,14 @@ impl Runner {
         ))
     }
 
+    #[cfg_attr(
+        dev,
+        tracing::instrument(
+            target = "mash::support",
+            name = "support.refresh_available",
+            skip_all
+        )
+    )]
     pub(crate) fn wait_for_support_refresh_available(&mut self) -> AutomationResult<bool> {
         let deadline = Instant::now() + SUPPORT_REFRESH_AVAILABLE_TIMEOUT;
         let mut emitted_wait = false;
@@ -154,7 +170,10 @@ impl Runner {
                 self.fail_action("SupportSelect", "等待助战刷新", "刷新按钮仍不可用".into());
                 return Ok(false);
             }
-            thread::sleep(SUPPORT_REFRESH_AVAILABLE_POLL);
+            support_phase!(
+                "support.refresh_wait",
+                thread::sleep(SUPPORT_REFRESH_AVAILABLE_POLL)
+            );
         }
     }
 
@@ -167,6 +186,10 @@ impl Runner {
     /// After tapping the support-list refresh button, confirm the modal when
     /// the server's cv.json defines one. Servers without a modal template
     /// fall back to the legacy fixed settle delay.
+    #[cfg_attr(
+        dev,
+        tracing::instrument(target = "mash::support", name = "support.refresh_confirm", skip_all)
+    )]
     pub(crate) fn confirm_support_refresh_dialog_if_needed(&mut self) -> AutomationResult<bool> {
         let appear_deadline = std::time::Instant::now() + SUPPORT_REFRESH_DIALOG_APPEAR_TIMEOUT;
         loop {
@@ -187,7 +210,10 @@ impl Runner {
                         SUPPORT_REFRESH_DIALOG_ELEMENT,
                     ) =>
                 {
-                    thread::sleep(SUPPORT_REFRESH_SETTLE);
+                    support_phase!(
+                        "support.refresh_wait",
+                        thread::sleep(SUPPORT_REFRESH_SETTLE)
+                    );
                     return Ok(true);
                 }
                 Err(e) => {
@@ -196,13 +222,22 @@ impl Runner {
                 }
             }
             if std::time::Instant::now() >= appear_deadline {
-                thread::sleep(SUPPORT_REFRESH_SETTLE);
+                support_phase!(
+                    "support.refresh_wait",
+                    thread::sleep(SUPPORT_REFRESH_SETTLE)
+                );
                 return Ok(true);
             }
-            thread::sleep(SUPPORT_REFRESH_DIALOG_POLL);
+            support_phase!(
+                "support.refresh_wait",
+                thread::sleep(SUPPORT_REFRESH_DIALOG_POLL)
+            );
         }
 
-        thread::sleep(SUPPORT_REFRESH_DIALOG_CONFIRM_SETTLE);
+        support_phase!(
+            "support.refresh_wait",
+            thread::sleep(SUPPORT_REFRESH_DIALOG_CONFIRM_SETTLE)
+        );
         if self.is_cancelled() {
             return Ok(false);
         }
@@ -223,7 +258,10 @@ impl Runner {
                 .recoverable()?
             {
                 Ok(m) if !m.found => {
-                    thread::sleep(SUPPORT_REFRESH_DIALOG_POLL);
+                    support_phase!(
+                        "support.refresh_wait",
+                        thread::sleep(SUPPORT_REFRESH_DIALOG_POLL)
+                    );
                     return Ok(true);
                 }
                 Ok(_) => {}
@@ -234,12 +272,18 @@ impl Runner {
                         SUPPORT_REFRESH_DIALOG_ELEMENT,
                     ) =>
                 {
-                    thread::sleep(SUPPORT_REFRESH_SETTLE);
+                    support_phase!(
+                        "support.refresh_wait",
+                        thread::sleep(SUPPORT_REFRESH_SETTLE)
+                    );
                     return Ok(true);
                 }
                 Err(e) => {
                     eprintln!("[runner] refresh dialog disappearance probe failed: {e}");
-                    thread::sleep(SUPPORT_REFRESH_SETTLE);
+                    support_phase!(
+                        "support.refresh_wait",
+                        thread::sleep(SUPPORT_REFRESH_SETTLE)
+                    );
                     return Ok(true);
                 }
             }
@@ -247,7 +291,10 @@ impl Runner {
                 self.emit("SupportSelect", "等待助战刷新确认关闭超时");
                 return Ok(false);
             }
-            thread::sleep(SUPPORT_REFRESH_DIALOG_POLL);
+            support_phase!(
+                "support.refresh_wait",
+                thread::sleep(SUPPORT_REFRESH_DIALOG_POLL)
+            );
         }
     }
 
@@ -255,6 +302,10 @@ impl Runner {
     /// pinned a support servant. Mirrors the pre-OCR behaviour so existing
     /// projects don't regress; new setups should pin a servant via the
     /// team-builder support slot to engage the OCR-based flow above.
+    #[cfg_attr(
+        dev,
+        tracing::instrument(target = "mash::support", name = "support.legacy_select", skip_all)
+    )]
     pub(crate) fn legacy_pick_first_support(&mut self) -> AutomationResult<()> {
         if let Some(name) = self.config.support_servant_name.clone() {
             let region = NormRect {
@@ -269,42 +320,54 @@ impl Runner {
                 .recoverable()?
             {
                 self.emit("SupportSelect", &format!("找到助战从者: {name}"));
-                if !self.tap_at("SupportSelect", pos) {
+                if !support_phase!("support.select", self.tap_at("SupportSelect", pos)) {
                     return Ok(());
                 }
                 self.support_selected = true;
                 self.support_scroll_count = 0;
-                thread::sleep(ACTION_DELAY);
+                support_phase!("support.legacy_wait", thread::sleep(ACTION_DELAY));
                 return Ok(());
             }
             // Template miss → fall through to scroll/refresh below.
             if self.support_scroll_count < self.config.max_support_scrolls {
-                if !self.swipe_at(
-                    "SupportSelect",
-                    Point::new(0.50, 0.70),
-                    Point::new(0.50, 0.30),
-                    300,
+                if !support_phase!(
+                    "support.scroll",
+                    self.swipe_at(
+                        "SupportSelect",
+                        Point::new(0.50, 0.70),
+                        Point::new(0.50, 0.30),
+                        300
+                    )
                 ) {
                     return Ok(());
                 }
                 self.support_scroll_count += 1;
-                thread::sleep(ACTION_DELAY);
+                support_phase!("support.scroll_redraw_wait", thread::sleep(ACTION_DELAY));
             } else {
+                #[cfg(dev)]
+                let _span =
+                    tracing::info_span!(target: "mash::support", "support.refresh").entered();
                 if !self.tap_at("SupportSelect", Point::new(0.92, 0.08)) {
                     return Ok(());
                 }
                 self.support_scroll_count = 0;
-                thread::sleep(Duration::from_secs(2));
+                support_phase!(
+                    "support.refresh_wait",
+                    thread::sleep(Duration::from_secs(2))
+                );
             }
             return Ok(());
         }
 
         self.emit("SupportSelect", "选择第一个助战从者");
-        if !self.tap_at("SupportSelect", Point::new(0.50, 0.35)) {
+        if !support_phase!(
+            "support.select",
+            self.tap_at("SupportSelect", Point::new(0.50, 0.35))
+        ) {
             return Ok(());
         }
         self.support_selected = true;
-        thread::sleep(ACTION_DELAY);
+        support_phase!("support.legacy_wait", thread::sleep(ACTION_DELAY));
         Ok(())
     }
 }

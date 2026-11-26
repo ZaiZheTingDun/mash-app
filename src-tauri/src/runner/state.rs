@@ -125,6 +125,7 @@ impl BattleState {
         true
     }
 
+    #[cfg(test)]
     pub(crate) fn observe_battle_load(
         &mut self,
         screen: Screen,

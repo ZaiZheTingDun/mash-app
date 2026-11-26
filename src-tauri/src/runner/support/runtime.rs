@@ -52,6 +52,10 @@ impl Runner {
                 self.support_extra_class_filter_configured,
             ) {
                 Some(SupportClassFilterAction::Tap(tab)) => {
+                    #[cfg(dev)]
+                    let _span =
+                        tracing::info_span!(target: "mash::support", "support.class_filter")
+                            .entered();
                     self.emit(
                         "SupportSelect",
                         &format!(
@@ -67,10 +71,17 @@ impl Runner {
                         return Ok(());
                     }
                     self.support_class_search.tab_done = true;
-                    thread::sleep(SUPPORT_CLASS_TAB_SETTLE);
+                    support_phase!(
+                        "support.class_filter_wait",
+                        thread::sleep(SUPPORT_CLASS_TAB_SETTLE)
+                    );
                     return Ok(());
                 }
                 Some(SupportClassFilterAction::CnExtra(extra)) => {
+                    #[cfg(dev)]
+                    let _span =
+                        tracing::info_span!(target: "mash::support", "support.class_filter_extra")
+                            .entered();
                     self.emit(
                         "SupportSelect",
                         &format!("设置 EXTRA 具体职阶筛选 -> {}", extra.label),
@@ -80,7 +91,10 @@ impl Runner {
                     }
                     self.support_extra_class_filter_configured = true;
                     self.support_class_search.tab_done = true;
-                    thread::sleep(SUPPORT_EXTRA_FILTER_RESULT_SETTLE);
+                    support_phase!(
+                        "support.class_filter_wait",
+                        thread::sleep(SUPPORT_EXTRA_FILTER_RESULT_SETTLE)
+                    );
                     return Ok(());
                 }
                 None => {
@@ -100,9 +114,9 @@ impl Runner {
         let include_support_details =
             support_level_filtering_enabled(self.server) && self.has_support_level_requirements();
         let support_full_list_ocr_fallback = self.config.support_full_list_ocr_fallback;
-        let result = match self
-            .sidecar()
-            .find_supports(
+        let response = support_phase!(
+            "support.find_supports",
+            self.sidecar().find_supports(
                 None,
                 &meta.name,
                 &meta.names,
@@ -113,8 +127,8 @@ impl Runner {
                 support_full_list_ocr_fallback,
                 false,
             )
-            .recoverable()?
-        {
+        );
+        let result = match response.recoverable()? {
             Ok(r) => r,
             Err(e) => {
                 self.release_support_ocr()?;
@@ -204,7 +218,10 @@ impl Runner {
                 "SupportSelect",
                 &support_found_debug_detail(&meta.name, row),
             );
-            if !self.tap_at("SupportSelect", support_row_tap_point(row)) {
+            if !support_phase!(
+                "support.select",
+                self.tap_at("SupportSelect", support_row_tap_point(row))
+            ) {
                 return Ok(());
             }
             self.support_selected = true;
@@ -256,7 +273,10 @@ impl Runner {
             if !self.tap_at("SupportSelect", SUPPORT_SKILL_PANEL_TOGGLE_BUTTON) {
                 return Ok(());
             }
-            thread::sleep(SUPPORT_SKILL_PANEL_TOGGLE_SETTLE);
+            support_phase!(
+                "support.skill_panel_wait",
+                thread::sleep(SUPPORT_SKILL_PANEL_TOGGLE_SETTLE)
+            );
             return Ok(());
         }
         if !level_filter_reasons.is_empty() {
@@ -291,7 +311,10 @@ impl Runner {
                 }
                 self.support_scroll_count += 1;
                 self.support_level_progress = SupportLevelPanelProgress::default();
-                thread::sleep(support_scroll_redraw_wait(self.touch.timing()));
+                support_phase!(
+                    "support.scroll_redraw_wait",
+                    thread::sleep(support_scroll_redraw_wait(self.touch.timing()))
+                );
             } else if self
                 .support_class_search
                 .advance_to_all_classes(self.config.support_class_filter_mode)
@@ -303,6 +326,9 @@ impl Runner {
                 self.support_scroll_count = 0;
                 self.support_level_progress = SupportLevelPanelProgress::default();
             } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
+                #[cfg(dev)]
+                let _span =
+                    tracing::info_span!(target: "mash::support", "support.refresh").entered();
                 let reason = if grand_section_exhausted {
                     "当前页已出现普通助战，冠位区域已扫完"
                 } else {
@@ -365,9 +391,9 @@ impl Runner {
         }
 
         let support_full_list_ocr_fallback = self.config.support_full_list_ocr_fallback;
-        let result = match self
-            .sidecar()
-            .find_supports(
+        let response = support_phase!(
+            "support.find_supports",
+            self.sidecar().find_supports(
                 None,
                 "",
                 &[],
@@ -378,8 +404,8 @@ impl Runner {
                 support_full_list_ocr_fallback,
                 true,
             )
-            .recoverable()?
-        {
+        );
+        let result = match response.recoverable()? {
             Ok(result) => result,
             Err(error) => {
                 self.release_support_ocr()?;
@@ -431,7 +457,10 @@ impl Runner {
                 &format!("找到符合礼装条件的助战: {label}（{mlb_summary}）"),
             );
             self.emit_debug("SupportSelect", &format!("礼装匹配助战 {label}"));
-            if !self.tap_at("SupportSelect", support_row_tap_point(row)) {
+            if !support_phase!(
+                "support.select",
+                self.tap_at("SupportSelect", support_row_tap_point(row))
+            ) {
                 return Ok(());
             }
             self.support_selected = true;
@@ -477,8 +506,14 @@ impl Runner {
                     return Ok(());
                 }
                 self.support_scroll_count += 1;
-                thread::sleep(support_scroll_redraw_wait(self.touch.timing()));
+                support_phase!(
+                    "support.scroll_redraw_wait",
+                    thread::sleep(support_scroll_redraw_wait(self.touch.timing()))
+                );
             } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
+                #[cfg(dev)]
+                let _span =
+                    tracing::info_span!(target: "mash::support", "support.refresh").entered();
                 let reason = if grand_section_exhausted {
                     "当前页已出现普通助战，冠位区域已扫完"
                 } else {

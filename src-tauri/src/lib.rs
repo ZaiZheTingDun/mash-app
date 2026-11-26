@@ -18,6 +18,8 @@ mod runner;
 mod screen;
 mod server;
 mod storage;
+#[cfg(any(dev, test))]
+mod telemetry;
 mod touch;
 
 #[cfg(test)]
@@ -56,6 +58,9 @@ pub(crate) use paths::*;
 // ---------------------------------------------------------------------------
 
 pub fn run() {
+    #[cfg(dev)]
+    let mut telemetry = telemetry::init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -309,8 +314,16 @@ pub fn run() {
             commands::debug::warm_sidecar,
             commands::catalog::get_servant_metadata,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(move |_, event| {
+            #[cfg(dev)]
+            if matches!(event, tauri::RunEvent::Exit) {
+                drop(telemetry.take());
+            }
+            #[cfg(not(dev))]
+            let _ = event;
+        });
 }
 
 #[cfg(test)]
