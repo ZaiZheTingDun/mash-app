@@ -44,7 +44,7 @@ fn relative_target_stays_within_root(root: &Path, link_parent: &Path, target: &P
 
 #[cfg(unix)]
 pub(crate) fn extract_zip_symlink(
-    entry: &mut zip::read::ZipFile<'_>,
+    entry: &mut zip::read::ZipFile<'_, fs::File>,
     output: &Path,
     destination: &Path,
 ) -> Result<(), String> {
@@ -70,7 +70,7 @@ pub(crate) fn extract_zip_symlink(
 
 #[cfg(not(unix))]
 pub(crate) fn extract_zip_symlink(
-    entry: &mut zip::read::ZipFile<'_>,
+    entry: &mut zip::read::ZipFile<'_, fs::File>,
     output: &Path,
     _destination: &Path,
 ) -> Result<(), String> {

@@ -1861,8 +1861,12 @@ fn build_zip_with_options(entries: &[(&str, &[u8], Option<u32>)]) -> Vec<u8> {
             let options = unix_permissions.map_or(SimpleFileOptions::default(), |mode| {
                 SimpleFileOptions::default().unix_permissions(mode)
             });
-            writer.start_file(name, options).unwrap();
-            writer.write_all(contents).unwrap();
+            if name.ends_with('/') {
+                writer.add_directory(*name, options).unwrap();
+            } else {
+                writer.start_file(name, options).unwrap();
+                writer.write_all(contents).unwrap();
+            }
         }
         writer.finish().unwrap();
     }
@@ -1877,6 +1881,7 @@ fn import_asset_bundle_from_zip_path_accepts_assets_wrapper() {
         &zip_path,
         build_zip(&[
             ("assets/assets-version.json", br#"{"version":2}"#),
+            ("assets/servants/1/", b""),
             ("assets/servants/1/narrow_servant_4.png", b"portrait"),
             ("assets/ces/2/card_ce.png", b"ce"),
         ]),
