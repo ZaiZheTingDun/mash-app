@@ -31,7 +31,7 @@ pub(crate) fn zip_has_valid_root(relative: &Path, root: &str) -> bool {
     }) == Some(root)
 }
 
-pub(crate) fn zip_entry_is_unix_symlink(entry: &zip::read::ZipFile<'_>) -> bool {
+pub(crate) fn zip_entry_is_unix_symlink(entry: &zip::read::ZipFile<'_, fs::File>) -> bool {
     entry
         .unix_mode()
         .is_some_and(|mode| (mode & 0o170000) == 0o120000)
@@ -58,7 +58,7 @@ pub(crate) fn extract_zip_with_root(
         }
 
         let output = destination.join(relative);
-        if entry.name().ends_with('/') {
+        if entry.name_raw().ends_with(b"/") {
             fs::create_dir_all(&output).map_err(|e| format!("创建 runtime 目录失败: {e}"))?;
             continue;
         }

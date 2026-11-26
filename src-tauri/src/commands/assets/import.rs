@@ -74,7 +74,7 @@ fn extract_zip_archive_inner(
             continue;
         };
         let output = destination.join(relative);
-        if entry.name().ends_with('/') {
+        if entry.name_raw().ends_with(b"/") {
             fs::create_dir_all(&output).map_err(|e| format!("创建目录失败: {e}"))?;
             continue;
         }
