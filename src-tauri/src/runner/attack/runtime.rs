@@ -204,7 +204,11 @@ impl Runner {
     }
 
     pub(crate) fn handle_attack(&mut self) -> AutomationResult<()> {
-        if !self.ensure_battle_speed_level_two()? {
+        if !battle_step!(
+            self,
+            "battle.speed_check",
+            self.ensure_battle_speed_level_two()
+        )? {
             return Ok(());
         }
 
@@ -305,7 +309,11 @@ impl Runner {
                         .map(|turn| &turn.critical_strategy)
                         .cloned()
                         .unwrap_or_default();
-                    let (picks, summary) = choose_critical_picks(&cards, &party_members, &strategy);
+                    let (picks, summary) = battle_step!(
+                        self,
+                        "battle.card_decision",
+                        choose_critical_picks(&cards, &party_members, &strategy)
+                    );
                     let selection = match summary.bonus {
                         Some(CriticalBonusType::MightyChain) => "精湛连携 +20% 暴击率",
                         Some(CriticalBonusType::QuickChain) => "迅击连携 +20% 暴击率",
@@ -344,12 +352,16 @@ impl Runner {
                         .map(|turn| &turn.advanced_card_strategy)
                         .cloned()
                         .unwrap_or_default();
-                    let (picks, matched_rule) = choose_ordinary_advanced_picks_with_crit(
-                        &cards,
-                        &nps,
-                        &party_members,
-                        &strategy,
-                        self.config.prefer_higher_critical_chance,
+                    let (picks, matched_rule) = battle_step!(
+                        self,
+                        "battle.card_decision",
+                        choose_ordinary_advanced_picks_with_crit(
+                            &cards,
+                            &nps,
+                            &party_members,
+                            &strategy,
+                            self.config.prefer_higher_critical_chance,
+                        )
                     );
                     if let Some(rule) = matched_rule {
                         self.emit("Attack", &format!("高级模式：命中 {rule}"));
@@ -400,7 +412,7 @@ impl Runner {
                 }
                 switch_requested = true;
             }
-            thread::sleep(SKILL_POLL_INTERVAL);
+            battle_step!(self, "battle.poll_wait", thread::sleep(SKILL_POLL_INTERVAL));
         }
     }
 
@@ -446,7 +458,11 @@ impl Runner {
             command_card_recognition_settle_delay(recognize_critical_chance);
         if !recognition_settle_delay.is_zero() {
             self.emit("Attack", "等待 1 秒后识别指令卡暴击率");
-            thread::sleep(recognition_settle_delay);
+            battle_step!(
+                self,
+                "battle.card_settle_wait",
+                thread::sleep(recognition_settle_delay)
+            );
         }
 
         // Start with the expected front line for speed. If owner recognition
@@ -480,10 +496,17 @@ impl Runner {
             loop {
                 let used_full_party_candidates =
                     self.battle.command_card_owner_fallback_to_full_party;
-                let cards = match self
-                    .sidecar()
-                    .find_command_cards(None, None, &candidate_ids, assets_dir.as_deref())
-                    .recoverable()?
+                let cards = match battle_step!(
+                    self,
+                    "battle.recognize_cards",
+                    self.sidecar().find_command_cards(
+                        None,
+                        None,
+                        &candidate_ids,
+                        assets_dir.as_deref()
+                    )
+                )
+                .recoverable()?
                 {
                     Ok(c) => c,
                     Err(err) => {
@@ -496,7 +519,7 @@ impl Runner {
                         return Ok(None);
                     }
                     self.emit("Attack", "指令卡尚未完全出现，等待卡面稳定后重试");
-                    thread::sleep(ACTION_DELAY);
+                    battle_step!(self, "battle.card_settle_wait", thread::sleep(ACTION_DELAY));
                     continue;
                 }
                 if !should_retry_command_card_owner_detection(
@@ -554,14 +577,16 @@ impl Runner {
                     return Ok(None);
                 }
                 self.emit("Attack", "指令卡从者未识别，等待卡面稳定后重试");
-                thread::sleep(ACTION_DELAY);
+                battle_step!(self, "battle.card_settle_wait", thread::sleep(ACTION_DELAY));
             }
         } else {
             let cards = loop {
-                let cards = match self
-                    .sidecar()
-                    .find_command_cards(None, None, &[], None)
-                    .recoverable()?
+                let cards = match battle_step!(
+                    self,
+                    "battle.recognize_cards",
+                    self.sidecar().find_command_cards(None, None, &[], None)
+                )
+                .recoverable()?
                 {
                     Ok(c) => c,
                     Err(err) => {
@@ -576,7 +601,7 @@ impl Runner {
                     return Ok(None);
                 }
                 self.emit("Attack", "指令卡尚未完全出现，等待卡面稳定后重试");
-                thread::sleep(ACTION_DELAY);
+                battle_step!(self, "battle.card_settle_wait", thread::sleep(ACTION_DELAY));
             };
             self.emit("Attack", "未配置普通指令卡，跳过指令卡归属识别");
             cards
@@ -614,10 +639,12 @@ impl Runner {
         } else {
             match np_detection_mode {
                 NoblePhantasmDetectionMode::Card => loop {
-                    let mut nps = match self
-                        .sidecar()
-                        .find_noble_phantasms(None, None)
-                        .recoverable()?
+                    let mut nps = match battle_step!(
+                        self,
+                        "battle.recognize_np",
+                        self.sidecar().find_noble_phantasms(None, None)
+                    )
+                    .recoverable()?
                     {
                         Ok(n) => n,
                         Err(err) => {
@@ -635,7 +662,7 @@ impl Runner {
                         return Ok(None);
                     }
                     self.emit("Attack", "宝具卡尚未识别完整，等待卡面稳定后重试");
-                    thread::sleep(ACTION_DELAY);
+                    battle_step!(self, "battle.card_settle_wait", thread::sleep(ACTION_DELAY));
                 },
                 NoblePhantasmDetectionMode::Gauge => {
                     let Some(nps) = self.read_noble_phantasm_gauges("Attack", false)? else {

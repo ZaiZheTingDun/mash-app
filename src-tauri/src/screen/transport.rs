@@ -19,8 +19,7 @@ impl SidecarTransport {
         timeout: Duration,
     ) -> Result<serde_json::Value, CvError> {
         #[cfg(dev)]
-        let span =
-            crate::telemetry::support_sidecar_span(request["cmd"].as_str().unwrap_or("unknown"));
+        let span = crate::telemetry::sidecar_span(request["cmd"].as_str().unwrap_or("unknown"));
         #[cfg(dev)]
         let _entered = span.enter();
         let id = self.next_id;

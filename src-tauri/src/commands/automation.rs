@@ -485,6 +485,8 @@ pub(crate) fn start_battle(app: &tauri::AppHandle, start: BattleStart) -> Result
             run.team_verification.clone(),
             team_check_targets,
             mystic_code_name,
+            #[cfg(dev)]
+            run_id,
         );
         runner.run();
     });

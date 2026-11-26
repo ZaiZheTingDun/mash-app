@@ -17,13 +17,19 @@ impl Runner {
 
             loop {
                 let sample = match if use_digit_readiness {
-                    self.sidecar()
-                        .find_battle_noble_phantasms(None, None)
-                        .recoverable()?
+                    battle_step!(
+                        self,
+                        "battle.recognize_np",
+                        self.sidecar().find_battle_noble_phantasms(None, None)
+                    )
+                    .recoverable()?
                 } else {
-                    self.sidecar()
-                        .find_noble_phantasms(None, None)
-                        .recoverable()?
+                    battle_step!(
+                        self,
+                        "battle.recognize_np",
+                        self.sidecar().find_noble_phantasms(None, None)
+                    )
+                    .recoverable()?
                 } {
                     Ok(n) => n,
                     Err(err) => {
@@ -40,7 +46,11 @@ impl Runner {
                 if np_gauge_sample_window_complete(started.elapsed(), samples.len()) {
                     break;
                 }
-                thread::sleep(NP_GAUGE_SAMPLE_INTERVAL);
+                battle_step!(
+                    self,
+                    "battle.poll_wait",
+                    thread::sleep(NP_GAUGE_SAMPLE_INTERVAL)
+                );
             }
 
             let nps = if use_digit_readiness {
@@ -61,7 +71,7 @@ impl Runner {
                 return Ok(None);
             }
             self.emit(screen, "宝具数字未识别完整，等待遮挡消失后重试");
-            thread::sleep(ACTION_DELAY);
+            battle_step!(self, "battle.poll_wait", thread::sleep(ACTION_DELAY));
         }
     }
 
@@ -99,6 +109,8 @@ impl Runner {
         party_supports: &[bool; 3],
         attack_priority_override: Option<&[AttackCard]>,
     ) -> AutomationResult<()> {
+        #[cfg(dev)]
+        let decision = battle_span!(self, "battle.card_decision").entered();
         let mut used_card_slots: HashSet<u32> = HashSet::new();
         let mut used_np_slots: HashSet<u32> = HashSet::new();
         let mut picks: Vec<Pick> = Vec::with_capacity(3);
@@ -159,6 +171,8 @@ impl Runner {
             return Ok(());
         }
 
+        #[cfg(dev)]
+        drop(decision);
         self.tap_picks("Attack", &picks, cards, party_ids)?;
         Ok(())
     }
@@ -170,6 +184,8 @@ impl Runner {
         cards: &[CommandCardMatch],
         party_ids: &[Option<u32>; 3],
     ) -> AutomationResult<()> {
+        #[cfg(dev)]
+        let submission = battle_span!(self, "battle.submit_cards").entered();
         if picks.is_empty() {
             self.emit(screen, "未能选出任何卡，跳过");
             self.battle.scene_config_used = false;
@@ -270,7 +286,7 @@ impl Runner {
             if !self.tap_pick_with_stuck_selection_test(screen, point, selected_count) {
                 return Ok(());
             }
-            thread::sleep(ACTION_DELAY);
+            battle_step!(self, "battle.poll_wait", thread::sleep(ACTION_DELAY));
 
             if is_np {
                 let cannot_use_np = match self
@@ -289,7 +305,7 @@ impl Runner {
                     if !self.tap_at(screen, CANNOT_USE_NP_CLOSE_POINT) {
                         return Ok(());
                     }
-                    thread::sleep(ACTION_DELAY);
+                    battle_step!(self, "battle.poll_wait", thread::sleep(ACTION_DELAY));
                     let Some(replacement) = replacements.pop_front() else {
                         self.fail_action(screen, "替换无法使用的宝具", "没有其他可用指令卡".into());
                         return Ok(());
@@ -308,8 +324,18 @@ impl Runner {
             cards: cards.to_vec(),
             party_ids: *party_ids,
         });
-        self.battle
-            .transition(BattleFlowEvent::AttackCardsSubmitted { at: Instant::now() });
+        #[cfg(dev)]
+        drop(submission);
+        let transition = self
+            .transition_battle_flow(BattleFlowEvent::AttackCardsSubmitted { at: Instant::now() });
+        #[cfg(dev)]
+        if transition.accepted {
+            if let Some(plan) = &self.last_attack_plan {
+                self.battle_trace.record_submission(&plan.picks);
+            }
+        }
+        #[cfg(not(dev))]
+        let _ = transition;
 
         // Reset for next cycle
         self.battle.scene_config_used = false;
@@ -321,10 +347,12 @@ impl Runner {
     ) -> AutomationResult<Option<Vec<NoblePhantasmMatch>>> {
         Ok(match self.config.noble_phantasm_detection_mode {
             NoblePhantasmDetectionMode::Card => loop {
-                let mut nps = match self
-                    .sidecar()
-                    .find_noble_phantasms(None, None)
-                    .recoverable()?
+                let mut nps = match battle_step!(
+                    self,
+                    "battle.recognize_np",
+                    self.sidecar().find_noble_phantasms(None, None)
+                )
+                .recoverable()?
                 {
                     Ok(n) => n,
                     Err(err) => {
@@ -341,7 +369,7 @@ impl Runner {
                     return Ok(None);
                 }
                 self.emit("Attack", "重试时宝具卡尚未识别完整，等待卡面稳定后重试");
-                thread::sleep(ACTION_DELAY);
+                battle_step!(self, "battle.poll_wait", thread::sleep(ACTION_DELAY));
             },
             NoblePhantasmDetectionMode::Gauge => {
                 self.read_noble_phantasm_gauges("Attack", false)?
@@ -368,6 +396,10 @@ impl Runner {
             self.emit_warn("Attack", "选卡未完成，但没有可复用的选卡记录");
             return Ok(());
         };
+        #[cfg(dev)]
+        self.battle_trace.begin_retry();
+        #[cfg(dev)]
+        let _retry = battle_span!(self, "battle.attack_retry").entered();
 
         self.emit_warn(
             "Attack",
@@ -376,13 +408,13 @@ impl Runner {
         if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
             return Ok(());
         }
-        thread::sleep(ACTION_DELAY);
+        battle_step!(self, "battle.poll_wait", thread::sleep(ACTION_DELAY));
         if !self.wait_for_attack_button("Battle", ATTACK_RETRY_NAVIGATION_TIMEOUT)? {
             self.emit_warn("Attack", "选卡重试返回 Battle 超时，稍后继续恢复");
             return Ok(());
         }
 
-        self.battle.transition(BattleFlowEvent::BattleActionable);
+        self.transition_battle_flow(BattleFlowEvent::BattleActionable);
         if !self.tap_attack_button()? {
             return Ok(());
         }
@@ -390,18 +422,25 @@ impl Runner {
             self.emit_warn("Attack", "选卡重试等待指令卡画面稳定超时");
             return Ok(());
         }
-        self.battle
-            .transition(BattleFlowEvent::AttackScreenDetected);
-        thread::sleep(ATTACK_RETRY_SCREEN_SETTLE);
+        self.transition_battle_flow(BattleFlowEvent::AttackScreenDetected);
+        battle_step!(
+            self,
+            "battle.poll_wait",
+            thread::sleep(ATTACK_RETRY_SCREEN_SETTLE)
+        );
 
         let Some(nps) = self.read_noble_phantasms_for_retry()? else {
             return Ok(());
         };
-        let retry_picks = refresh_retry_picks_for_np_state(
-            &plan.picks,
-            &plan.cards,
-            &nps,
-            self.config.prefer_higher_critical_chance,
+        let retry_picks = battle_step!(
+            self,
+            "battle.card_decision",
+            refresh_retry_picks_for_np_state(
+                &plan.picks,
+                &plan.cards,
+                &nps,
+                self.config.prefer_higher_critical_chance,
+            )
         );
         if retry_picks.len() < 3 {
             self.fail_action(
@@ -445,7 +484,7 @@ impl Runner {
             if started_at.elapsed() >= timeout {
                 return Ok(false);
             }
-            thread::sleep(SKILL_POLL_INTERVAL);
+            battle_step!(self, "battle.poll_wait", thread::sleep(SKILL_POLL_INTERVAL));
         }
     }
 
@@ -469,7 +508,7 @@ impl Runner {
             if started_at.elapsed() >= timeout {
                 return Ok(false);
             }
-            thread::sleep(SKILL_POLL_INTERVAL);
+            battle_step!(self, "battle.poll_wait", thread::sleep(SKILL_POLL_INTERVAL));
         }
     }
 }

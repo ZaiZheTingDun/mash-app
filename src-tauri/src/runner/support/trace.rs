@@ -57,11 +57,21 @@ impl SupportSearchTrace {
                 parent: None,
                 "support.search",
                 outcome = tracing::field::Empty,
+                run_id = tracing::field::Empty,
+                quest_index = tracing::field::Empty,
                 otel.status_code = tracing::field::Empty,
             );
             if !span.is_disabled() {
                 self.span = Some(span);
             }
+        }
+    }
+
+    #[cfg(dev)]
+    pub(in crate::runner) fn record_quest(&self, run_id: uuid::Uuid, quest_index: u32) {
+        if let Some(span) = &self.span {
+            span.record("run_id", tracing::field::display(run_id));
+            span.record("quest_index", quest_index);
         }
     }
 
@@ -111,38 +121,14 @@ impl Drop for SupportSearchTrace {
 
 #[cfg(all(dev, test))]
 mod tests {
-    use std::sync::{Arc, Mutex};
-
-    use opentelemetry::{
-        trace::{SpanId, Status},
-        Context,
-    };
-    use opentelemetry_sdk::{
-        error::OTelSdkResult,
-        trace::{SdkTracerProvider, Span, SpanData, SpanProcessor},
-    };
+    use opentelemetry::trace::{SpanId, Status};
+    use opentelemetry_sdk::trace::{SdkTracerProvider, SpanData};
 
     use super::*;
-    use crate::{runner::engine::support_search_screen_exited, telemetry};
-
-    #[derive(Clone, Debug, Default)]
-    struct CompletedSpans(Arc<Mutex<Vec<SpanData>>>);
-
-    impl SpanProcessor for CompletedSpans {
-        fn on_start(&self, _: &mut Span, _: &Context) {}
-
-        fn on_end(&self, span: SpanData) {
-            self.0.lock().unwrap().push(span);
-        }
-
-        fn force_flush(&self) -> OTelSdkResult {
-            Ok(())
-        }
-
-        fn shutdown_with_timeout(&self, _: Duration) -> OTelSdkResult {
-            Ok(())
-        }
-    }
+    use crate::{
+        runner::engine::support_search_screen_exited,
+        telemetry::{self, test_support::CompletedSpans},
+    };
 
     #[test]
     fn search_keeps_polling_and_sidecar_spans_under_one_root_through_unknown() {
@@ -150,17 +136,17 @@ mod tests {
         let provider = SdkTracerProvider::builder()
             .with_span_processor(completed.clone())
             .build();
-        tracing::subscriber::with_default(telemetry::support_subscriber(&provider), || {
+        tracing::subscriber::with_default(telemetry::trace_subscriber(&provider), || {
             let mut search = SupportSearchTrace::default();
             search.wait_for_poll(Duration::ZERO);
-            assert!(telemetry::support_sidecar_span("detect").is_disabled());
+            assert!(telemetry::sidecar_span("detect").is_disabled());
 
             search.begin();
             search.wait_for_poll(Duration::ZERO);
             search.in_scope(|| {
                 support_phase!(
                     "support.detect_screen",
-                    telemetry::support_sidecar_span("detect").in_scope(|| {})
+                    telemetry::sidecar_span("detect").in_scope(|| {})
                 );
             });
             assert!(!support_search_screen_exited(
@@ -215,7 +201,7 @@ mod tests {
             (SearchOutcome::on_runner_exit(true, false), "failed"),
             (SearchOutcome::on_runner_exit(false, false), "interrupted"),
         ];
-        tracing::subscriber::with_default(telemetry::support_subscriber(&provider), || {
+        tracing::subscriber::with_default(telemetry::trace_subscriber(&provider), || {
             let mut search = SupportSearchTrace::default();
             for (outcome, _) in cases {
                 search.begin();
